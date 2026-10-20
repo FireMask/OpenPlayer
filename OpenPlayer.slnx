@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/OpenPlayer.Core/OpenPlayer.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/OpenPlayer.Core.Tests/OpenPlayer.Core.Tests.csproj" />
+  </Folder>
+</Solution>
