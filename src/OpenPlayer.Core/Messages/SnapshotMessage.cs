@@ -7,7 +7,7 @@ namespace OpenPlayer.Core.Messages;
 /// <summary>Mensaje IPC <c>player.snapshot</c> (architecture.md §7): una línea JSON.</summary>
 public static class SnapshotMessage
 {
-    private static readonly JsonSerializerOptions Options = new()
+    internal static readonly JsonSerializerOptions Options = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         // Acentos legibles por SSH; el mensaje nunca se incrusta en HTML.
