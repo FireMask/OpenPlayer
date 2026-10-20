@@ -111,10 +111,13 @@ public interface IPlayer
     Task TogglePlaybackAsync(CancellationToken ct = default);
     Task NextAsync(CancellationToken ct = default);
     Task PreviousAsync(CancellationToken ct = default);
+    Task SeekAsync(TimeSpan position, CancellationToken ct = default);
     Task SetVolumeAsync(int volume, CancellationToken ct = default);
     Task<PlaybackSnapshot> GetSnapshotAsync(CancellationToken ct = default);
 }
 ```
+
+`SeekAsync` mueve la posición dentro de la pista actual (MPD: `seekcur`); `previous` lo usa para reiniciar la pista. `SetVolumeAsync` acepta 0–100 y las implementaciones validan con `Volume.EnsureValid`.
 
 `PlaybackSnapshot` debe incluir como mínimo estado, pista actual nullable, posición, duración, volumen y timestamp de actualización. Usar `TimeSpan` para posiciones/duraciones. No asumir que todos los metadatos existen.
 
@@ -151,10 +154,12 @@ Reglas:
 ## 8. Mapeo de botones
 
 - `play_pause`: alterna reproducción/pausa.
-- `previous`: pista anterior; decidir y documentar si una pulsación dentro de los primeros segundos reinicia la pista o siempre retrocede.
+- `previous`: si la posición actual es mayor que `PreviousRestartThreshold` (3 s por defecto), reinicia la pista (`SeekAsync(0)`); si no, o si la posición es desconocida, va a la pista anterior.
 - `next`: siguiente pista.
-- `volume_up` / `volume_down`: cambiar volumen en pasos configurables, por ejemplo 5 puntos porcentuales.
-- `menu`: reservado para navegación OLED futura; en el MVP puede no hacer nada o generar un evento registrado.
+- `volume_up` / `volume_down`: cambiar volumen en pasos de `VolumeStep` (5 por defecto), recortando a 0–100. Si el volumen es desconocido (MPD sin mixer), no hacer nada.
+- `menu`: reservado para navegación OLED futura; en el MVP no hace nada.
+
+Implementado en `OpenPlayer.Core.Commands.ButtonCommandHandler` (SPEC 01).
 
 Las pulsaciones largas, combinaciones y doble clic son posteriores al MVP. Evitar que una misma pulsación genere tanto una acción corta como una larga.
 

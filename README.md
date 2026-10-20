@@ -36,6 +36,15 @@ Este repositorio contiene la documentación base para que una persona o un LLM p
 8. No exponer MPD ni el socket IPC a Internet.
 9. Añadir pruebas y actualizar los documentos cuando cambien interfaces o cableado.
 
+## Compilar y probar
+
+Requiere el SDK de .NET 10 (fijado en `global.json`). Las pruebas corren en Windows o Linux:
+
+```bash
+dotnet build OpenPlayer.slnx
+dotnet test OpenPlayer.slnx
+```
+
 ## Estructura
 
 ```text
@@ -43,6 +52,10 @@ OpenPlayer/
 ├── README.md
 ├── LICENSE
 ├── .gitignore
+├── OpenPlayer.slnx
+├── global.json
+├── Directory.Build.props
+├── specs/
 ├── docs/
 │   ├── architecture.md
 │   ├── gpio-map.md
