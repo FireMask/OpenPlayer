@@ -1,2 +1,50 @@
-﻿// See https://aka.ms/new-console-template for more information
-Console.WriteLine("Hello, World!");
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using OpenPlayer.Core.Commands;
+using OpenPlayer.Core.Interfaces;
+using OpenPlayer.Core.Models;
+using OpenPlayer.Mpd;
+using OpenPlayer.Service;
+
+var configPath = Path.Combine(AppContext.BaseDirectory, "player.json");
+if (!File.Exists(configPath))
+{
+    Console.Error.WriteLine($"Config file not found: {configPath}");
+    return 1;
+}
+
+var builder = Host.CreateApplicationBuilder(args);
+builder.Configuration.AddJsonFile(configPath, optional: false);
+
+MpdOptions mpdOptions;
+PlayerSettings playerSettings;
+try
+{
+    var config = builder.Configuration.Get<PlayerConfig>() ?? new PlayerConfig();
+    mpdOptions = config.Mpd.ToOptions();
+    playerSettings = config.Player.ToSettings();
+}
+catch (Exception e) when (e is ArgumentException or InvalidOperationException or FormatException)
+{
+    Console.Error.WriteLine($"Invalid config in {configPath}: {e.Message}");
+    return 1;
+}
+
+// Logs de una línea a stderr; stdout queda solo para las respuestas de "status".
+builder.Logging.ClearProviders();
+builder.Logging.AddSimpleConsole(o => o.SingleLine = true);
+builder.Logging.Services.Configure<Microsoft.Extensions.Logging.Console.ConsoleLoggerOptions>(
+    o => o.LogToStandardErrorThreshold = LogLevel.Trace);
+builder.Services.Configure<ConsoleLifetimeOptions>(o => o.SuppressStatusMessages = true);
+
+builder.Services.AddSingleton(mpdOptions);
+builder.Services.AddSingleton(playerSettings);
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<MpdClient>();
+builder.Services.AddSingleton<IPlayer, MpdPlayer>();
+builder.Services.AddSingleton<ButtonCommandHandler>();
+
+await builder.Build().RunAsync();
+return 0;
