@@ -73,6 +73,12 @@ chmod +x ~/openplayer/OpenPlayer.Service
 ~/openplayer/OpenPlayer.Service
 ```
 
+Desde Windows, `deploy.ps1` compila, copia e instala en `~/openplayer` en un paso (no sobrescribe `player.json` de la Pi; sin `-Password` usa tu clave SSH o la pide):
+
+```powershell
+.\deploy.ps1 -Device openplayer.local -User <usuario> [-Password <contraseña>]
+```
+
 Para filtrar el estado: `echo status | ~/openplayer/OpenPlayer.Service 2>/dev/null | jq`.
 
 ## Estructura
@@ -85,6 +91,7 @@ OpenPlayer/
 ├── OpenPlayer.slnx
 ├── global.json
 ├── Directory.Build.props
+├── deploy.ps1
 ├── specs/
 ├── docs/
 │   ├── architecture.md
