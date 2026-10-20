@@ -13,11 +13,19 @@ public sealed class ButtonCommandHandler(IPlayer player, PlayerSettings settings
         ButtonName.PlayPause => _player.TogglePlaybackAsync(ct),
         ButtonName.Next => _player.NextAsync(ct),
         ButtonName.Previous => PreviousAsync(ct),
+        ButtonName.VolumeUp => ChangeVolumeAsync(_settings.VolumeStep, ct),
+        ButtonName.VolumeDown => ChangeVolumeAsync(-_settings.VolumeStep, ct),
         ButtonName.Menu => Task.CompletedTask,
-        // Paso 9 del plan de SPEC 01.
-        ButtonName.VolumeUp or ButtonName.VolumeDown => Task.CompletedTask,
         _ => throw new ArgumentOutOfRangeException(nameof(button), button, null),
     };
+
+    // Recorta a 0–100. Volumen null (sin mixer) = no hacer nada.
+    private async Task ChangeVolumeAsync(int delta, CancellationToken ct)
+    {
+        var snapshot = await _player.GetSnapshotAsync(ct);
+        if (snapshot.Volume is int current)
+            await _player.SetVolumeAsync(Math.Clamp(current + delta, Volume.Min, Volume.Max), ct);
+    }
 
     // Pasado el umbral reinicia la pista; antes (o sin posición conocida) va a la anterior.
     private async Task PreviousAsync(CancellationToken ct)

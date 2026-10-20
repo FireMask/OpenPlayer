@@ -51,6 +51,30 @@ public class ButtonCommandHandlerTests
         Assert.Equal(["GetSnapshot", "Previous"], _player.Calls);
     }
 
+    [Theory]
+    [InlineData(ButtonName.VolumeUp, 50, 55)]
+    [InlineData(ButtonName.VolumeDown, 50, 45)]
+    [InlineData(ButtonName.VolumeUp, 98, 100)]
+    [InlineData(ButtonName.VolumeDown, 3, 0)]
+    [InlineData(ButtonName.VolumeUp, 100, 100)]
+    [InlineData(ButtonName.VolumeDown, 0, 0)]
+    public async Task Volume_steps_and_clamps(ButtonName button, int current, int expected)
+    {
+        _player.Snapshot = FakePlayer.SnapshotWith(volume: current);
+        await Press(button);
+        Assert.Equal(["GetSnapshot", $"SetVolume({expected})"], _player.Calls);
+    }
+
+    [Theory]
+    [InlineData(ButtonName.VolumeUp)]
+    [InlineData(ButtonName.VolumeDown)]
+    public async Task Volume_unknown_does_nothing(ButtonName button)
+    {
+        _player.Snapshot = FakePlayer.SnapshotWith(volume: null);
+        await Press(button);
+        Assert.Equal(["GetSnapshot"], _player.Calls);
+    }
+
     [Fact]
     public async Task Undefined_button_throws() =>
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => Press((ButtonName)99));
