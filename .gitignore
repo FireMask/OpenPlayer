@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+**/.venv/
+__pycache__/
+*.py[cod]
+.vscode/
+.idea/
+publish/
+.env
+*.user
+*.suo

@@ -1,0 +1,21 @@
+[Unit]
+Description=OpenPlayer Hardware Agent
+After=openplayer.service
+Wants=openplayer.service
+
+[Service]
+Type=simple
+User=openplayer
+Group=openplayer
+SupplementaryGroups=gpio
+WorkingDirectory=/opt/openplayer/hardware-agent
+ExecStart=/opt/openplayer/hardware-agent/.venv/bin/python /opt/openplayer/hardware-agent/main.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/openplayer
+
+[Install]
+WantedBy=multi-user.target

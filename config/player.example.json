@@ -1,0 +1,31 @@
+{
+  "mpd": {
+    "host": "127.0.0.1",
+    "port": 6600,
+    "connectTimeoutMs": 3000,
+    "reconnectInitialDelayMs": 500,
+    "reconnectMaxDelayMs": 10000
+  },
+  "ipc": {
+    "unixSocketPath": "/run/openplayer/hardware.sock",
+    "maxMessageBytes": 4096
+  },
+  "player": {
+    "initialVolume": 35,
+    "volumeStep": 5,
+    "preferredOutput": "usb-dac",
+    "resumePlaybackOnBoot": false
+  },
+  "hardware": {
+    "buttons": {
+      "play_pause": 17,
+      "previous": 27,
+      "next": 22,
+      "volume_up": 23,
+      "volume_down": 24,
+      "menu": 25
+    },
+    "debounceSeconds": 0.08,
+    "oledEnabled": false
+  }
+}

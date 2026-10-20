@@ -1,0 +1,22 @@
+[Unit]
+Description=OpenPlayer Control Service
+After=network.target mpd.service
+Requires=mpd.service
+
+[Service]
+Type=simple
+User=openplayer
+Group=openplayer
+WorkingDirectory=/opt/openplayer
+RuntimeDirectory=openplayer
+RuntimeDirectoryMode=0770
+ExecStart=/opt/openplayer/OpenPlayer.Service
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/openplayer /var/lib/openplayer
+
+[Install]
+WantedBy=multi-user.target
