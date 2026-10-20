@@ -8,25 +8,33 @@ public class MpdPlayerTests
     private static MpdPlayer PlayerFor(FakeMpdServer server) =>
         new(new MpdClient(server.Options()), TimeProvider.System);
 
-    public static TheoryData<string, Func<IPlayer, Task>> SingleCommands => new()
+    // Clave = comando MPD esperado.
+    private static readonly Dictionary<string, Func<IPlayer, Task>> Calls = new()
     {
-        { "play", p => p.PlayAsync() },
-        { "pause 1", p => p.PauseAsync() },
-        { "next", p => p.NextAsync() },
-        { "previous", p => p.PreviousAsync() },
-        { "seekcur 0", p => p.SeekAsync(TimeSpan.Zero) },
-        { "seekcur 1.5", p => p.SeekAsync(TimeSpan.FromSeconds(1.5)) },
-        { "setvol 0", p => p.SetVolumeAsync(0) },
-        { "setvol 100", p => p.SetVolumeAsync(100) },
+        ["play"] = p => p.PlayAsync(),
+        ["pause 1"] = p => p.PauseAsync(),
+        ["next"] = p => p.NextAsync(),
+        ["previous"] = p => p.PreviousAsync(),
+        ["seekcur 0"] = p => p.SeekAsync(TimeSpan.Zero),
+        ["seekcur 1.5"] = p => p.SeekAsync(TimeSpan.FromSeconds(1.5)),
+        ["setvol 0"] = p => p.SetVolumeAsync(0),
+        ["setvol 100"] = p => p.SetVolumeAsync(100),
     };
 
     [Theory]
-    [MemberData(nameof(SingleCommands))]
-    public async Task Sends_exact_command(string expected, Func<IPlayer, Task> call)
+    [InlineData("play")]
+    [InlineData("pause 1")]
+    [InlineData("next")]
+    [InlineData("previous")]
+    [InlineData("seekcur 0")]
+    [InlineData("seekcur 1.5")]
+    [InlineData("setvol 0")]
+    [InlineData("setvol 100")]
+    public async Task Sends_exact_command(string expected)
     {
         await using var server = new FakeMpdServer();
 
-        await call(PlayerFor(server));
+        await Calls[expected](PlayerFor(server));
 
         Assert.Equal([[expected]], server.Connections);
     }
