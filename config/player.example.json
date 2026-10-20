@@ -2,9 +2,7 @@
   "mpd": {
     "host": "127.0.0.1",
     "port": 6600,
-    "connectTimeoutMs": 3000,
-    "reconnectInitialDelayMs": 500,
-    "reconnectMaxDelayMs": 10000
+    "connectTimeoutMs": 3000
   },
   "ipc": {
     "unixSocketPath": "/run/openplayer/hardware.sock",
@@ -13,6 +11,7 @@
   "player": {
     "initialVolume": 35,
     "volumeStep": 5,
+    "previousRestartThresholdSeconds": 3,
     "preferredOutput": "usb-dac",
     "resumePlaybackOnBoot": false
   },

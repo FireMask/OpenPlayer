@@ -1,8 +1,11 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/OpenPlayer.Core/OpenPlayer.Core.csproj" />
+    <Project Path="src/OpenPlayer.Mpd/OpenPlayer.Mpd.csproj" />
+    <Project Path="src/OpenPlayer.Service/OpenPlayer.Service.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/OpenPlayer.Core.Tests/OpenPlayer.Core.Tests.csproj" />
+    <Project Path="tests/OpenPlayer.Mpd.Tests/OpenPlayer.Mpd.Tests.csproj" />
   </Folder>
 </Solution>

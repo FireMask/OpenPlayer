@@ -126,13 +126,16 @@ dotnet sln add src/OpenPlayer.Service/OpenPlayer.Service.csproj
 dotnet add src/OpenPlayer.Service/OpenPlayer.Service.csproj reference src/OpenPlayer.Core/OpenPlayer.Core.csproj
 ```
 
-Publicar para la Pi (ARM64):
+Publicar para la Pi (ARM64), autocontenido (decisión de SPEC 02: no requiere instalar el runtime de .NET en la Pi):
 
 ```bash
-dotnet publish src/OpenPlayer.Service -c Release -r linux-arm64 --self-contained false -o publish/linux-arm64
+dotnet publish src/OpenPlayer.Service -c Release -r linux-arm64 --self-contained true -o publish/linux-arm64
+scp -r publish/linux-arm64 <usuario>@openplayer.local:~/openplayer
 ```
 
-Con `--self-contained false`, instalar un runtime compatible en la Pi. Alternativamente, publicar autocontenido (`--self-contained true`) para no depender del runtime instalado. Confirmar la arquitectura con `uname -m` y la versión objetivo de .NET antes de desplegar.
+La carpeta incluye `player.json` (copia de `config/player.example.json`); editarla en la Pi si MPD no está en `127.0.0.1:6600`. Confirmar la arquitectura con `uname -m` (`aarch64`) antes de desplegar. Si se prefiere un runtime compartido, `--self-contained false` requiere instalar .NET 10 en la Pi.
+
+Prueba manual por SSH: ejecutar `~/openplayer/OpenPlayer.Service`, escribir `status` y comparar con `mpc current`; ver comandos en `README.md`. Si `volume` sale `null`, el `audio_output` de MPD no tiene mixer: añadir `mixer_type "software"` si se quiere controlar volumen.
 
 ## 8. Agente Python y GPIO
 

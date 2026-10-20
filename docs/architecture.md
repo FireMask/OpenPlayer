@@ -135,11 +135,16 @@ Evento de entrada:
 {"type":"button.pressed","button":"next","sequence":1}
 ```
 
-Respuesta/estado futuro:
+Estado (`player.snapshot`, una línea; generado por `OpenPlayer.Core.Messages.SnapshotMessage`):
 
 ```json
-{"type":"player.snapshot","state":"playing","trackTitle":"Example","positionSeconds":42,"durationSeconds":210,"volume":35}
+{"type":"player.snapshot","state":"playing","trackTitle":"Example","trackArtist":"Artist","positionSeconds":42,"durationSeconds":210,"volume":35}
 ```
+
+- `state`: `playing` | `paused` | `stopped`.
+- Todos los campos excepto `type` y `state` pueden ser `null` (sin pista, sin metadatos, MPD sin mixer); los `null` se escriben explícitamente.
+- Segundos truncados a entero.
+- Hoy se imprime por stdout al escribir `status` en el Service (SPEC 02); el envío por socket llega con el IPC.
 
 Reglas:
 
@@ -177,7 +182,20 @@ Una base SQLite propia queda pospuesta para preferencias, historial de reproducc
 
 ## 10. Configuración
 
-Archivo propuesto `config/player.example.json`. Separar valores de despliegue (rutas, host/puerto MPD, socket) de preferencias (volumen inicial, pasos de volumen, salida preferida). No guardar contraseñas ni claves en el repositorio. Validar configuración al arrancar y mostrar errores accionables.
+Archivo `config/player.example.json`; el build y el publish del Service lo copian como `player.json` junto al binario. Separar valores de despliegue (rutas, host/puerto MPD, socket) de preferencias (volumen inicial, pasos de volumen, salida preferida). No guardar contraseñas ni claves en el repositorio. Validar configuración al arrancar y mostrar errores accionables: si `player.json` falta o un valor es inválido, el Service sale con código 1 y un mensaje que nombra el archivo o el campo.
+
+| Clave | Uso | Estado |
+|---|---|---|
+| `mpd.host` / `mpd.port` | Dirección de MPD (por defecto `127.0.0.1:6600`) | Usado |
+| `mpd.connectTimeoutMs` | Timeout de cada operación MPD (conexión + respuesta) | Usado |
+| `player.volumeStep` | Paso de `volume_up`/`volume_down`, 1–100 | Usado |
+| `player.previousRestartThresholdSeconds` | Umbral de `previous` para reiniciar la pista | Usado |
+| `player.initialVolume` | Volumen al arrancar, 0–100 | Validado, aún no aplicado |
+| `player.preferredOutput` / `player.resumePlaybackOnBoot` | Salida preferida / reanudar al arrancar | Reservado |
+| `ipc.*` | Socket del hardware agent | Reservado (IPC) |
+| `hardware.*` | Pines BCM, debounce, OLED; los lee el agente Python | Reservado (agente) |
+
+El Service abre una conexión TCP a MPD por operación (sin conexión persistente ni reconexión con backoff); un MPD caído solo hace fallar esa operación con un warning.
 
 ## 11. Logging y errores
 
