@@ -1,6 +1,6 @@
 # SPEC 04 — Servicio systemd para OpenPlayer
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 03
 > **Date:** 2026-10-20
 > **Objective:** Instalar `OpenPlayer.Service` como unidad systemd en `/opt/openplayer` con el usuario de sistema `openplayer`, desplegada con un solo comando desde Windows (`deploy.ps1`), para que arranque sola con la Pi y el socket exista siempre.
@@ -154,31 +154,31 @@ Antes de la verificación de los pasos 2 y 3 hay que detener cualquier `~/openpl
 
 **Repositorio:**
 
-- [ ] `deploy/openplayer.service` usa `Wants=mpd.service` (no `Requires=`), tiene `StartLimitIntervalSec=60`, `StartLimitBurst=5` y `RuntimeDirectoryMode=0770`, y no menciona `/var/lib/openplayer`.
-- [ ] `systemd-analyze verify` sobre la unidad no reporta errores (se corre en la Pi).
-- [ ] `deploy.ps1` ya no menciona `~/openplayer`.
-- [ ] `dotnet build` y `dotnet test` siguen pasando (sin cambios de código C#).
+- [x] `deploy/openplayer.service` usa `Wants=mpd.service` (no `Requires=`), tiene `StartLimitIntervalSec=60`, `StartLimitBurst=5` y `RuntimeDirectoryMode=0770`, y no menciona `/var/lib/openplayer`.
+- [x] `systemd-analyze verify` sobre la unidad no reporta errores (se corre en la Pi).
+- [x] `deploy.ps1` ya no menciona `~/openplayer`.
+- [x] `dotnet build` y `dotnet test` siguen pasando (sin cambios de código C#).
 
 **Raspberry Pi (manual):**
 
-- [ ] `.\deploy.ps1 -Device mpi3-player.local -User andres -Password …` termina con exit 0 y la unidad queda `active`.
-- [ ] Correr `deploy.ps1` dos veces seguidas termina con exit 0 ambas veces, sin duplicar el usuario ni el grupo.
-- [ ] `id openplayer` muestra un usuario de sistema (uid < 1000) con shell `nologin`, y `andres` pertenece al grupo `openplayer`.
-- [ ] `/opt/openplayer` es de `root`; si se edita `player.json` en la Pi, conserva el cambio tras otro deploy.
-- [ ] `ps -o user= -C OpenPlayer.Service` muestra `openplayer`.
-- [ ] `/run/openplayer` es `openplayer:openplayer` con permisos `drwxrwx---`, y el socket es `srw-rw----`.
-- [ ] Desde una sesión nueva de `andres`, `echo '{"type":"player.get_snapshot"}' | socat - UNIX-CONNECT:/run/openplayer/hardware.sock` devuelve un `player.snapshot`.
-- [ ] `journalctl -u openplayer -b` muestra `Listening on /run/openplayer/hardware.sock`.
-- [ ] `sudo systemctl restart mpd` no reinicia el Service (el `MainPID` no cambia), y la siguiente consulta funciona.
-- [ ] `sudo kill -9 <MainPID>` hace que systemd lo reinicie a los ~3 s.
-- [ ] Con `maxMessageBytes: 10` en `/opt/openplayer/player.json`, la unidad termina en `failed` después de 5 intentos, sin reintentar indefinidamente. Se restaura el valor y se vuelve a arrancar.
-- [ ] Después de `sudo reboot`, sin intervención manual, la unidad está `active` y `socat` responde.
+- [x] `.\deploy.ps1 -Device mpi3-player.local -User andres -Password …` termina con exit 0 y la unidad queda `active`.
+- [x] Correr `deploy.ps1` dos veces seguidas termina con exit 0 ambas veces, sin duplicar el usuario ni el grupo.
+- [x] `id openplayer` muestra un usuario de sistema (uid < 1000) con shell `nologin`, y `andres` pertenece al grupo `openplayer`.
+- [x] `/opt/openplayer` es de `root`; si se edita `player.json` en la Pi, conserva el cambio tras otro deploy.
+- [x] `ps -o user= -C OpenPlayer.Service` muestra `openplayer`.
+- [x] `/run/openplayer` es `openplayer:openplayer` con permisos `drwxrwx---`, y el socket es `srw-rw----`.
+- [x] Desde una sesión nueva de `andres`, `echo '{"type":"player.get_snapshot"}' | socat - UNIX-CONNECT:/run/openplayer/hardware.sock` devuelve un `player.snapshot`.
+- [x] `journalctl -u openplayer -b` muestra `Listening on /run/openplayer/hardware.sock`.
+- [x] `sudo systemctl restart mpd` no reinicia el Service (el `MainPID` no cambia), y la siguiente consulta funciona.
+- [x] `sudo kill -9 <MainPID>` hace que systemd lo reinicie a los ~3 s.
+- [x] Con `maxMessageBytes: 10` en `/opt/openplayer/player.json`, la unidad termina en `failed` después de 5 intentos, sin reintentar indefinidamente. Se restaura el valor y se vuelve a arrancar.
+- [x] Después de `sudo reboot`, sin intervención manual, la unidad está `active` y `socat` responde.
 
 **Documentación:**
 
-- [ ] El README explica cómo desplegar, `systemctl status|restart|stop openplayer` y `journalctl -u openplayer`, y que hay que detener la unidad antes de ejecutarlo a mano.
-- [ ] `assembly.md` §7 y §9 describen la instalación con systemd y que `~/openplayer` y el `mkdir` manual ya no se usan.
-- [ ] `architecture.md` §7 indica que `/run/openplayer` lo crea systemd, y §13 marca la fase de systemd.
+- [x] El README explica cómo desplegar, `systemctl status|restart|stop openplayer` y `journalctl -u openplayer`, y que hay que detener la unidad antes de ejecutarlo a mano.
+- [x] `assembly.md` §7 y §9 describen la instalación con systemd y que `~/openplayer` y el `mkdir` manual ya no se usan.
+- [x] `architecture.md` §7 indica que `/run/openplayer` lo crea systemd, y §13 marca la fase de systemd.
 
 ## Decisions
 
