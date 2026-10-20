@@ -45,6 +45,36 @@ dotnet build OpenPlayer.slnx
 dotnet test OpenPlayer.slnx
 ```
 
+## Ejecutar el Service
+
+`OpenPlayer.Service` lee `player.json` junto al binario (copia de `config/player.example.json`) y acepta comandos por stdin. Los logs van a stderr; stdout solo lleva las respuestas de `status`.
+
+```bash
+dotnet run --project src/OpenPlayer.Service
+```
+
+| Comando | Efecto |
+|---|---|
+| `play_pause`, `previous`, `next`, `volume_up`, `volume_down`, `menu` | Igual que el botón físico |
+| `status` | Imprime una línea JSON `player.snapshot` |
+| `quit` (o EOF / Ctrl+C) | Sale con código 0 |
+
+Sin MPD accesible, cada comando registra un warning y el proceso sigue.
+
+## Publicar para la Raspberry Pi
+
+Publicación autocontenida (no requiere instalar .NET en la Pi):
+
+```bash
+dotnet publish src/OpenPlayer.Service -c Release -r linux-arm64 --self-contained true -o publish/linux-arm64
+scp -r publish/linux-arm64 <usuario>@openplayer.local:~/openplayer
+ssh <usuario>@openplayer.local
+chmod +x ~/openplayer/OpenPlayer.Service
+~/openplayer/OpenPlayer.Service
+```
+
+Para filtrar el estado: `echo status | ~/openplayer/OpenPlayer.Service 2>/dev/null | jq`.
+
 ## Estructura
 
 ```text
