@@ -20,15 +20,25 @@ builder.Configuration.AddJsonFile(configPath, optional: false);
 
 MpdOptions mpdOptions;
 PlayerSettings playerSettings;
+IpcOptions ipcOptions;
 try
 {
     var config = builder.Configuration.Get<PlayerConfig>() ?? new PlayerConfig();
     mpdOptions = config.Mpd.ToOptions();
     playerSettings = config.Player.ToSettings();
+    ipcOptions = config.Ipc.ToOptions();
 }
 catch (Exception e) when (e is ArgumentException or InvalidOperationException or FormatException)
 {
     Console.Error.WriteLine($"Invalid config in {configPath}: {e.Message}");
+    return 1;
+}
+
+// /run/openplayer lo crea systemd (RuntimeDirectory); el Service no lo crea.
+var socketDir = Path.GetDirectoryName(Path.GetFullPath(ipcOptions.SocketPath));
+if (!Directory.Exists(socketDir))
+{
+    Console.Error.WriteLine($"Invalid config in {configPath}: ipc.unixSocketPath directory not found: {socketDir}");
     return 1;
 }
 
@@ -41,6 +51,7 @@ builder.Services.Configure<ConsoleLifetimeOptions>(o => o.SuppressStatusMessages
 
 builder.Services.AddSingleton(mpdOptions);
 builder.Services.AddSingleton(playerSettings);
+builder.Services.AddSingleton(ipcOptions);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<MpdClient>();
 builder.Services.AddSingleton<IPlayer, MpdPlayer>();
