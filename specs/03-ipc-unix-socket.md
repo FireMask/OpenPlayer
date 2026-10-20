@@ -1,6 +1,6 @@
 # SPEC 03 — IPC por socket Unix con JSON Lines
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 02
 > **Date:** 2026-10-20
 > **Objective:** Reemplazar el bucle stdin del Service por un servidor de socket Unix que recibe `button.pressed` y responde `player.get_snapshot` en JSON Lines, verificable con `socat` en la Pi.
@@ -170,38 +170,38 @@ Framing en `IpcServer`:
 
 **Windows (automatizable):**
 
-- [ ] `dotnet build OpenPlayer.slnx` termina sin errores ni warnings.
-- [ ] `dotnet test OpenPlayer.slnx` pasa todas las pruebas (Core, Mpd y Service).
-- [ ] Core sigue sin `PackageReference` ni `Microsoft.Extensions.*`.
-- [ ] `IpcMessageParser` acepta `button.pressed` (con y sin `sequence`) y `player.get_snapshot`, ignora campos extra y rechaza cada caso de la tabla de validación sin lanzar.
-- [ ] `ErrorMessage` produce exactamente `{"type":"error","request":…,"message":…}`.
-- [ ] `IpcServer`: `button.pressed` ejecuta el botón en el `IPlayer`, y `player.get_snapshot` responde una línea `player.snapshot` solo a ese cliente.
-- [ ] `IpcServer`: si `GetSnapshotAsync` lanza `MpdUnavailableException`, responde `error` y la conexión sigue abierta.
-- [ ] `IpcServer`: un mensaje partido en dos escrituras y dos mensajes en una sola escritura se procesan correctamente.
-- [ ] `IpcServer`: después de un JSON inválido, el siguiente mensaje válido de la misma conexión se procesa.
-- [ ] `IpcServer`: una línea de más de `maxMessageBytes` cierra esa conexión, y otros clientes siguen funcionando.
-- [ ] `IpcServer`: dos clientes conectados a la vez reciben cada uno su propia respuesta.
-- [ ] `IpcServer`: arranca aunque exista un archivo de socket viejo, y al detenerse borra el archivo.
-- [ ] `ConsoleCommandLoop.cs` ya no existe.
-- [ ] Con `ipc.maxMessageBytes: 10`, o con `unixSocketPath` en un directorio inexistente, el Service sale con exit code 1 y un mensaje que nombra el campo o la ruta.
+- [x] `dotnet build OpenPlayer.slnx` termina sin errores ni warnings.
+- [x] `dotnet test OpenPlayer.slnx` pasa todas las pruebas (Core, Mpd y Service).
+- [x] Core sigue sin `PackageReference` ni `Microsoft.Extensions.*`.
+- [x] `IpcMessageParser` acepta `button.pressed` (con y sin `sequence`) y `player.get_snapshot`, ignora campos extra y rechaza cada caso de la tabla de validación sin lanzar.
+- [x] `ErrorMessage` produce exactamente `{"type":"error","request":…,"message":…}`.
+- [x] `IpcServer`: `button.pressed` ejecuta el botón en el `IPlayer`, y `player.get_snapshot` responde una línea `player.snapshot` solo a ese cliente.
+- [x] `IpcServer`: si `GetSnapshotAsync` lanza `MpdUnavailableException`, responde `error` y la conexión sigue abierta.
+- [x] `IpcServer`: un mensaje partido en dos escrituras y dos mensajes en una sola escritura se procesan correctamente.
+- [x] `IpcServer`: después de un JSON inválido, el siguiente mensaje válido de la misma conexión se procesa.
+- [x] `IpcServer`: una línea de más de `maxMessageBytes` cierra esa conexión, y otros clientes siguen funcionando.
+- [x] `IpcServer`: dos clientes conectados a la vez reciben cada uno su propia respuesta.
+- [x] `IpcServer`: arranca aunque exista un archivo de socket viejo, y al detenerse borra el archivo.
+- [x] `ConsoleCommandLoop.cs` ya no existe.
+- [x] Con `ipc.maxMessageBytes: 10`, o con `unixSocketPath` en un directorio inexistente, el Service sale con exit code 1 y un mensaje que nombra el campo o la ruta.
 
 **Raspberry Pi (manual por SSH; requiere `socat` y `/run/openplayer` creado a mano):**
 
-- [ ] `deploy.ps1` publica y el Service arranca escuchando en `/run/openplayer/hardware.sock`.
-- [ ] `ls -l` muestra el socket con permisos `srw-rw----`.
-- [ ] `echo '{"type":"player.get_snapshot"}' | socat - UNIX-CONNECT:/run/openplayer/hardware.sock` imprime un `player.snapshot` que coincide con `mpc current`.
-- [ ] `{"type":"button.pressed","button":"play_pause"}` alterna la reproducción según `mpc status`.
-- [ ] `next`, `previous`, `volume_up` y `volume_down` por socket producen el mismo efecto que en la SPEC 02.
-- [ ] `{"type":"button.pressed","button":"foo"}` y una línea `hola` registran un warning, y el Service sigue funcionando.
-- [ ] Con MPD detenido (`sudo systemctl stop mpd`), `player.get_snapshot` responde `{"type":"error",…}`; al volver a arrancar MPD, la siguiente consulta funciona.
-- [ ] Ctrl+C detiene el Service con exit code 0 y el archivo del socket desaparece.
-- [ ] El Service corriendo con stdin cerrado (`< /dev/null`) no termina: sigue atendiendo el socket.
+- [x] `deploy.ps1` publica y el Service arranca escuchando en `/run/openplayer/hardware.sock`.
+- [x] `ls -l` muestra el socket con permisos `srw-rw----`.
+- [x] `echo '{"type":"player.get_snapshot"}' | socat - UNIX-CONNECT:/run/openplayer/hardware.sock` imprime un `player.snapshot` que coincide con `mpc current`.
+- [x] `{"type":"button.pressed","button":"play_pause"}` alterna la reproducción según `mpc status`.
+- [x] `next`, `previous`, `volume_up` y `volume_down` por socket producen el mismo efecto que en la SPEC 02.
+- [x] `{"type":"button.pressed","button":"foo"}` y una línea `hola` registran un warning, y el Service sigue funcionando.
+- [x] Con MPD detenido (`sudo systemctl stop mpd`), `player.get_snapshot` responde `{"type":"error",…}`; al volver a arrancar MPD, la siguiente consulta funciona.
+- [x] Ctrl+C detiene el Service con exit code 0 y el archivo del socket desaparece.
+- [x] El Service corriendo con stdin cerrado (`< /dev/null`) no termina: sigue atendiendo el socket.
 
 **Documentación:**
 
-- [ ] `docs/architecture.md` §7 documenta los mensajes, las respuestas, los errores y el framing; §10 marca `ipc.*` como "Usado".
-- [ ] `README.md` explica cómo probar con `socat` y ya no menciona stdin.
-- [ ] `docs/assembly.md` incluye la instalación de `socat` y la creación temporal de `/run/openplayer`.
+- [x] `docs/architecture.md` §7 documenta los mensajes, las respuestas, los errores y el framing; §10 marca `ipc.*` como "Usado".
+- [x] `README.md` explica cómo probar con `socat` y ya no menciona stdin.
+- [x] `docs/assembly.md` incluye la instalación de `socat` y la creación temporal de `/run/openplayer`.
 
 ## Decisions
 
