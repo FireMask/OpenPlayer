@@ -26,7 +26,7 @@
 - `tests/hardware-agent/` (pytest, corre en Windows con `MockFactory` de `gpiozero`):
   - `test_config.py`: config válida y cada caso inválido.
   - `test_sender.py`: contra un servidor falso TCP local (conexión inyectable). Cubre el formato y `sequence`, descarte sin conexión, reconexión tras el cierre del servidor y detección del cierre en reposo.
-  - `test_buttons.py`: activar un pin simulado encola el nombre correcto, y un rebote dentro del debounce no duplica el evento.
+  - `test_buttons.py`: activar un pin simulado encola el nombre correcto, y cada pin queda configurado con `bounce_time` igual al debounce (el rebote real lo filtra `lgpio` y se valida en la Pi).
 - `deploy/openplayer-hardware.service`:
   - `ExecStart=/usr/bin/python3 /opt/openplayer/hardware-agent/main.py`;
   - `StartLimitIntervalSec=60` y `StartLimitBurst=5`;
@@ -157,7 +157,7 @@ warning: dropped next: not connected
    - `stop()` termina el hilo.
 3. Crear `buttons.py` y `test_buttons.py` con `MockFactory`.
    - Activar el pin de `next` → `on_press("next")`.
-   - Dos activaciones dentro del debounce → un solo evento.
+   - Cada pin queda con `bounce_time` igual a `debounceSeconds` (`MockPin` no simula el debounce).
    - Los 6 pines del ejemplo crean 6 botones con pull-up.
 4. Crear `main.py`: argumento opcional con la ruta, logging, arma todo y espera la señal; SIGTERM o Ctrl+C → `stop()` → exit 0; `ConfigError` → exit 1.
    - Verificar en Windows con `GPIOZERO_PIN_FACTORY=mock`: arranca, registra los intentos de conexión sin hacer spam y Ctrl+C sale con 0. Con config inválida → exit 1 y un mensaje que nombra el campo.
@@ -180,7 +180,7 @@ warning: dropped next: not connected
 - [ ] Sin servidor, `press()` vuelve de inmediato y el evento se descarta (nunca se envía más tarde).
 - [ ] Si el servidor cierra la conexión en reposo, el `Sender` lo detecta en 2 s o menos y reconecta cuando el servidor vuelve.
 - [ ] El backoff de reconexión no supera `max_backoff` y vuelve al mínimo tras conectar.
-- [ ] Con `MockFactory`, activar el pin de cada botón produce `on_press` con su nombre, y dos activaciones dentro del debounce producen un solo evento.
+- [ ] Con `MockFactory`, activar el pin de cada botón produce `on_press` con su nombre, y cada pin queda configurado con `bounce_time` igual a `debounceSeconds`.
 - [ ] `main.py` con config inválida sale con exit 1 y un mensaje que nombra el campo.
 - [ ] El agente solo importa stdlib y `gpiozero` (verificable con grep).
 - [ ] `dotnet build` y `dotnet test` siguen pasando.
@@ -223,6 +223,7 @@ warning: dropped next: not connected
 - **Sí:** el mismo `install.sh` y `deploy.ps1` instalan el agente. Un comando despliega todo.
 - **Sí:** `install.sh` verifica los paquetes Python pero no los instala. Instalar paquetes del sistema es una decisión del administrador; un mensaje claro basta.
 - **Sí:** validar con un cable dupont entre GPIO y GND. Es exactamente el circuito del botón con pull-up interno; el software no cambia al cablear botones reales.
+- **Sí:** debounce solo con `bounce_time` de `gpiozero` (lo aplica `lgpio` en el kernel). `MockPin` no lo simula; se prueba la configuración y el rebote real se valida en la Pi. **No:** un debounce extra por software en Python, que duplicaría lógica.
 - **Sí:** el debounce se calibra en `player.json`. El rebote real depende del botón o del cable; es un ajuste físico, no una constante de código.
 
 ## Risks
