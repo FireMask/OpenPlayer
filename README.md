@@ -47,19 +47,29 @@ dotnet test OpenPlayer.slnx
 
 ## Ejecutar el Service
 
-`OpenPlayer.Service` lee `player.json` junto al binario (copia de `config/player.example.json`) y acepta comandos por stdin. Los logs van a stderr; stdout solo lleva las respuestas de `status`.
+`OpenPlayer.Service` lee `player.json` junto al binario (copia de `config/player.example.json`) y escucha en el socket Unix `ipc.unixSocketPath` (por defecto `/run/openplayer/hardware.sock`) mensajes JSON Lines; contrato en [`docs/architecture.md`](docs/architecture.md) §7. Los logs van a stderr. Ctrl+C o SIGTERM lo detienen con código 0 y borran el socket.
+
+El directorio del socket debe existir. Mientras no haya unidad systemd, en la Pi:
 
 ```bash
-dotnet run --project src/OpenPlayer.Service
+sudo mkdir -p /run/openplayer && sudo chown $USER /run/openplayer   # se pierde al reiniciar
+~/openplayer/OpenPlayer.Service
 ```
 
-| Comando | Efecto |
-|---|---|
-| `play_pause`, `previous`, `next`, `volume_up`, `volume_down`, `menu` | Igual que el botón físico |
-| `status` | Imprime una línea JSON `player.snapshot` |
-| `quit` (o EOF / Ctrl+C) | Sale con código 0 |
+Probar desde otra sesión SSH con `socat` (`sudo apt install socat`):
 
-Sin MPD accesible, cada comando registra un warning y el proceso sigue.
+```bash
+S=UNIX-CONNECT:/run/openplayer/hardware.sock
+echo '{"type":"player.get_snapshot"}' | socat - $S
+echo '{"type":"button.pressed","button":"play_pause"}' | socat - $S
+```
+
+| Mensaje | Efecto |
+|---|---|
+| `{"type":"button.pressed","button":"<nombre>"}` con `play_pause`, `previous`, `next`, `volume_up`, `volume_down`, `menu` | Igual que el botón físico; sin respuesta |
+| `{"type":"player.get_snapshot"}` | Responde una línea `player.snapshot`, o `error` si MPD no responde |
+
+Un mensaje inválido o sin MPD accesible solo registra un warning; el proceso sigue. Si `socat` corta la respuesta, usar `socat -t 2`. En Windows hay que apuntar `ipc.unixSocketPath` a una carpeta existente (ruta de máximo 108 caracteres).
 
 ## Publicar para la Raspberry Pi
 
@@ -70,7 +80,6 @@ dotnet publish src/OpenPlayer.Service -c Release -r linux-arm64 --self-contained
 scp -r publish/linux-arm64 <usuario>@openplayer.local:~/openplayer
 ssh <usuario>@openplayer.local
 chmod +x ~/openplayer/OpenPlayer.Service
-~/openplayer/OpenPlayer.Service
 ```
 
 Desde Windows, `deploy.ps1` compila, copia e instala en `~/openplayer` en un paso (no sobrescribe `player.json` de la Pi; sin `-Password` usa tu clave SSH o la pide):
@@ -79,7 +88,7 @@ Desde Windows, `deploy.ps1` compila, copia e instala en `~/openplayer` en un pas
 .\deploy.ps1 -Device openplayer.local -User <usuario> [-Password <contraseña>]
 ```
 
-Para filtrar el estado: `echo status | ~/openplayer/OpenPlayer.Service 2>/dev/null | jq`.
+Para ejecutarlo y probarlo, ver "Ejecutar el Service".
 
 ## Estructura
 
@@ -113,6 +122,8 @@ OpenPlayer/
 │   └── openplayer-hardware.service
 └── tests/
     ├── OpenPlayer.Core.Tests/
+    ├── OpenPlayer.Mpd.Tests/
+    ├── OpenPlayer.Service.Tests/
     └── hardware-agent/
 ```
 

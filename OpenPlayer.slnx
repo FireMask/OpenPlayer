@@ -7,5 +7,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/OpenPlayer.Core.Tests/OpenPlayer.Core.Tests.csproj" />
     <Project Path="tests/OpenPlayer.Mpd.Tests/OpenPlayer.Mpd.Tests.csproj" />
+    <Project Path="tests/OpenPlayer.Service.Tests/OpenPlayer.Service.Tests.csproj" />
   </Folder>
 </Solution>

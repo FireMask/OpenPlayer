@@ -20,11 +20,13 @@ builder.Configuration.AddJsonFile(configPath, optional: false);
 
 MpdOptions mpdOptions;
 PlayerSettings playerSettings;
+IpcOptions ipcOptions;
 try
 {
     var config = builder.Configuration.Get<PlayerConfig>() ?? new PlayerConfig();
     mpdOptions = config.Mpd.ToOptions();
     playerSettings = config.Player.ToSettings();
+    ipcOptions = config.Ipc.ToOptions();
 }
 catch (Exception e) when (e is ArgumentException or InvalidOperationException or FormatException)
 {
@@ -32,7 +34,15 @@ catch (Exception e) when (e is ArgumentException or InvalidOperationException or
     return 1;
 }
 
-// Logs de una línea a stderr; stdout queda solo para las respuestas de "status".
+// /run/openplayer lo crea systemd (RuntimeDirectory); el Service no lo crea.
+var socketDir = Path.GetDirectoryName(Path.GetFullPath(ipcOptions.SocketPath));
+if (!Directory.Exists(socketDir))
+{
+    Console.Error.WriteLine($"Invalid config in {configPath}: ipc.unixSocketPath directory not found: {socketDir}");
+    return 1;
+}
+
+// Logs de una línea a stderr (journald los captura bajo systemd).
 builder.Logging.ClearProviders();
 builder.Logging.AddSimpleConsole(o => o.SingleLine = true);
 builder.Logging.Services.Configure<Microsoft.Extensions.Logging.Console.ConsoleLoggerOptions>(
@@ -41,11 +51,21 @@ builder.Services.Configure<ConsoleLifetimeOptions>(o => o.SuppressStatusMessages
 
 builder.Services.AddSingleton(mpdOptions);
 builder.Services.AddSingleton(playerSettings);
+builder.Services.AddSingleton(ipcOptions);
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<MpdClient>();
 builder.Services.AddSingleton<IPlayer, MpdPlayer>();
 builder.Services.AddSingleton<ButtonCommandHandler>();
-builder.Services.AddHostedService<ConsoleCommandLoop>();
+builder.Services.AddHostedService<IpcServer>();
 
-await builder.Build().RunAsync();
+try
+{
+    await builder.Build().RunAsync();
+}
+catch (Exception e)
+{
+    // El host ya registró el detalle (p. ej. bind del socket fallido); exit 1 para que systemd lo vea como fallo.
+    Console.Error.WriteLine($"Service failed: {e.Message}");
+    return 1;
+}
 return 0;
