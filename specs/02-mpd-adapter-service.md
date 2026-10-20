@@ -1,6 +1,6 @@
 # SPEC 02 — Adaptador MPD y Service mínimo por stdin
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 01
 > **Date:** 2026-10-20
 > **Objective:** Implementar `OpenPlayer.Mpd` (`IPlayer` sobre el protocolo MPD) y un `OpenPlayer.Service` de consola que ejecuta botones y `status` leídos por stdin, verificable por SSH en la Pi.
@@ -149,39 +149,39 @@ Mensaje `status` (una línea, `System.Text.Json`, camelCase, nulls incluidos):
 
 **Windows (automatizable):**
 
-- [ ] `dotnet build OpenPlayer.slnx` termina sin errores ni warnings.
-- [ ] `dotnet test OpenPlayer.slnx` pasa todas las pruebas (Core y Mpd).
-- [ ] `OpenPlayer.Core.csproj` y `OpenPlayer.Mpd.csproj` no tienen `PackageReference`.
-- [ ] Core y Mpd no referencian `Microsoft.Extensions.*` (verificable con grep).
-- [ ] `MpdSnapshotParser` traduce `volume:-1` a `Volume = null` y un `currentsong` sin `file` a `CurrentTrack = null`.
-- [ ] `MpdClient` lanza `MpdException` ante `ACK` y `MpdUnavailableException` ante puerto cerrado, saludo inválido o timeout.
-- [ ] Cada `MpdClient.ExecuteAsync` abre exactamente una conexión y la cierra al terminar, también si hay error.
-- [ ] `TogglePlaybackAsync` envía `pause 1` si el estado es play, `pause 0` si es pause y `play` si es stop.
-- [ ] `SetVolumeAsync(101)` lanza `ArgumentOutOfRangeException` sin abrir conexión.
-- [ ] `GetSnapshotAsync` envía `status` y `currentsong` en una sola conexión.
-- [ ] `SnapshotMessage` produce exactamente `{"type":"player.snapshot","state":…,"trackTitle":…,"trackArtist":…,"positionSeconds":…,"durationSeconds":…,"volume":…}`, con `null` en los campos ausentes.
-- [ ] Sin `player.json` junto al binario, el Service sale con exit code 1 y un mensaje que nombra el archivo.
-- [ ] Con `"volumeStep": 0` en `player.json`, el Service sale con exit code 1 y un mensaje que nombra el campo.
-- [ ] Con MPD inaccesible, `status` y `next` registran un warning de una línea y el proceso sigue leyendo stdin.
-- [ ] Un comando desconocido registra un warning y el proceso sigue.
-- [ ] `quit` y EOF (Ctrl+Z/Ctrl+D) terminan el proceso con exit code 0.
-- [ ] `config/player.example.json` no contiene `reconnectInitialDelayMs` ni `reconnectMaxDelayMs`, y contiene `previousRestartThresholdSeconds`.
+- [x] `dotnet build OpenPlayer.slnx` termina sin errores ni warnings.
+- [x] `dotnet test OpenPlayer.slnx` pasa todas las pruebas (Core y Mpd).
+- [x] `OpenPlayer.Core.csproj` y `OpenPlayer.Mpd.csproj` no tienen `PackageReference`.
+- [x] Core y Mpd no referencian `Microsoft.Extensions.*` (verificable con grep).
+- [x] `MpdSnapshotParser` traduce `volume:-1` a `Volume = null` y un `currentsong` sin `file` a `CurrentTrack = null`.
+- [x] `MpdClient` lanza `MpdException` ante `ACK` y `MpdUnavailableException` ante puerto cerrado, saludo inválido o timeout.
+- [x] Cada `MpdClient.ExecuteAsync` abre exactamente una conexión y la cierra al terminar, también si hay error.
+- [x] `TogglePlaybackAsync` envía `pause 1` si el estado es play, `pause 0` si es pause y `play` si es stop.
+- [x] `SetVolumeAsync(101)` lanza `ArgumentOutOfRangeException` sin abrir conexión.
+- [x] `GetSnapshotAsync` envía `status` y `currentsong` en una sola conexión.
+- [x] `SnapshotMessage` produce exactamente `{"type":"player.snapshot","state":…,"trackTitle":…,"trackArtist":…,"positionSeconds":…,"durationSeconds":…,"volume":…}`, con `null` en los campos ausentes.
+- [x] Sin `player.json` junto al binario, el Service sale con exit code 1 y un mensaje que nombra el archivo.
+- [x] Con `"volumeStep": 0` en `player.json`, el Service sale con exit code 1 y un mensaje que nombra el campo.
+- [x] Con MPD inaccesible, `status` y `next` registran un warning de una línea y el proceso sigue leyendo stdin.
+- [x] Un comando desconocido registra un warning y el proceso sigue.
+- [x] `quit` y EOF (Ctrl+Z/Ctrl+D) terminan el proceso con exit code 0.
+- [x] `config/player.example.json` no contiene `reconnectInitialDelayMs` ni `reconnectMaxDelayMs`, y contiene `previousRestartThresholdSeconds`.
 
 **Raspberry Pi (manual por SSH; requiere fase 1 lista: MPD con al menos 2 pistas en cola):**
 
-- [ ] `dotnet publish src/OpenPlayer.Service -c Release -r linux-arm64 --self-contained true -o publish/linux-arm64` genera la carpeta con `player.json` incluido.
-- [ ] Tras copiar la carpeta a la Pi, `./OpenPlayer.Service` arranca sin tener el runtime de .NET instalado.
-- [ ] `status` imprime un `player.snapshot` cuyo `trackTitle` coincide con `mpc current`.
-- [ ] `play_pause` alterna entre `playing` y `paused` según `mpc status`.
-- [ ] `next` cambia la pista y `mpc current` lo confirma.
-- [ ] `previous` con más de 3 s de reproducción reinicia la pista; con menos de 3 s va a la anterior.
-- [ ] `volume_up` y `volume_down` cambian el volumen en 5, si el DAC tiene mixer; si no lo tiene, el volumen sale `null` y no hay error.
-- [ ] Tras `sudo systemctl restart mpd`, el siguiente `status` funciona sin reiniciar el Service.
+- [x] `dotnet publish src/OpenPlayer.Service -c Release -r linux-arm64 --self-contained true -o publish/linux-arm64` genera la carpeta con `player.json` incluido.
+- [x] Tras copiar la carpeta a la Pi, `./OpenPlayer.Service` arranca sin tener el runtime de .NET instalado.
+- [x] `status` imprime un `player.snapshot` cuyo `trackTitle` coincide con `mpc current`.
+- [x] `play_pause` alterna entre `playing` y `paused` según `mpc status`.
+- [x] `next` cambia la pista y `mpc current` lo confirma.
+- [x] `previous` con más de 3 s de reproducción reinicia la pista; con menos de 3 s va a la anterior.
+- [x] `volume_up` y `volume_down` cambian el volumen en 5, si el DAC tiene mixer; si no lo tiene, el volumen sale `null` y no hay error.
+- [x] Tras `sudo systemctl restart mpd`, el siguiente `status` funciona sin reiniciar el Service.
 
 **Documentación:**
 
-- [ ] `docs/architecture.md` §7 incluye `trackArtist` y §10 lista las claves de `player.json`.
-- [ ] `README.md` explica cómo ejecutar y publicar el Service.
+- [x] `docs/architecture.md` §7 incluye `trackArtist` y §10 lista las claves de `player.json`.
+- [x] `README.md` explica cómo ejecutar y publicar el Service.
 
 ## Decisions
 
