@@ -127,34 +127,42 @@ public interface IPlayer
 
 Transporte inicial: Unix domain socket local, ruta propuesta `/run/openplayer/hardware.sock`. El directorio `/run/openplayer` debe crearse en el arranque mediante `systemd` (`RuntimeDirectory=openplayer`) y asignarse a un grupo dedicado. No usar `/tmp` como ruta de confianza a largo plazo.
 
-Formato: un objeto JSON por línea UTF-8, con límite de tamaño, por ejemplo 4 KiB por mensaje.
+Formato JSON Lines: un objeto JSON por línea UTF-8 terminada en `\n`. Implementado en `OpenPlayer.Service.IpcServer` (SPEC 03); el parser es `OpenPlayer.Core.Messages.IpcMessageParser`.
 
-Evento de entrada:
+Mensajes de entrada:
 
 ```json
 {"type":"button.pressed","button":"next","sequence":1}
+{"type":"player.get_snapshot"}
 ```
 
-Estado (`player.snapshot`, una línea; generado por `OpenPlayer.Core.Messages.SnapshotMessage`):
+- `type` obligatorio. Campos extra se ignoran.
+- `button.pressed`: `button` obligatorio, uno de `play_pause`, `previous`, `next`, `volume_up`, `volume_down`, `menu` (exacto). `sequence` opcional (entero); solo se registra en el log. No hay respuesta.
+- `player.get_snapshot`: responde una línea solo al cliente que la pidió.
+
+Respuestas:
 
 ```json
 {"type":"player.snapshot","state":"playing","trackTitle":"Example","trackArtist":"Artist","positionSeconds":42,"durationSeconds":210,"volume":35}
+{"type":"error","request":"player.get_snapshot","message":"MPD did not respond within 3000 ms"}
 ```
 
-- `state`: `playing` | `paused` | `stopped`.
-- Todos los campos excepto `type` y `state` pueden ser `null` (sin pista, sin metadatos, MPD sin mixer); los `null` se escriben explícitamente.
-- Segundos truncados a entero.
-- Hoy se imprime por stdout al escribir `status` en el Service (SPEC 02); el envío por socket llega con el IPC.
+- `player.snapshot` (generado por `SnapshotMessage`): `state` es `playing` | `paused` | `stopped`. Todos los campos excepto `type` y `state` pueden ser `null` (sin pista, sin metadatos, MPD sin mixer); los `null` se escriben explícitamente. Segundos truncados a entero.
+- `error` (generado por `ErrorMessage`): la consulta falló porque MPD no respondió o devolvió `ACK`.
 
-Reglas:
+Framing y errores:
 
-- El servidor lee hasta newline; una llamada `recv` no garantiza recibir un mensaje completo.
-- Validar JSON, `type`, nombre de botón y tamaño máximo.
-- No aceptar comandos arbitrarios ni nombres de ejecutables por IPC.
-- Ignorar o registrar tipos desconocidos; no terminar el proceso por un evento malformado.
-- Definir si se requieren acknowledgements; para el MVP, log de recepción y estado MPD son suficientes.
-- Reconectar con espera incremental limitada; no registrar cada intento en un bucle rápido.
-- Añadir identificadores/sequence si se detectan eventos duplicados en pruebas.
+- El servidor lee bytes y parte por `\n`; un `\r` final se descarta y las líneas vacías se ignoran. Un mensaje puede llegar partido en varias lecturas y una lectura puede traer varios mensajes.
+- Límite `ipc.maxMessageBytes` (por defecto 4096) medido en bytes sin contar el `\n`. Si se acumulan más bytes sin `\n`, se registra un warning y se cierra esa conexión; el cliente debe reconectar.
+- JSON inválido, `type` desconocido, botón inválido o `sequence` no entero: warning en el log y la conexión sigue abierta. Nunca termina el proceso.
+- Varios clientes a la vez (agente y `socat` de diagnóstico). Todos los comandos se ejecutan en serie con un lock global.
+- No hay acknowledgements de `button.pressed`; el log y el estado de MPD bastan para el MVP. No se aceptan comandos arbitrarios ni nombres de ejecutables.
+
+Socket:
+
+- Al arrancar se borra un archivo de socket viejo y, tras el bind, se aplican permisos `0660`. Si el directorio no existe, el Service sale con código 1: crearlo es responsabilidad de systemd (`RuntimeDirectory`), o manual mientras no exista la unidad.
+- Al detenerse (Ctrl+C, SIGTERM) deja de aceptar conexiones, cierra los clientes y borra el archivo.
+- El cliente (agente) debe reconectar con espera incremental limitada, sin registrar cada intento en un bucle rápido.
 
 ## 8. Mapeo de botones
 
@@ -192,7 +200,8 @@ Archivo `config/player.example.json`; el build y el publish del Service lo copia
 | `player.previousRestartThresholdSeconds` | Umbral de `previous` para reiniciar la pista | Usado |
 | `player.initialVolume` | Volumen al arrancar, 0–100 | Validado, aún no aplicado |
 | `player.preferredOutput` / `player.resumePlaybackOnBoot` | Salida preferida / reanudar al arrancar | Reservado |
-| `ipc.*` | Socket del hardware agent | Reservado (IPC) |
+| `ipc.unixSocketPath` | Ruta del socket Unix; el directorio debe existir | Usado |
+| `ipc.maxMessageBytes` | Tamaño máximo de un mensaje IPC, 256–65536 bytes | Usado |
 | `hardware.*` | Pines BCM, debounce, OLED; los lee el agente Python | Reservado (agente) |
 
 El Service abre una conexión TCP a MPD por operación (sin conexión persistente ni reconexión con backoff); un MPD caído solo hace fallar esa operación con un warning.

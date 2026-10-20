@@ -135,7 +135,19 @@ scp -r publish/linux-arm64 <usuario>@openplayer.local:~/openplayer
 
 La carpeta incluye `player.json` (copia de `config/player.example.json`); editarla en la Pi si MPD no está en `127.0.0.1:6600`. Confirmar la arquitectura con `uname -m` (`aarch64`) antes de desplegar. Si se prefiere un runtime compartido, `--self-contained false` requiere instalar .NET 10 en la Pi.
 
-Prueba manual por SSH: ejecutar `~/openplayer/OpenPlayer.Service`, escribir `status` y comparar con `mpc current`; ver comandos en `README.md`. Si `volume` sale `null`, el `audio_output` de MPD no tiene mixer: añadir `mixer_type "software"` si se quiere controlar volumen.
+Desde Windows, `.\deploy.ps1 -Device <host> -User <usuario>` hace publish, copia e instalación en un paso.
+
+Prueba manual por SSH. El Service escucha en `/run/openplayer/hardware.sock`; hasta tener la unidad systemd (`RuntimeDirectory`), crear el directorio a mano. Explicación: `mkdir` en `/run` requiere `sudo`, y `chown` deja al usuario actual como dueño para que el Service corra sin root. `/run` es tmpfs: el directorio desaparece al reiniciar y hay que repetirlo.
+
+```bash
+sudo apt install -y socat
+sudo mkdir -p /run/openplayer && sudo chown $USER /run/openplayer
+~/openplayer/OpenPlayer.Service
+# en otra sesión SSH:
+echo '{"type":"player.get_snapshot"}' | socat - UNIX-CONNECT:/run/openplayer/hardware.sock
+```
+
+Comparar el `player.snapshot` con `mpc current`; más mensajes en `README.md`. Si `volume` sale `null`, el `audio_output` de MPD no tiene mixer: añadir `mixer_type "software"` si se quiere controlar volumen.
 
 ## 8. Agente Python y GPIO
 
