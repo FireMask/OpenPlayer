@@ -45,6 +45,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<MpdClient>();
 builder.Services.AddSingleton<IPlayer, MpdPlayer>();
 builder.Services.AddSingleton<ButtonCommandHandler>();
+builder.Services.AddHostedService<ConsoleCommandLoop>();
 
 await builder.Build().RunAsync();
 return 0;
