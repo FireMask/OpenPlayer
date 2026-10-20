@@ -160,7 +160,7 @@ Framing y errores:
 
 Socket:
 
-- Al arrancar se borra un archivo de socket viejo y, tras el bind, se aplican permisos `0660`. Si el directorio no existe, el Service sale con código 1: crearlo es responsabilidad de systemd (`RuntimeDirectory`), o manual mientras no exista la unidad.
+- Al arrancar se borra un archivo de socket viejo y, tras el bind, se aplican permisos `0660`. Si el directorio no existe, el Service sale con código 1: lo crea systemd (`RuntimeDirectory=openplayer`, `0770`, grupo `openplayer`) en cada arranque de la unidad (SPEC 04).
 - Al detenerse (Ctrl+C, SIGTERM) deja de aceptar conexiones, cierra los clientes y borra el archivo.
 - El cliente (agente) debe reconectar con espera incremental limitada, sin registrar cada intento en un bucle rápido.
 
@@ -239,12 +239,12 @@ Integración en Pi:
 
 ## 13. Fases de desarrollo
 
-1. Instalar Raspberry Pi OS Lite, SSH, MPD y verificar DAC USB.
-2. Crear solución .NET, Core e interfaz `IPlayer`.
-3. Implementar adaptador MPD y snapshot de estado.
-4. Implementar socket Unix y agente Python con dos botones.
+1. Instalar Raspberry Pi OS Lite, SSH, MPD y verificar DAC USB. *(Hecho.)*
+2. Crear solución .NET, Core e interfaz `IPlayer`. *(Hecho: SPEC 01.)*
+3. Implementar adaptador MPD y snapshot de estado. *(Hecho: SPEC 02.)*
+4. Implementar socket Unix y agente Python con dos botones. *(Socket hecho: SPEC 03; agente pendiente.)*
 5. Añadir biblioteca y playlists.
-6. Instalar servicios systemd y validar arranque automático.
+6. Instalar servicios systemd y validar arranque automático. *(Service C# hecho: SPEC 04, `deploy/openplayer.service`; unidad del agente pendiente.)*
 7. Configurar Bluetooth A2DP y selector de salida.
 8. Añadir OLED.
 9. Medir consumo y desarrollar alimentación portátil segura.

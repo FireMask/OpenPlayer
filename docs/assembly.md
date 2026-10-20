@@ -126,28 +126,31 @@ dotnet sln add src/OpenPlayer.Service/OpenPlayer.Service.csproj
 dotnet add src/OpenPlayer.Service/OpenPlayer.Service.csproj reference src/OpenPlayer.Core/OpenPlayer.Core.csproj
 ```
 
-Publicar para la Pi (ARM64), autocontenido (decisión de SPEC 02: no requiere instalar el runtime de .NET en la Pi):
+Publicar e instalar en la Pi (ARM64), autocontenido (SPEC 02: no requiere el runtime de .NET en la Pi) y como unidad systemd (SPEC 04). Confirmar la arquitectura con `uname -m` (`aarch64`). Desde Windows:
 
-```bash
-dotnet publish src/OpenPlayer.Service -c Release -r linux-arm64 --self-contained true -o publish/linux-arm64
-scp -r publish/linux-arm64 <usuario>@openplayer.local:~/openplayer
+```powershell
+.\deploy.ps1 -Device openplayer.local -User <usuario> [-Password <contraseña>]
 ```
 
-La carpeta incluye `player.json` (copia de `config/player.example.json`); editarla en la Pi si MPD no está en `127.0.0.1:6600`. Confirmar la arquitectura con `uname -m` (`aarch64`) antes de desplegar. Si se prefiere un runtime compartido, `--self-contained false` requiere instalar .NET 10 en la Pi.
+`deploy.ps1` compila, copia a `/tmp/openplayer-deploy` y ejecuta `deploy/install.sh` con sudo. Explicación de lo que hace `install.sh` (idempotente, se puede repetir en cada deploy):
 
-Desde Windows, `.\deploy.ps1 -Device <host> -User <usuario>` hace publish, copia e instalación en un paso.
+- Crea el grupo y el usuario de sistema `openplayer` (sin login ni home) si faltan, y añade `<usuario>` al grupo para poder usar el socket con `socat`.
+- Extrae el publish en `/opt/openplayer` (dueño `root`, legible por todos). `player.json` solo se copia si no existe: los ajustes hechos en la Pi se conservan.
+- Instala `deploy/openplayer.service` en `/etc/systemd/system/`, la habilita para el arranque y la reinicia.
 
-Prueba manual por SSH. El Service escucha en `/run/openplayer/hardware.sock`; hasta tener la unidad systemd (`RuntimeDirectory`), crear el directorio a mano. Explicación: `mkdir` en `/run` requiere `sudo`, y `chown` deja al usuario actual como dueño para que el Service corra sin root. `/run` es tmpfs: el directorio desaparece al reiniciar y hay que repetirlo.
+`/opt/openplayer/player.json` es copia de `config/player.example.json`; editarlo con `sudo` si MPD no está en `127.0.0.1:6600` y luego `sudo systemctl restart openplayer`. El equivalente sin PowerShell está en `README.md`.
+
+Prueba manual por SSH (abrir una sesión nueva tras el primer deploy, para que aplique el grupo `openplayer`):
 
 ```bash
 sudo apt install -y socat
-sudo mkdir -p /run/openplayer && sudo chown $USER /run/openplayer
-~/openplayer/OpenPlayer.Service
-# en otra sesión SSH:
+systemctl status openplayer
 echo '{"type":"player.get_snapshot"}' | socat - UNIX-CONNECT:/run/openplayer/hardware.sock
 ```
 
 Comparar el `player.snapshot` con `mpc current`; más mensajes en `README.md`. Si `volume` sale `null`, el `audio_output` de MPD no tiene mixer: añadir `mixer_type "software"` si se quiere controlar volumen.
+
+La instalación manual de SPEC 02/03 (`~/openplayer` y `mkdir /run/openplayer` a mano) ya no se usa: borrar `~/openplayer` y detener cualquier `OpenPlayer.Service` lanzado a mano antes del primer deploy, porque compite por el socket.
 
 ## 8. Agente Python y GPIO
 
@@ -164,7 +167,12 @@ Implementar el agente en este orden:
 
 ## 9. Socket Unix y systemd
 
-El socket `/run/openplayer/hardware.sock` requiere que el servicio cree un listener. Configurar `RuntimeDirectory=openplayer` en la unidad systemd, con usuario/grupo y permisos mínimos. Ambos procesos deben compartir un grupo dedicado para la comunicación. No dar acceso global al socket.
+Implementado en `deploy/openplayer.service` (SPEC 04):
+
+- `User=openplayer`, `Group=openplayer`. `RuntimeDirectory=openplayer` con `RuntimeDirectoryMode=0770`: systemd crea `/run/openplayer` en cada arranque (y lo borra al detener); el Service crea el socket con `0660`. El agente comparte el grupo `openplayer`. No dar acceso global al socket.
+- `Wants=mpd.service` y `After=mpd.service`: reiniciar MPD no reinicia el Service, que sobrevive solo a una caída de MPD.
+- `Restart=on-failure` cada 3 s, con `StartLimitIntervalSec=60` y `StartLimitBurst=5`: un `player.json` inválido deja la unidad en `failed` tras 5 intentos en lugar de reintentar sin fin. Corregir el archivo y `sudo systemctl restart openplayer`.
+- `ProtectSystem=strict`, `ProtectHome=true`, `NoNewPrivileges=true`; solo `/run/openplayer` es escribible.
 
 Orden recomendado:
 

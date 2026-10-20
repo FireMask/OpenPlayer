@@ -1,7 +1,9 @@
 [Unit]
 Description=OpenPlayer Control Service
 After=network.target mpd.service
-Requires=mpd.service
+Wants=mpd.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -16,7 +18,7 @@ RestartSec=3
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/run/openplayer /var/lib/openplayer
+ReadWritePaths=/run/openplayer
 
 [Install]
 WantedBy=multi-user.target
