@@ -16,8 +16,8 @@ $remote = '/tmp/openplayer-deploy'
 dotnet publish (Join-Path $PSScriptRoot 'src\OpenPlayer.Service') -c Release -r linux-arm64 --self-contained true -o $out
 if ($LASTEXITCODE) { throw 'dotnet publish falló' }
 
-# Un solo archivo comprimido: scp de 225 archivos sueltos es lento.
-tar -czf $tgz -C $out .
+# Un solo archivo comprimido: scp de 225 archivos sueltos es lento. Incluye el hardware agent (solo .py).
+tar -czf $tgz --exclude=__pycache__ --exclude=requirements-dev.txt -C $out . -C (Join-Path $PSScriptRoot 'src') hardware-agent
 if ($LASTEXITCODE) { throw 'tar falló' }
 
 if ($Password) {
@@ -31,14 +31,16 @@ if ($Password) {
 try {
     ssh -o StrictHostKeyChecking=accept-new $target "mkdir -p $remote"
     if ($LASTEXITCODE) { throw 'ssh falló' }
-    scp $tgz (Join-Path $PSScriptRoot 'deploy\install.sh') (Join-Path $PSScriptRoot 'deploy\openplayer.service') "${target}:$remote/"
+    $deploy = Join-Path $PSScriptRoot 'deploy'
+    scp $tgz "$deploy\install.sh" "$deploy\openplayer.service" "$deploy\openplayer-hardware.service" "${target}:$remote/"
     if ($LASTEXITCODE) { throw 'scp falló' }
 
     $install = "bash $remote/install.sh $remote/openplayer.tgz $remote/openplayer.service $User"
     $cleanup = "rc=`$?; rm -r $remote; exit `$rc"
     if ($Password) {
-        # La contraseña va por stdin a sudo -S, no en la línea de comandos. PowerShell añade \r\n: tr quita el \r.
-        $Password | ssh $target "tr -d '\r' | sudo -S -p '' $install; $cleanup"
+        # La contraseña va por stdin a sudo -S, no en la línea de comandos. El pipe de PowerShell 5.1 puede
+        # anteponer un BOM UTF-8 y añade \r\n; sed quita ambos para que sudo reciba la contraseña limpia.
+        $Password | ssh $target "sed -e '1s/^\xEF\xBB\xBF//' -e 's/\r$//' | sudo -S -p '' $install; $cleanup"
     }
     else {
         ssh -t $target "sudo $install; $cleanup"
