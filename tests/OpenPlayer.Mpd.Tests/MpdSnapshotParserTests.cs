@@ -8,7 +8,7 @@ public class MpdSnapshotParserTests
     private static readonly DateTimeOffset Now = new(2026, 10, 20, 12, 0, 0, TimeSpan.Zero);
 
     private static MpdResponse Resp(params string[] lines) =>
-        new(lines.Select(l => l.Split(": ", 2)).Select(p => KeyValuePair.Create(p[0], p[1])).ToList());
+        new([.. lines.Select(l => l.Split(": ", 2)).Select(p => KeyValuePair.Create(p[0], p[1]))]);
 
     [Fact]
     public void Parses_full_playing_snapshot()
