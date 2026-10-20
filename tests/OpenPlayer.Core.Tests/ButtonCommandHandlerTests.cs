@@ -32,6 +32,26 @@ public class ButtonCommandHandlerTests
     }
 
     [Fact]
+    public async Task Previous_after_threshold_restarts_track()
+    {
+        _player.Snapshot = FakePlayer.SnapshotWith(position: TimeSpan.FromSeconds(5));
+        await Press(ButtonName.Previous);
+        Assert.Equal(["GetSnapshot", "Seek(00:00:00)"], _player.Calls);
+    }
+
+    [Theory]
+    [InlineData(2.0)]
+    [InlineData(3.0)]
+    [InlineData(null)]
+    public async Task Previous_at_or_before_threshold_goes_previous(double? seconds)
+    {
+        _player.Snapshot = FakePlayer.SnapshotWith(
+            position: seconds is null ? null : TimeSpan.FromSeconds(seconds.Value));
+        await Press(ButtonName.Previous);
+        Assert.Equal(["GetSnapshot", "Previous"], _player.Calls);
+    }
+
+    [Fact]
     public async Task Undefined_button_throws() =>
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => Press((ButtonName)99));
 }

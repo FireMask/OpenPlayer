@@ -12,9 +12,20 @@ public sealed class ButtonCommandHandler(IPlayer player, PlayerSettings settings
     {
         ButtonName.PlayPause => _player.TogglePlaybackAsync(ct),
         ButtonName.Next => _player.NextAsync(ct),
+        ButtonName.Previous => PreviousAsync(ct),
         ButtonName.Menu => Task.CompletedTask,
-        // Pasos 8 y 9 del plan de SPEC 01.
-        ButtonName.Previous or ButtonName.VolumeUp or ButtonName.VolumeDown => Task.CompletedTask,
+        // Paso 9 del plan de SPEC 01.
+        ButtonName.VolumeUp or ButtonName.VolumeDown => Task.CompletedTask,
         _ => throw new ArgumentOutOfRangeException(nameof(button), button, null),
     };
+
+    // Pasado el umbral reinicia la pista; antes (o sin posición conocida) va a la anterior.
+    private async Task PreviousAsync(CancellationToken ct)
+    {
+        var snapshot = await _player.GetSnapshotAsync(ct);
+        if (snapshot.Position > _settings.PreviousRestartThreshold)
+            await _player.SeekAsync(TimeSpan.Zero, ct);
+        else
+            await _player.PreviousAsync(ct);
+    }
 }
