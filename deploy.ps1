@@ -1,6 +1,7 @@
-﻿# Compila OpenPlayer.Service para linux-arm64 y lo instala en ~/openplayer de la Pi.
+﻿# Compila OpenPlayer.Service para linux-arm64 y lo instala en la Pi como unidad systemd (deploy/install.sh).
 # Uso: .\deploy.ps1 -Device mpi3-player.local -User andres [-Password ...]
-# Sin -Password, ssh la pide (o usa tu clave SSH). player.json de la Pi no se sobrescribe.
+# -Password sirve para ssh y sudo. Sin él, ssh usa tu clave SSH (o la pide) y sudo la pide en la terminal.
+# player.json de la Pi (/opt/openplayer) no se sobrescribe.
 param(
     [Parameter(Mandatory)][string]$Device,
     [Parameter(Mandatory)][string]$User,
@@ -10,6 +11,7 @@ $ErrorActionPreference = 'Stop'
 $out = Join-Path $PSScriptRoot 'publish\linux-arm64'
 $tgz = Join-Path $env:TEMP 'openplayer.tgz'
 $target = "$User@$Device"
+$remote = '/tmp/openplayer-deploy'
 
 dotnet publish (Join-Path $PSScriptRoot 'src\OpenPlayer.Service') -c Release -r linux-arm64 --self-contained true -o $out
 if ($LASTEXITCODE) { throw 'dotnet publish falló' }
@@ -27,9 +29,20 @@ if ($Password) {
     $env:SSH_ASKPASS_REQUIRE = 'force'
 }
 try {
-    scp -o StrictHostKeyChecking=accept-new $tgz "${target}:/tmp/openplayer.tgz"
+    ssh -o StrictHostKeyChecking=accept-new $target "mkdir -p $remote"
+    if ($LASTEXITCODE) { throw 'ssh falló' }
+    scp $tgz (Join-Path $PSScriptRoot 'deploy\install.sh') (Join-Path $PSScriptRoot 'deploy\openplayer.service') "${target}:$remote/"
     if ($LASTEXITCODE) { throw 'scp falló' }
-    ssh $target 'set -e; d=~/openplayer; mkdir -p $d; tar -xzmf /tmp/openplayer.tgz -C $d --exclude=./player.json; [ -f $d/player.json ] || tar -xzmf /tmp/openplayer.tgz -C $d ./player.json; chmod +x $d/OpenPlayer.Service; rm /tmp/openplayer.tgz; echo "Instalado en $d"'
+
+    $install = "bash $remote/install.sh $remote/openplayer.tgz $remote/openplayer.service $User"
+    $cleanup = "rc=`$?; rm -r $remote; exit `$rc"
+    if ($Password) {
+        # La contraseña va por stdin a sudo -S, no en la línea de comandos. PowerShell añade \r\n: tr quita el \r.
+        $Password | ssh $target "tr -d '\r' | sudo -S -p '' $install; $cleanup"
+    }
+    else {
+        ssh -t $target "sudo $install; $cleanup"
+    }
     if ($LASTEXITCODE) { throw 'instalación remota falló' }
 }
 finally {
