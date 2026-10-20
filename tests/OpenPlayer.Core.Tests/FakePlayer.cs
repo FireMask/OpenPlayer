@@ -3,13 +3,15 @@ using OpenPlayer.Core.Models;
 
 namespace OpenPlayer.Core.Tests;
 
-/// <summary>Registra cada llamada (incluida GetSnapshot) y devuelve <see cref="Snapshot"/>.</summary>
+/// <summary>Registra cada llamada (incluida GetSnapshot) y devuelve <see cref="Snapshot"/>, o lanza <see cref="SnapshotError"/>.</summary>
 internal sealed class FakePlayer : IPlayer
 {
     public List<string> Calls { get; } = [];
 
     public PlaybackSnapshot Snapshot { get; set; } =
         new(PlaybackState.Stopped, null, null, null, null, DateTimeOffset.UnixEpoch);
+
+    public Exception? SnapshotError { get; set; }
 
     public static PlaybackSnapshot SnapshotWith(TimeSpan? position = null, int? volume = null) =>
         new(PlaybackState.Playing, null, position, null, volume, DateTimeOffset.UnixEpoch);
@@ -27,7 +29,7 @@ internal sealed class FakePlayer : IPlayer
     public Task<PlaybackSnapshot> GetSnapshotAsync(CancellationToken ct = default)
     {
         Calls.Add("GetSnapshot");
-        return Task.FromResult(Snapshot);
+        return SnapshotError is { } e ? Task.FromException<PlaybackSnapshot>(e) : Task.FromResult(Snapshot);
     }
 
     private Task Record(string call)
