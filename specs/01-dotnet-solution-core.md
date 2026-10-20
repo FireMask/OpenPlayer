@@ -1,6 +1,6 @@
 # SPEC 01 — Solución .NET 10 y OpenPlayer.Core
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** —
 > **Date:** 2026-10-20
 > **Objective:** Crear `OpenPlayer.slnx` con la biblioteca `OpenPlayer.Core` (net10.0) que define modelos, `IPlayer` y la traducción de botones a acciones, probada con xUnit en Windows.
@@ -133,23 +133,23 @@ Convenciones:
 
 ## Acceptance criteria
 
-- [ ] `dotnet --version` en la raíz del repo devuelve `10.0.x`.
-- [ ] `dotnet build OpenPlayer.slnx` termina sin errores ni warnings en Windows.
-- [ ] `dotnet test OpenPlayer.slnx` pasa todas las pruebas en Windows.
-- [ ] `OpenPlayer.Core.csproj` no tiene `PackageReference` ni `RuntimeIdentifier`.
-- [ ] Core no usa `System.Net.Sockets`, `System.IO.File`, `System.Diagnostics.Process` ni `Environment` (verificable con grep).
-- [ ] `ButtonNames.TryParse` acepta exactamente `play_pause`, `previous`, `next`, `volume_up`, `volume_down` y `menu`, y rechaza cualquier otro valor, incluido `null`.
-- [ ] `PlayPause` llama a `TogglePlaybackAsync` una vez y nada más.
-- [ ] `Next` llama a `NextAsync` una vez y nada más.
-- [ ] `Previous` con posición 5 s y umbral 3 s llama a `SeekAsync(TimeSpan.Zero)` y no llama a `PreviousAsync`.
-- [ ] `Previous` con posición 2 s, 3 s o `null` llama a `PreviousAsync` y no llama a `SeekAsync`.
-- [ ] `VolumeUp` con volumen 98 y paso 5 llama a `SetVolumeAsync(100)`.
-- [ ] `VolumeDown` con volumen 3 y paso 5 llama a `SetVolumeAsync(0)`.
-- [ ] `VolumeUp`/`VolumeDown` con volumen `null` no llaman a `SetVolumeAsync`.
-- [ ] `Menu` no llama a ningún método de `IPlayer`.
-- [ ] `Volume.EnsureValid` lanza `ArgumentOutOfRangeException` con −1 y 101, y acepta 0 y 100.
-- [ ] `PlayerSettings` lanza `ArgumentOutOfRangeException` con `VolumeStep` 0 o 101, `InitialVolume` −1 o 101, o un umbral negativo.
-- [ ] `docs/architecture.md` §6 incluye `SeekAsync` y §8 documenta la política de `previous`.
+- [x] `dotnet --version` en la raíz del repo devuelve `10.0.x`.
+- [x] `dotnet build OpenPlayer.slnx` termina sin errores ni warnings en Windows.
+- [x] `dotnet test OpenPlayer.slnx` pasa todas las pruebas en Windows.
+- [x] `OpenPlayer.Core.csproj` no tiene `PackageReference` ni `RuntimeIdentifier`.
+- [x] Core no usa `System.Net.Sockets`, `System.IO.File`, `System.Diagnostics.Process` ni `Environment` (verificable con grep).
+- [x] `ButtonNames.TryParse` acepta exactamente `play_pause`, `previous`, `next`, `volume_up`, `volume_down` y `menu`, y rechaza cualquier otro valor, incluido `null`.
+- [x] `PlayPause` llama a `TogglePlaybackAsync` una vez y nada más.
+- [x] `Next` llama a `NextAsync` una vez y nada más.
+- [x] `Previous` con posición 5 s y umbral 3 s llama a `SeekAsync(TimeSpan.Zero)` y no llama a `PreviousAsync`.
+- [x] `Previous` con posición 2 s, 3 s o `null` llama a `PreviousAsync` y no llama a `SeekAsync`.
+- [x] `VolumeUp` con volumen 98 y paso 5 llama a `SetVolumeAsync(100)`.
+- [x] `VolumeDown` con volumen 3 y paso 5 llama a `SetVolumeAsync(0)`.
+- [x] `VolumeUp`/`VolumeDown` con volumen `null` no llaman a `SetVolumeAsync`.
+- [x] `Menu` no llama a ningún método de `IPlayer`.
+- [x] `Volume.EnsureValid` lanza `ArgumentOutOfRangeException` con −1 y 101, y acepta 0 y 100.
+- [x] `PlayerSettings` lanza `ArgumentOutOfRangeException` con `VolumeStep` 0 o 101, `InitialVolume` −1 o 101, o un umbral negativo.
+- [x] `docs/architecture.md` §6 incluye `SeekAsync` y §8 documenta la política de `previous`.
 
 ## Decisions
 
