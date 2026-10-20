@@ -42,6 +42,8 @@ class Sender:
         self._thread.join(timeout=5)
 
     def _connect_unix(self):
+        if not hasattr(socket, "AF_UNIX"):
+            raise OSError("AF_UNIX not supported on this platform")
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             sock.connect(self._path)
