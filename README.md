@@ -47,16 +47,16 @@ dotnet test OpenPlayer.slnx
 
 ## Ejecutar el Service
 
-`OpenPlayer.Service` lee `player.json` junto al binario (copia de `config/player.example.json`) y escucha en el socket Unix `ipc.unixSocketPath` (por defecto `/run/openplayer/hardware.sock`) mensajes JSON Lines; contrato en [`docs/architecture.md`](docs/architecture.md) §7. Los logs van a stderr. Ctrl+C o SIGTERM lo detienen con código 0 y borran el socket.
-
-El directorio del socket debe existir. Mientras no haya unidad systemd, en la Pi:
+En la Pi corre como unidad systemd `openplayer` (usuario de sistema `openplayer`, binario en `/opt/openplayer`). Lee `/opt/openplayer/player.json` (copia de `config/player.example.json`) y escucha en el socket Unix `ipc.unixSocketPath` (por defecto `/run/openplayer/hardware.sock`, directorio creado por systemd) mensajes JSON Lines; contrato en [`docs/architecture.md`](docs/architecture.md) §7.
 
 ```bash
-sudo mkdir -p /run/openplayer && sudo chown $USER /run/openplayer   # se pierde al reiniciar
-~/openplayer/OpenPlayer.Service
+systemctl status openplayer              # estado
+sudo systemctl restart openplayer        # p. ej. tras editar /opt/openplayer/player.json
+sudo systemctl stop openplayer
+journalctl -u openplayer -b -f           # logs
 ```
 
-Probar desde otra sesión SSH con `socat` (`sudo apt install socat`):
+Probar con `socat` (`sudo apt install socat`). El usuario que despliega está en el grupo `openplayer`; tras el primer deploy, abrir una sesión SSH nueva para que el grupo aplique.
 
 ```bash
 S=UNIX-CONNECT:/run/openplayer/hardware.sock
@@ -69,26 +69,41 @@ echo '{"type":"button.pressed","button":"play_pause"}' | socat - $S
 | `{"type":"button.pressed","button":"<nombre>"}` con `play_pause`, `previous`, `next`, `volume_up`, `volume_down`, `menu` | Igual que el botón físico; sin respuesta |
 | `{"type":"player.get_snapshot"}` | Responde una línea `player.snapshot`, o `error` si MPD no responde |
 
-Un mensaje inválido o sin MPD accesible solo registra un warning; el proceso sigue. Si `socat` corta la respuesta, usar `socat -t 2`. En Windows hay que apuntar `ipc.unixSocketPath` a una carpeta existente (ruta de máximo 108 caracteres).
+Un mensaje inválido o sin MPD accesible solo registra un warning; el proceso sigue. Si `socat` corta la respuesta, usar `socat -t 2`.
+
+Para ejecutarlo a mano (depurar), detener antes la unidad: dos instancias compiten por el socket. Al detenerse, systemd borra `/run/openplayer`, así que hay que recrearlo. Ctrl+C sale con código 0 y borra el socket.
+
+```bash
+sudo systemctl stop openplayer
+sudo install -d -o openplayer -g openplayer -m 0770 /run/openplayer
+sudo -u openplayer /opt/openplayer/OpenPlayer.Service
+sudo systemctl start openplayer
+```
+
+En Windows (`dotnet run --project src/OpenPlayer.Service`) hay que apuntar `ipc.unixSocketPath` a una carpeta existente (ruta de máximo 108 caracteres).
 
 ## Publicar para la Raspberry Pi
 
-Publicación autocontenida (no requiere instalar .NET en la Pi):
-
-```bash
-dotnet publish src/OpenPlayer.Service -c Release -r linux-arm64 --self-contained true -o publish/linux-arm64
-scp -r publish/linux-arm64 <usuario>@openplayer.local:~/openplayer
-ssh <usuario>@openplayer.local
-chmod +x ~/openplayer/OpenPlayer.Service
-```
-
-Desde Windows, `deploy.ps1` compila, copia e instala en `~/openplayer` en un paso (no sobrescribe `player.json` de la Pi; sin `-Password` usa tu clave SSH o la pide):
+Publicación autocontenida (no requiere instalar .NET en la Pi). Desde Windows, `deploy.ps1` compila, copia y ejecuta `deploy/install.sh` con sudo en la Pi:
 
 ```powershell
 .\deploy.ps1 -Device openplayer.local -User <usuario> [-Password <contraseña>]
 ```
 
-Para ejecutarlo y probarlo, ver "Ejecutar el Service".
+`install.sh` es idempotente: crea el usuario y grupo `openplayer` si faltan, añade `<usuario>` al grupo, instala en `/opt/openplayer` (sin sobrescribir un `player.json` existente), instala `deploy/openplayer.service`, la habilita y la reinicia. Termina con error y muestra `journalctl` si la unidad no queda escuchando.
+
+`-Password` sirve para ssh y sudo, pero queda en el historial de PowerShell; sin él, ssh usa tu clave (`ssh-copy-id`) y sudo pide la contraseña en la terminal.
+
+Sin PowerShell, el equivalente manual:
+
+```bash
+dotnet publish src/OpenPlayer.Service -c Release -r linux-arm64 --self-contained true -o publish/linux-arm64
+tar -czf openplayer.tgz -C publish/linux-arm64 .
+scp openplayer.tgz deploy/install.sh deploy/openplayer.service <usuario>@openplayer.local:/tmp/
+ssh -t <usuario>@openplayer.local 'sudo bash /tmp/install.sh /tmp/openplayer.tgz /tmp/openplayer.service $USER'
+```
+
+La instalación anterior en `~/openplayer` (SPEC 02/03) ya no se usa; se puede borrar con `rm -r ~/openplayer`.
 
 ## Estructura
 
