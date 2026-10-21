@@ -61,9 +61,31 @@
   dialog::backdrop { background: rgb(0 0 0 / .4); }
   dialog h2 { font-size: 1rem; margin: 0 0 8px; }
   dialog .list { background: var(--bg); max-height: 50vh; overflow-y: auto; margin-bottom: 12px; }
+
+  /* Cola (SPEC 11): a la derecha ≥ 900 px en todas las pestañas; debajo de los controles en Reproductor si no. */
+  .queue h2 { font-size: 1rem; margin: 0 0 8px; overflow-wrap: anywhere; }
+  .queue .list { overflow-y: auto; }
+  .list .q { display: flex; align-items: center; gap: 10px; }
+  .list .q .num { min-width: 2.5em; text-align: right; color: var(--muted); font-size: .8rem;
+                  font-variant-numeric: tabular-nums; }
+  .list .q .body { flex: 1; min-width: 0; }
+  .list .q .dur { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+  @media (min-width: 900px) {
+    .layout { display: grid; grid-template-columns: 420px minmax(320px, 1fr); gap: 24px; align-items: start;
+              max-width: 1100px; margin: 0 auto; }
+    main { width: 100%; }
+    .queue { position: sticky; top: 16px; }
+    .queue .list { max-height: calc(100vh - 120px); }
+  }
+  @media (max-width: 899px) {
+    body:not([data-tab="player"]) .queue { display: none; }
+    .queue { max-width: 420px; margin: 16px auto 0; }
+    .queue .list { max-height: 60vh; }
+  }
 </style>
 </head>
-<body>
+<body data-tab="player">
+<div class="layout">
 <main>
   <h1>OpenPlayer</h1>
   <nav class="tabs" role="tablist">
@@ -124,6 +146,13 @@
     <button class="small" id="picker-cancel">Cancelar</button>
   </dialog>
 </main>
+<aside class="queue" aria-label="Cola">
+  <h2 id="queue-head">Cola</h2>
+  <p class="msg" id="queue-msg" aria-live="polite"></p>
+  <ul class="list" id="queue-list"></ul>
+  <button class="small more" id="queue-more" hidden>Más</button>
+</aside>
+</div>
 <script>
   const STATES = { playing: "Reproduciendo", paused: "En pausa", stopped: "Detenido" };
   const $ = id => document.getElementById(id);
@@ -164,6 +193,7 @@
     $("artist").textContent = "";
     $("progress").hidden = true;
     duration = 0;
+    queueOffline();
   }
 
   // textContent, nunca innerHTML: título y artista vienen de los archivos de música.
@@ -174,6 +204,7 @@
     $("title").textContent = s.trackTitle || (s.state === "stopped" ? "" : "Sin título");
     $("artist").textContent = s.trackArtist || "";
     showProgress(s);
+    syncQueue(s);
   }
 
   async function refresh() {
@@ -272,6 +303,7 @@
   const loaders = { library: () => loadLibrary(), lists: () => showIndex() };
   const loaded = new Set(["player"]);
   tabs.forEach(t => t.addEventListener("click", () => {
+    document.body.dataset.tab = t.dataset.tab;  // en pantallas angostas la cola solo se ve en Reproductor
     tabs.forEach(o => {
       o.setAttribute("aria-selected", String(o === t));
       $("tab-" + o.dataset.tab).hidden = o !== t;
@@ -407,12 +439,16 @@
   async function renamePlaylist(name) {
     const newName = prompt("Nuevo nombre", name);
     if (!newName || !newName.trim() || newName.trim() === name) return;
-    if (await mutate("POST", listUrl(name) + "/rename", { newName: newName.trim() })) showIndex("Lista renombrada");
+    if (!(await mutate("POST", listUrl(name) + "/rename", { newName: newName.trim() }))) return;
+    showIndex("Lista renombrada");
+    reloadQueue();  // el nombre de la lista cargada pudo cambiar sin que cambie queueVersion
   }
 
   async function deletePlaylist(name) {
     if (!confirm(`¿Borrar la lista “${name}”? La música no se borra.`)) return;
-    if (await mutate("DELETE", listUrl(name))) showIndex(`Lista “${name}” borrada`);
+    if (!(await mutate("DELETE", listUrl(name)))) return;
+    showIndex(`Lista “${name}” borrada`);
+    reloadQueue();
   }
 
   function openPlaylist(name) {
@@ -477,6 +513,80 @@
   $("list-back").addEventListener("click", () => showIndex());
   $("list-play").addEventListener("click", () => playPlaylist(0));
   $("lists-more").addEventListener("click", () => loadPlaylist());
+
+  // --- Cola (SPEC 11): se pide solo cuando el snapshot trae otro queueVersion. ---
+
+  let qVersion, qLoading = false, qCount = 0, qTotal = 0;  // qVersion undefined = sin cargar
+  const queueMsg = (text, isError) => setMsg("queue-msg", text, isError);
+
+  function syncQueue(s) {
+    if (!qLoading && s.queueVersion !== qVersion) loadQueue(s.queueVersion, s.queuePosition);
+  }
+
+  function reloadQueue() {
+    qVersion = undefined;
+    refresh();
+  }
+
+  function queueOffline() {
+    qVersion = undefined;  // al volver la conexión se recarga (el Service pudo reiniciarse y olvidar el nombre)
+    qCount = 0;
+    $("queue-head").textContent = "Cola";
+    $("queue-list").replaceChildren();
+    $("queue-more").hidden = true;
+    queueMsg(OFFLINE, true);
+  }
+
+  // Páginas desde 0 hasta incluir la pista actual; el resto con "Más".
+  async function loadQueue(version, position) {
+    qLoading = true;
+    qVersion = version;
+    const entries = [];
+    let page, offset = 0;
+    try {
+      do {
+        page = await api("GET", `/api/queue?offset=${offset}`);
+        entries.push(...page.entries);
+        offset = page.offset + page.entries.length;
+      } while (page.entries.length && position != null && offset <= position && offset < page.total);
+    } catch (e) {
+      qVersion = undefined;  // reintenta en el próximo sondeo
+      return queueMsg(e.message, true);
+    } finally {
+      qLoading = false;
+    }
+    queueMsg("");
+    qTotal = page.total;
+    qCount = 0;
+    $("queue-head").textContent = (page.playlist ? `Lista: ${page.playlist}` : "Cola")
+      + ` · ${qTotal} ${qTotal === 1 ? "canción" : "canciones"}`;
+    $("queue-list").replaceChildren();
+    appendQueue(entries);
+  }
+
+  function appendQueue(entries) {
+    const list = $("queue-list");
+    entries.forEach((e, i) => list.append(queueRow(e, qCount + i)));
+    qCount += entries.length;
+    if (!qCount) list.append(el("li", { className: "empty", textContent: "Cola vacía" }));
+    $("queue-more").hidden = qCount >= qTotal;
+  }
+
+  function queueRow(e, pos) {
+    const meta = [e.artist, e.album].filter(Boolean).join(" · ");
+    const body = el("span", { className: "body" }, el("span", { className: "name", textContent: e.title || baseName(e.uri) }));
+    if (meta) body.append(el("span", { className: "meta", textContent: meta }));
+    return el("li", {}, el("button", { className: "main q" },
+      el("span", { className: "num", textContent: pos + 1 }),
+      body,
+      el("span", { className: "dur", textContent: e.durationSeconds == null ? "" : mmss(e.durationSeconds) })));
+  }
+
+  $("queue-more").addEventListener("click", async () => {
+    let page;
+    try { page = await api("GET", `/api/queue?offset=${qCount}`); } catch (e) { return queueMsg(e.message, true); }
+    appendQueue(page.entries);
+  });
 </script>
 </body>
 </html>
