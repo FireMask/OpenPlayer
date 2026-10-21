@@ -67,6 +67,12 @@ def test_press_sends_exact_line_and_closes(server):
     assert wait_for(server.received) == [b'{"type":"button.pressed","button":"next"}\n']
 
 
+def test_seek_sends_exact_line_and_closes(server):
+    Ipc("/x", connect=server.connect).seek(83)
+
+    assert wait_for(server.received) == [b'{"type":"player.seek","positionSeconds":83}\n']
+
+
 def test_snapshot_returns_reply_line(server):
     server.reply = SNAPSHOT.encode() + b"\n"
 
@@ -113,6 +119,8 @@ def test_connect_failure_is_unavailable():
     ipc = Ipc("/x", connect=refuse)
     with pytest.raises(IpcUnavailable):
         ipc.press("next")
+    with pytest.raises(IpcUnavailable):
+        ipc.seek(83)
     with pytest.raises(IpcUnavailable):
         ipc.snapshot()
 

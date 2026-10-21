@@ -10,6 +10,8 @@ public sealed record ButtonPressed(ButtonName Button, long? Sequence) : IpcMessa
 
 public sealed record SnapshotRequested : IpcMessage;
 
+public sealed record SeekRequested(TimeSpan Position) : IpcMessage;
+
 public static class IpcMessageParser
 {
     /// <summary>Parsea una línea JSON. Nunca lanza: si es inválida devuelve false y un error legible para el log.</summary>
@@ -42,6 +44,13 @@ public static class IpcMessageParser
                     break;
                 case "player.get_snapshot":
                     message = new SnapshotRequested();
+                    break;
+                case "player.seek":
+                    // Cota de 24 h para no desbordar TimeSpan con valores absurdos.
+                    if (!root.TryGetProperty("positionSeconds", out var p) || p.ValueKind != JsonValueKind.Number
+                        || !p.TryGetInt32(out var seconds) || seconds is < 0 or > 86400)
+                        return Fail("invalid positionSeconds", out error);
+                    message = new SeekRequested(TimeSpan.FromSeconds(seconds));
                     break;
                 default:
                     return Fail($"unknown type '{type.GetString()}'", out error);

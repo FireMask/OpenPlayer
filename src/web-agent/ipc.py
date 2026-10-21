@@ -22,6 +22,10 @@ class Ipc:
         with self._open() as sock:
             self._send(sock, {"type": "button.pressed", "button": name})
 
+    def seek(self, seconds):
+        with self._open() as sock:
+            self._send(sock, {"type": "player.seek", "positionSeconds": seconds})
+
     def snapshot(self):
         """Devuelve la línea de respuesta (player.snapshot o error) sin el salto de línea."""
         with self._open() as sock:
