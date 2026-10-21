@@ -108,9 +108,10 @@ Implementado en SPEC 05 (Python 3, solo stdlib y `gpiozero` con `lgpio`, paquete
 Proceso Python (SPEC 08, solo stdlib): página con los 6 botones y el estado, para controlar el reproductor desde un navegador de la red local sin GPIO.
 
 - `config.py`: lee `ipc.unixSocketPath` y `web.port` (1024–65535) de `player.json`; ignora `hardware`. Config inválida → exit 1 nombrando el campo.
-- `ipc.py`: una conexión al socket por pedido HTTP; `button.pressed` sin `sequence`; `player.get_snapshot` con timeout de 2 s; `player.seek` (SPEC 09).
+- `ipc.py`: una conexión al socket por pedido HTTP; `button.pressed` sin `sequence`; `player.get_snapshot` con timeout de 2 s; `player.seek` (SPEC 09). Biblioteca y playlists (SPEC 10) con `request()`: timeout de 5 s y respuesta de hasta 1 MB.
 - `server.py`: `ThreadingHTTPServer` en `::` (IPv4 e IPv6). Solo acepta clientes de `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `::1` y `fe80::/10` (IPv4 mapeadas se evalúan como IPv4); el resto recibe `403`. Sin autenticación ni HTTPS.
 - `index.html`: botones y línea de estado (sondeo cada 2 s); título y artista se insertan como texto, nunca como HTML. Barra de progreso (`<input type="range">` + `m:ss / m:ss`, SPEC 09): avanza localmente entre sondeos si `playing`, el sondeo no la mueve mientras se arrastra, al soltar envía `POST /api/seek`; oculta sin `durationSeconds`, deshabilitada en `stopped`.
+- Pestañas Reproductor / Biblioteca / Listas (SPEC 10). Biblioteca: carpetas con migas, búsqueda (≥ 2 caracteres), "Más" cada 100; tocar una pista reemplaza la cola y la reproduce; "+" agrega pista o carpeta a una lista (`<dialog>`). Listas: crear/renombrar con `prompt`, borrar con `confirm`; abrir una lista: ↑/↓/✕ y reproducir desde el inicio o desde una pista. Tras cada cambio la lista se recarga para no usar posiciones viejas.
 - `main.py`: logs `ready:` / `button <nombre>` / `seek <N>` / warnings; SIGTERM → exit 0. Unidad `deploy/openplayer-web.service` (usuario `openplayer`). Pruebas en `tests/web-agent`.
 
 Contrato HTTP:
@@ -121,8 +122,26 @@ Contrato HTTP:
 | `POST /api/buttons/<nombre>` (los 6 de §8) | `204` | `404` nombre desconocido; `503` Service inalcanzable |
 | `POST /api/seek` con cuerpo `{"positionSeconds": N}` | `204` | `400` cuerpo ausente, > 1 KB, JSON inválido, o `positionSeconds` no entero / fuera de 0–86400; `503` Service inalcanzable |
 | `GET /api/snapshot` | `200` `application/json`: la línea `player.snapshot` de §7 tal cual | `502` si el Service responde `error`; `503` inalcanzable o sin respuesta en 2 s |
+| Biblioteca y playlists (SPEC 10, tabla abajo) | `200` JSON (página o lista) / `204` (`ok`) | `400` forma inválida; `502` el Service responde `error` (cuerpo = esa línea); `503` inalcanzable o sin respuesta en 5 s |
 | Otra ruta / otro método | — | `404` / `405` |
 | Cliente fuera de los rangos | — | `403` en todas las rutas |
+
+Rutas de biblioteca y playlists (SPEC 10). `<nombre>` y `<pos>` van URL-encoded en la ruta; cuerpos JSON de hasta 4 KB. El web agent valida la forma (tipos, enteros ≥ 0, textos no vacíos); el contenido (caracteres de los nombres, longitudes, `query` ≥ 2) lo valida el Core y vuelve como `502`.
+
+| Método y ruta | Mensaje IPC (§7) | Éxito |
+|---|---|---|
+| `GET /api/library?path=&offset=` | `library.browse` | `200` `library.page` |
+| `GET /api/library/search?q=&offset=` | `library.search` | `200` `library.page` |
+| `POST /api/library/play` `{"uri"}` | `library.play` | `204` |
+| `GET /api/playlists` | `playlist.list` | `200` |
+| `POST /api/playlists` `{"name"}` | `playlist.create` | `204` |
+| `GET /api/playlists/<nombre>?offset=` | `playlist.get` | `200` `library.page` |
+| `POST /api/playlists/<nombre>/rename` `{"newName"}` | `playlist.rename` | `204` |
+| `DELETE /api/playlists/<nombre>` | `playlist.delete` | `204` |
+| `POST /api/playlists/<nombre>/tracks` `{"uri"}` | `playlist.add` | `204` |
+| `DELETE /api/playlists/<nombre>/tracks/<pos>` | `playlist.remove` | `204` |
+| `POST /api/playlists/<nombre>/move` `{"from","to"}` | `playlist.move` | `204` |
+| `POST /api/playlists/<nombre>/play` `{"position"}` opcional (cuerpo opcional) | `playlist.play` | `204` |
 
 ### MPD y salida de audio
 
@@ -152,6 +171,34 @@ public interface IPlayer
 
 `ILibrary` debe ofrecer búsquedas acotadas y paginables cuando sea posible. `IPlaylistStore` puede delegar inicialmente todas las listas persistentes a MPD; no crear una segunda copia de la cola sin una necesidad concreta.
 
+Implementado en SPEC 10 (`OpenPlayer.Core.Interfaces`, adaptadores `MpdLibrary` y `MpdPlaylistStore`):
+
+```csharp
+public interface ILibrary
+{
+    Task<LibraryPage> BrowseAsync(string path, int offset, CancellationToken ct = default);   // lsinfo; "" = raíz
+    Task<LibraryPage> SearchAsync(string query, int offset, CancellationToken ct = default);  // search any
+    Task PlayTrackAsync(string uri, CancellationToken ct = default);                          // clear + add + play 0
+}
+
+public interface IPlaylistStore
+{
+    Task<IReadOnlyList<string>> ListAsync(CancellationToken ct = default);
+    Task<LibraryPage> GetAsync(string name, int offset, CancellationToken ct = default);
+    Task CreateAsync(string name, CancellationToken ct = default);          // existe → error; si no, playlistclear
+    Task RenameAsync(string name, string newName, CancellationToken ct = default);
+    Task DeleteAsync(string name, CancellationToken ct = default);
+    Task AddAsync(string name, string uri, CancellationToken ct = default); // pista o carpeta (recursivo)
+    Task RemoveAsync(string name, int position, CancellationToken ct = default);
+    Task MoveAsync(string name, int from, int to, CancellationToken ct = default);
+    Task PlayAsync(string name, int position, CancellationToken ct = default); // clear + load + play N
+}
+```
+
+- `LibraryPage(Offset, Total, Entries)` con páginas de `LibraryPage.PageSize` = 100; `LibraryEntry(Uri, Track?)` con `Track` null para carpetas. En playlists, la posición de una pista es `Offset + índice`.
+- MPD 0.23 no pagina `lsinfo` ni `search`: el adaptador pide todo y corta. `BrowseAsync` pone carpetas primero (orden estable) e ignora las entradas `playlist:`.
+- Nombres de playlist: `PlaylistName.EnsureValid` (1–100 caracteres, sin `/`, `\`, `\n`, `\r` ni `.` inicial). Todo argumento de texto a MPD pasa por `MpdClient.Quote` (comillas dobles, `\` y `"` escapados).
+
 ## 7. IPC Python ↔ C#
 
 Transporte inicial: Unix domain socket local, ruta propuesta `/run/openplayer/hardware.sock`. El directorio `/run/openplayer` debe crearse en el arranque mediante `systemd` (`RuntimeDirectory=openplayer`) y asignarse a un grupo dedicado. No usar `/tmp` como ruta de confianza a largo plazo.
@@ -164,12 +211,25 @@ Mensajes de entrada:
 {"type":"button.pressed","button":"next","sequence":1}
 {"type":"player.get_snapshot"}
 {"type":"player.seek","positionSeconds":83}
+{"type":"library.browse","path":"Rock/AC DC","offset":0}
+{"type":"library.search","query":"thunder","offset":0}
+{"type":"library.play","uri":"Rock/AC DC/01.flac"}
+{"type":"playlist.list"}
+{"type":"playlist.get","name":"Viaje","offset":0}
+{"type":"playlist.create","name":"Viaje"}
+{"type":"playlist.rename","name":"Viaje","newName":"Viaje 2026"}
+{"type":"playlist.delete","name":"Viaje"}
+{"type":"playlist.add","name":"Viaje","uri":"Rock/AC DC"}
+{"type":"playlist.remove","name":"Viaje","position":3}
+{"type":"playlist.move","name":"Viaje","from":3,"to":2}
+{"type":"playlist.play","name":"Viaje","position":0}
 ```
 
 - `type` obligatorio. Campos extra se ignoran.
 - `button.pressed`: `button` obligatorio, uno de `play_pause`, `previous`, `next`, `volume_up`, `volume_down`, `menu` (exacto). `sequence` opcional (entero); solo se registra en el log. No hay respuesta.
 - `player.get_snapshot`: responde una línea solo al cliente que la pidió.
 - `player.seek` (SPEC 09): `positionSeconds` obligatorio, entero JSON 0–86400 (no `83.5`, `"83"` ni `true`). Ejecuta `IPlayer.SeekAsync` (`seekcur`) y registra `Seek to N s`. No hay respuesta; si MPD falla (detenido, posición fuera de la pista) solo registra warning `Seek failed: …`. No se recorta contra la duración.
+- `library.*` y `playlist.*` (SPEC 10): **siempre responden una línea**, aunque sean inválidos. Validación en el Core: `name`/`newName` con `PlaylistName.EnsureValid`; `uri` 1–1024 caracteres y `path` 0–1024 (`""` = raíz), sin caracteres de control; `query` 2–100; `offset`, `position`, `from`, `to` enteros JSON ≥ 0 (`offset` y la `position` de `playlist.play` son opcionales, 0). Se ejecutan bajo el mismo lock global. `library.play` y `playlist.play` reemplazan la cola (`clear` + `add`/`load` + `play N`).
 
 Respuestas:
 
@@ -179,7 +239,15 @@ Respuestas:
 ```
 
 - `player.snapshot` (generado por `SnapshotMessage`): `state` es `playing` | `paused` | `stopped`. Todos los campos excepto `type` y `state` pueden ser `null` (sin pista, sin metadatos, MPD sin mixer); los `null` se escriben explícitamente. Segundos truncados a entero.
-- `error` (generado por `ErrorMessage`): la consulta falló porque MPD no respondió o devolvió `ACK`.
+- `error` (generado por `ErrorMessage`): la consulta falló porque MPD no respondió o devolvió `ACK`, o (SPEC 10) el mensaje de biblioteca/playlists era inválido (`message`: `invalid <campo>`).
+- SPEC 10: `ok` (`OkMessage`) para mutaciones y `*.play`; `library.page` (`LibraryPageMessage`) para `library.browse`, `library.search` y `playlist.get`, con carpetas `{"uri","directory":true}` y pistas con `title`, `artist`, `album`, `durationSeconds` (`null` explícitos); `playlist.list` (`PlaylistListMessage`).
+
+```json
+{"type":"ok","request":"playlist.add"}
+{"type":"library.page","offset":0,"total":2,"entries":[{"uri":"Rock/AC DC","directory":true},{"uri":"Rock/x.mp3","directory":false,"title":"X","artist":"A","album":null,"durationSeconds":210}]}
+{"type":"playlist.list","playlists":["Viaje","Gym"]}
+{"type":"error","request":"playlist.create","message":"Playlist 'Viaje' already exists"}
+```
 
 Framing y errores:
 
@@ -187,7 +255,7 @@ Framing y errores:
 - Límite `ipc.maxMessageBytes` (por defecto 4096) medido en bytes sin contar el `\n`. Si se acumulan más bytes sin `\n`, se registra un warning y se cierra esa conexión; el cliente debe reconectar.
 - JSON inválido, `type` desconocido, botón inválido, `sequence` no entero o `positionSeconds` inválido: warning en el log y la conexión sigue abierta. Nunca termina el proceso.
 - Varios clientes a la vez (agente y `socat` de diagnóstico). Todos los comandos se ejecutan en serie con un lock global.
-- No hay acknowledgements de `button.pressed` ni de `player.seek`; el log y el estado de MPD bastan para el MVP. No se aceptan comandos arbitrarios ni nombres de ejecutables.
+- No hay acknowledgements de `button.pressed` ni de `player.seek` (sí de los mensajes de SPEC 10); el log y el estado de MPD bastan para el MVP. No se aceptan comandos arbitrarios ni nombres de ejecutables.
 
 Socket:
 
@@ -216,6 +284,12 @@ En v1, usar la base de biblioteca y las playlists de MPD. Implementar:
 - Añadir pista a cola y limpiar cola con confirmación en interfaces futuras.
 - Crear/listar/guardar playlists mediante el protocolo MPD.
 - Tratar los URI/rutas como datos, nunca como shell commands.
+
+Estado (SPEC 10, desde la web):
+
+- Hecho: navegación por carpetas y búsqueda (`search any`), paginadas de a 100; playlists guardadas de MPD (`.m3u` en `playlist_directory`): crear, renombrar, borrar, agregar pista o carpeta, quitar, reordenar; reproducir una pista o una lista reemplazando la cola.
+- Pendiente: ver/editar la cola en vivo, navegación artista → álbum, OLED y botones (SPEC 11).
+- Sin botón de reescaneo: `auto_update` de MPD (SPEC 07) indexa lo copiado por Samba.
 
 Una base SQLite propia queda pospuesta para preferencias, historial de reproducción, ratings o datos que MPD no cubra.
 
@@ -275,7 +349,7 @@ Integración en Pi:
 2. Crear solución .NET, Core e interfaz `IPlayer`. *(Hecho: SPEC 01.)*
 3. Implementar adaptador MPD y snapshot de estado. *(Hecho: SPEC 02.)*
 4. Implementar socket Unix y agente Python con dos botones. *(Hecho: socket SPEC 03, agente SPEC 05 con los 6 botones; validado con cable de puente, botones físicos pendientes.)*
-5. Añadir biblioteca y playlists.
+5. Añadir biblioteca y playlists. *(Web: SPEC 10; OLED + botones: SPEC 11.)*
 6. Instalar servicios systemd y validar arranque automático. *(Hecho: SPEC 04 `deploy/openplayer.service`, SPEC 05 `deploy/openplayer-hardware.service`.)*
 7. Configurar Bluetooth A2DP y selector de salida.
 8. Añadir OLED.
