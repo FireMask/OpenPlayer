@@ -39,6 +39,19 @@ usermod -aG openplayer "$DEPLOYER"
 mkdir -p "$DIR"
 tar -xzmf "$TGZ" -C "$DIR" --no-same-owner --exclude=./player.json
 [ -f "$DIR/player.json" ] || tar -xzmf "$TGZ" -C "$DIR" --no-same-owner ./player.json
+# Un player.json anterior a SPEC 08 no tiene "web": se agrega con el valor del ejemplo y el resto queda igual.
+python3 - "$DIR/player.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, encoding="utf-8") as f:
+    data = json.load(f)
+if "web" not in data:
+    data["web"] = {"port": 8080}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    print("player.json: added web.port 8080")
+PY
 chown -R root:root "$DIR"
 chmod -R u=rwX,go=rX "$DIR"
 chmod 755 "$DIR/OpenPlayer.Service"

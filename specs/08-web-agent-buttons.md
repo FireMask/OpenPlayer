@@ -17,7 +17,7 @@
   - `index.html`: 6 botones grandes con íconos y etiquetas en español, línea de estado (estado, pista, volumen) con `GET /api/snapshot` cada 2 s; CSS y JS inline; usable en móvil.
 - `player.json` / `config/player.example.json`: sección `web: { "port": 8080 }`.
 - Service: el log de `button.pressed` omite `(sequence …)` cuando no viene.
-- `deploy/openplayer-web.service`, `install.sh` y `deploy.ps1` (mismo tgz; espera `ready:`).
+- `deploy/openplayer-web.service`, `install.sh` y `deploy.ps1` (mismo tgz; espera `ready:`). `install.sh` agrega `"web": {"port": 8080}` a un `player.json` existente que no lo tenga.
 - Pruebas `tests/web-agent/` (pytest, servidor TCP falso + HTTP real en puerto aleatorio).
 - Docs: `architecture.md` (web agent y contrato HTTP), README, `assembly.md`.
 
@@ -71,7 +71,7 @@ Rangos permitidos: `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16
 2. `ipc.py`: `press()` y `snapshot()` con una conexión por pedido y `connect` inyectable; pruebas con el servidor TCP falso (línea exacta enviada, respuesta devuelta, `error`, servidor caído, timeout de 2 s).
 3. `server.py` + `index.html`: rutas, filtro de cliente y códigos del contrato; pruebas HTTP reales en puerto aleatorio con `ipc` falso (cada código de la tabla, incluido 403 con un cliente no permitido simulado).
 4. `main.py`: arranque, `ready:`, señales, exit 1 con config inválida. Service: log de `button.pressed` sin `(sequence …)` cuando falta, con su prueba.
-5. Deploy: `deploy/openplayer-web.service`, `install.sh` (instala, habilita, espera `ready:`), `deploy.ps1` y tgz con `web-agent/`; `systemd-analyze verify`.
+5. Deploy: `deploy/openplayer-web.service`, `install.sh` (instala, habilita, espera `ready:`, agrega `web` a un `player.json` existente sin esa sección), `deploy.ps1` y tgz con `web-agent/`; `systemd-analyze verify`.
 6. Docs: `architecture.md` (web agent y contrato HTTP), README (uso y logs), `assembly.md` (instalación y URL).
 7. Verificación en la Pi: desde Windows y desde un móvil en la misma red, cada botón actúa sobre MPD, el estado se actualiza, Service detenido → 503 y la página lo muestra, reboot → todo arriba.
 
@@ -118,6 +118,7 @@ Rangos permitidos: `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16
 - **Config propia mínima en `web-agent/`.** Duplica la lectura de `ipc.unixSocketPath`, pero una sección `hardware` inválida no tumba la web.
 - **`index.html` único, vanilla, en español.** Sin build ni framework; se sirve desde el mismo proceso.
 - **Unidad systemd propia (`openplayer-web`).** Se habilita/deshabilita sin tocar el Service ni el hardware agent.
+- **`install.sh` agrega `web` si falta en `player.json`.** `install.sh` nunca sobrescribe `player.json`; sin la sección, el primer deploy fallaría con `web.port is missing`. Solo se agrega la sección faltante con el valor del ejemplo (hallado al implementar).
 
 **Descartadas:**
 
