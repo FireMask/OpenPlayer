@@ -8,6 +8,10 @@ public sealed class MpdClient(MpdOptions options)
 {
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
+    /// <summary>Argumento de texto entre comillas dobles, con <c>\</c> y <c>"</c> escapados.</summary>
+    public static string Quote(string argument) =>
+        "\"" + argument.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+
     public async Task<IReadOnlyList<MpdResponse>> ExecuteAsync(IReadOnlyList<string> commands, CancellationToken ct)
     {
         foreach (var command in commands)

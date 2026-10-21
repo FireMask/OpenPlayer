@@ -85,6 +85,24 @@ public class MpdClientTests
     }
 
     [Theory]
+    [InlineData("a \"b\" \\c", "\"a \\\"b\\\" \\\\c\"")]
+    [InlineData("Viaje 2026", "\"Viaje 2026\"")]
+    [InlineData("", "\"\"")]
+    public void Quote_wraps_and_escapes(string argument, string expected) =>
+        Assert.Equal(expected, MpdClient.Quote(argument));
+
+    [Fact]
+    public async Task Quoted_utf8_argument_arrives_as_one_line()
+    {
+        await using var server = new FakeMpdServer();
+
+        await new MpdClient(server.Options()).ExecuteAsync([$"load {MpdClient.Quote("Ñandú \"en\" ruta")}"], Ct);
+        await server.AllClosed();
+
+        Assert.Equal([["load \"Ñandú \\\"en\\\" ruta\""]], server.Connections);
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("play\nclear")]
     [InlineData("play\r")]
