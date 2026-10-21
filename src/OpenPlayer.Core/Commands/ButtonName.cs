@@ -1,6 +1,6 @@
 namespace OpenPlayer.Core.Commands;
 
-public enum ButtonName { PlayPause, Previous, Next, VolumeUp, VolumeDown, Menu }
+public enum ButtonName { PlayPause, Previous, Next, VolumeUp, VolumeDown, Menu, RefreshLibrary }
 
 public static class ButtonNames
 {
@@ -15,6 +15,7 @@ public static class ButtonNames
             "volume_up" => ButtonName.VolumeUp,
             "volume_down" => ButtonName.VolumeDown,
             "menu" => ButtonName.Menu,
+            "refresh_library" => ButtonName.RefreshLibrary,
             _ => null,
         };
         button = parsed.GetValueOrDefault();

@@ -14,5 +14,8 @@ public interface IPlayer
     /// <summary>Volumen 0–100. Las implementaciones validan con <see cref="Volume.EnsureValid"/>.</summary>
     Task SetVolumeAsync(int volume, CancellationToken ct = default);
 
+    /// <summary>Reescanea la biblioteca de música en segundo plano.</summary>
+    Task UpdateLibraryAsync(CancellationToken ct = default);
+
     Task<PlaybackSnapshot> GetSnapshotAsync(CancellationToken ct = default);
 }

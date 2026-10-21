@@ -61,6 +61,7 @@ Configurar entradas con pull-up interno. Estado en reposo: alto. Estado pulsado:
 | `volume_up` | Aumentar volumen según paso configurado |
 | `volume_down` | Disminuir volumen según paso configurado |
 | `menu` | Reservado para menú OLED; por ahora ignorar o registrar |
+| `refresh_library` | Reescanear la biblioteca (MPD `update`); solo desde el web agent |
 
 Los nombres de eventos son parte del contrato IPC. Si se renombran, actualizar Python, C#, pruebas y documentación en el mismo cambio.
 

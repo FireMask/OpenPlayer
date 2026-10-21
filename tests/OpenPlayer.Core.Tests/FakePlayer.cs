@@ -23,6 +23,8 @@ internal sealed class FakePlayer : IPlayer
     public Task PreviousAsync(CancellationToken ct = default) => Record("Previous");
     public Task SeekAsync(TimeSpan position, CancellationToken ct = default) => Record($"Seek({position})");
 
+    public Task UpdateLibraryAsync(CancellationToken ct = default) => Record("UpdateLibrary");
+
     public Task SetVolumeAsync(int volume, CancellationToken ct = default) =>
         Record($"SetVolume({Volume.EnsureValid(volume)})");
 

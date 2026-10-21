@@ -16,6 +16,7 @@ public sealed class ButtonCommandHandler(IPlayer player, PlayerSettings settings
         ButtonName.VolumeUp => ChangeVolumeAsync(_settings.VolumeStep, ct),
         ButtonName.VolumeDown => ChangeVolumeAsync(-_settings.VolumeStep, ct),
         ButtonName.Menu => Task.CompletedTask,
+        ButtonName.RefreshLibrary => _player.UpdateLibraryAsync(ct),
         _ => throw new ArgumentOutOfRangeException(nameof(button), button, null),
     };
 

@@ -36,6 +36,9 @@ public sealed class MpdPlayer(MpdClient client, TimeProvider time) : IPlayer
     public Task SetVolumeAsync(int volume, CancellationToken ct = default) =>
         SendAsync($"setvol {Volume.EnsureValid(volume).ToString(CultureInfo.InvariantCulture)}", ct);
 
+    // MPD responde con un job id y escanea en segundo plano.
+    public Task UpdateLibraryAsync(CancellationToken ct = default) => SendAsync("update", ct);
+
     public async Task<PlaybackSnapshot> GetSnapshotAsync(CancellationToken ct = default)
     {
         var responses = await client.ExecuteAsync(["status", "currentsong"], ct);

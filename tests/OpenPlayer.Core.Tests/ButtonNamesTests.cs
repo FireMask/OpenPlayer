@@ -11,6 +11,7 @@ public class ButtonNamesTests
     [InlineData("volume_up", ButtonName.VolumeUp)]
     [InlineData("volume_down", ButtonName.VolumeDown)]
     [InlineData("menu", ButtonName.Menu)]
+    [InlineData("refresh_library", ButtonName.RefreshLibrary)]
     public void Parses_ipc_names(string value, ButtonName expected)
     {
         Assert.True(ButtonNames.TryParse(value, out var button));

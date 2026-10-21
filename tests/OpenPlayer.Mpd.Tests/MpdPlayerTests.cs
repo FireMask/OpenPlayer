@@ -19,6 +19,7 @@ public class MpdPlayerTests
         ["seekcur 1.5"] = p => p.SeekAsync(TimeSpan.FromSeconds(1.5)),
         ["setvol 0"] = p => p.SetVolumeAsync(0),
         ["setvol 100"] = p => p.SetVolumeAsync(100),
+        ["update"] = p => p.UpdateLibraryAsync(),
     };
 
     [Theory]
@@ -30,6 +31,7 @@ public class MpdPlayerTests
     [InlineData("seekcur 1.5")]
     [InlineData("setvol 0")]
     [InlineData("setvol 100")]
+    [InlineData("update")]
     public async Task Sends_exact_command(string expected)
     {
         await using var server = new FakeMpdServer();

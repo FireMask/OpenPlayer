@@ -32,6 +32,13 @@ public class ButtonCommandHandlerTests
     }
 
     [Fact]
+    public async Task RefreshLibrary_updates_library_once()
+    {
+        await Press(ButtonName.RefreshLibrary);
+        Assert.Equal(["UpdateLibrary"], _player.Calls);
+    }
+
+    [Fact]
     public async Task Previous_after_threshold_restarts_track()
     {
         _player.Snapshot = FakePlayer.SnapshotWith(position: TimeSpan.FromSeconds(5));

@@ -13,7 +13,7 @@ from ipc import IpcUnavailable
 
 log = logging.getLogger(__name__)
 
-BUTTON_NAMES = ("play_pause", "previous", "next", "volume_up", "volume_down", "menu")
+BUTTON_NAMES = ("play_pause", "previous", "next", "volume_up", "volume_down", "menu", "refresh_library")
 BUTTONS_PREFIX = "/api/buttons/"
 
 # Solo red local; fe80::/10 porque Windows resuelve .local primero a IPv6 link-local (SPEC 07).
