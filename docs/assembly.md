@@ -134,7 +134,7 @@ sudo systemctl disable --now nmbd   # sin NetBIOS: se accede por ruta, no por "R
 En `/etc/samba/smb.conf`, añadir dentro de la sección `[global]` existente:
 
 ```ini
-   hosts allow = 127. 10. 172.16.0.0/12 192.168.
+   hosts allow = 127. 10. 172.16.0.0/12 192.168. ::1 fe80::/10
    hosts deny = ALL
    server min protocol = SMB2
 ```
@@ -331,7 +331,7 @@ Aparece en `mpc status` o `journalctl -u mpd -b`, y los botones registran `Butto
 
 - El usuario es `andres` y la contraseña es la de `smbpasswd`, no la de SSH. Rehacerla con `sudo smbpasswd -a andres`.
 - Windows reutiliza una sesión previa con otras credenciales: `net use \\mpi3-player.local\music /delete` en `cmd` y volver a abrir la ruta.
-- `Acceso denegado` sin pedir contraseña: la IP del equipo no está en `hosts allow` (`sudo journalctl -u smbd -b`).
+- `Acceso denegado` o `System error 64` sin pedir contraseña: la IP del equipo no está en `hosts allow` (`sudo journalctl -u smbd -b`). Windows suele conectar por IPv6 link-local (`fe80::…`) al usar `.local`; por eso `fe80::/10` va en la lista.
 - La ruta no se encuentra: probar `\\<IP de la Pi>\music` (`hostname -I`); si funciona, el problema es la resolución mDNS de `.local`.
 
 ### Archivo copiado por Samba que no aparece en `mpc listall`

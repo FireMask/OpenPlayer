@@ -1,6 +1,6 @@
 # SPEC 07 — Carpeta compartida Samba para importar música
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 06
 > **Date:** 2026-10-20
 > **Objective:** Documentar cómo compartir `/home/andres/Music` por Samba (`\\mpi3-player.local\music`, usuario `andres`, solo redes privadas) con `auto_update` de MPD, para que copiar archivos desde el Explorador de Windows los agregue a la biblioteca sin SSH.
@@ -12,7 +12,7 @@
 - `docs/assembly.md`, nueva sección "Importar música por Samba":
   - `sudo apt install samba` (sin `wsdd`) y `sudo systemctl disable --now nmbd`.
   - Bloque `[music]` en `/etc/samba/smb.conf`: `path = /home/andres/Music`, `valid users = andres`, `read only = no`, `create mask = 0664`, `directory mask = 0775` (legibles por `mpd`).
-  - En `[global]`: `hosts allow = 127. 10. 172.16.0.0/12 192.168.`, `hosts deny = ALL`, `server min protocol = SMB2`.
+  - En `[global]`: `hosts allow = 127. 10. 172.16.0.0/12 192.168. ::1 fe80::/10`, `hosts deny = ALL`, `server min protocol = SMB2`.
   - `sudo smbpasswd -a andres` (contraseña propia de Samba).
   - `auto_update "yes"` en `/etc/mpd.conf`.
   - `mkdir ~/Playlists` (corrige el error de MPD; no se comparte).
@@ -43,21 +43,21 @@ No aplica: solo documentación y configuración del sistema en la Pi (`/etc/samb
 
 **Documentación:**
 
-- [ ] `assembly.md` tiene la sección "Importar música por Samba" con: `apt install samba`, bloques `[global]` y `[music]` exactos, `smbpasswd -a andres`, `auto_update "yes"`, `mkdir ~/Playlists` y la ruta `\\mpi3-player.local\music`.
-- [ ] `assembly.md` §14 cubre credenciales rechazadas y archivo que no aparece en `mpc listall`.
-- [ ] README apunta a la sección.
+- [x] `assembly.md` tiene la sección "Importar música por Samba" con: `apt install samba`, bloques `[global]` y `[music]` exactos, `smbpasswd -a andres`, `auto_update "yes"`, `mkdir ~/Playlists` y la ruta `\\mpi3-player.local\music`.
+- [x] `assembly.md` §14 cubre credenciales rechazadas y archivo que no aparece en `mpc listall`.
+- [x] README apunta a la sección.
 
 **Raspberry Pi:**
 
-- [ ] `testparm -s` termina sin errores y muestra `[music]` con `valid users = andres`.
-- [ ] `systemctl is-active smbd` → `active`; `nmbd` y `wsdd` no están activos.
-- [ ] Desde Windows, sin credenciales no se puede abrir el recurso; con `andres` y la contraseña Samba sí.
-- [ ] Un archivo copiado desde Windows aparece en `mpc listall` en 10 s o menos, sin `mpc update`, y `mpc play` lo reproduce.
-- [ ] El archivo copiado queda con permisos `-rw-rw-r--` y una carpeta copiada con `drwxrwxr-x`.
-- [ ] Borrarlo desde Windows lo quita de `mpc listall` en 10 s o menos.
-- [ ] `~/Playlists` existe y `journalctl -u mpd -b` no tiene `Failed to access /home/andres/Playlists`.
-- [ ] Tras `sudo reboot`, `\\mpi3-player.local\music` sigue accesible y `auto_update` sigue funcionando.
-- [ ] `dotnet test` y `pytest tests/hardware-agent` siguen pasando (sin cambios de código).
+- [x] `testparm -s` termina sin errores y muestra `[music]` con `valid users = andres`.
+- [x] `systemctl is-active smbd` → `active`; `nmbd` y `wsdd` no están activos.
+- [x] Desde Windows, sin credenciales no se puede abrir el recurso; con `andres` y la contraseña Samba sí.
+- [x] Un archivo copiado desde Windows aparece en `mpc listall` en 10 s o menos, sin `mpc update`, y `mpc play` lo reproduce.
+- [x] El archivo copiado queda con permisos `-rw-rw-r--` y una carpeta copiada con `drwxrwxr-x`.
+- [x] Borrarlo desde Windows lo quita de `mpc listall` en 10 s o menos.
+- [x] `~/Playlists` existe y `journalctl -u mpd -b` no tiene `Failed to access /home/andres/Playlists`.
+- [x] Tras `sudo reboot`, `\\mpi3-player.local\music` sigue accesible y `auto_update` sigue funcionando.
+- [x] `dotnet test` y `pytest tests/hardware-agent` siguen pasando (sin cambios de código).
 
 ## Decisions
 
@@ -66,7 +66,7 @@ No aplica: solo documentación y configuración del sistema en la Pi (`/etc/samb
 - **Solo documentación, sin script.** Igual que SPEC 06: configuración única del SO por Pi; `smbpasswd` es interactivo.
 - **Compartir `/home/andres/Music` tal cual.** Ya es el `music_directory` de MPD y `mpd` lo lee; mover la biblioteca no aporta.
 - **Usuario `andres` con contraseña Samba propia, sin invitado.** Escritura en la biblioteca solo con credenciales.
-- **`hosts allow` por rangos privados + `server min protocol = SMB2`.** No depende de la subred del router de hoy; bloquea SMB1 y cualquier IP pública.
+- **`hosts allow` por rangos privados + `server min protocol = SMB2`.** No depende de la subred del router de hoy; bloquea SMB1 y cualquier IP pública. Incluye `::1` y `fe80::/10` (IPv6 link-local, no enrutable): Windows resuelve `mpi3-player.local` primero a la dirección `fe80::` y sin ella Samba corta la conexión (error 64; hallado al validar).
 - **`create mask 0664` / `directory mask 0775`.** Lo que se copia queda legible para `mpd` sin tocar permisos a mano.
 - **`auto_update "yes"`.** MPD vigila la carpeta con inotify; lo copiado aparece sin SSH.
 - **Acceso por ruta (`\\mpi3-player.local\music`), `nmbd` deshabilitado y sin `wsdd`.** Windows resuelve `.local` por mDNS; menos servicios en la Zero.
