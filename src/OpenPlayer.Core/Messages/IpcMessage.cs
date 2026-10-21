@@ -38,6 +38,11 @@ public sealed record PlaylistMoveRequested(string Name, int From, int To) : IpcM
 
 public sealed record PlaylistPlayRequested(string Name, int Position) : IpcMessage;
 
+// Cola (SPEC 11): responden queue.page / ok / error.
+public sealed record QueueGetRequested(int Offset) : IpcMessage;
+
+public sealed record QueuePlayRequested(int Position) : IpcMessage;
+
 public static class IpcMessageParser
 {
     public const int MaxUriLength = 1024;
@@ -48,6 +53,7 @@ public static class IpcMessageParser
         "library.browse", "library.search", "library.play",
         "playlist.list", "playlist.get", "playlist.create", "playlist.rename", "playlist.delete",
         "playlist.add", "playlist.remove", "playlist.move", "playlist.play",
+        "queue.get", "queue.play",
     ];
 
     /// <summary>Parsea una línea JSON. Nunca lanza: si es inválida devuelve false y un error legible para el log.</summary>
@@ -130,6 +136,12 @@ public static class IpcMessageParser
                     break;
                 case "playlist.play":
                     message = new PlaylistPlayRequested(Name(root, "name"), Index(root, "position", true));
+                    break;
+                case "queue.get":
+                    message = new QueueGetRequested(Index(root, "offset", true));
+                    break;
+                case "queue.play":
+                    message = new QueuePlayRequested(Index(root, "position", false));
                     break;
                 default:
                     return Fail($"unknown type '{type.GetString()}'", out error);
