@@ -327,6 +327,20 @@ Seguir `battery-design.md`. No imprimir la carcasa definitiva antes de medir DAC
 
 Aparece en `mpc status` o `journalctl -u mpd -b`, y los botones registran `Button Next failed: … Not playing`. Causa: el `device` de `audio_output` usa un índice y el DAC cambió de número (p. ej. pasó a `card 0` y `hw:1,0` ahora es HDMI). Solución: usar el id de la tarjeta, `hw:CARD=<id>,DEV=0` (§4–5), y `sudo systemctl restart mpd`.
 
+### Samba rechaza las credenciales
+
+- El usuario es `andres` y la contraseña es la de `smbpasswd`, no la de SSH. Rehacerla con `sudo smbpasswd -a andres`.
+- Windows reutiliza una sesión previa con otras credenciales: `net use \\mpi3-player.local\music /delete` en `cmd` y volver a abrir la ruta.
+- `Acceso denegado` sin pedir contraseña: la IP del equipo no está en `hosts allow` (`sudo journalctl -u smbd -b`).
+- La ruta no se encuentra: probar `\\<IP de la Pi>\music` (`hostname -I`); si funciona, el problema es la resolución mDNS de `.local`.
+
+### Archivo copiado por Samba que no aparece en `mpc listall`
+
+- Confirmar `auto_update "yes"` en `/etc/mpd.conf` y que MPD se reinició después.
+- Permisos: `ls -l ~/Music/...` debe mostrar lectura para otros (`-rw-rw-r--`, carpetas `drwxrwxr-x`); si no, revisar `create mask` y `directory mask` de `[music]`.
+- Formato no soportado o archivo copiado a medias: `journalctl -u mpd -b` y forzar con `mpc update`.
+- Errores `inotify` en el log de MPD: subir `fs.inotify.max_user_watches` con `sysctl`.
+
 ### Tras actualizar el paquete `mpd`
 
 Si `apt` pregunta si reemplazar `/etc/mpd.conf`, conservar la versión local (opción por defecto `N`): la del paquete no trae el `audio_output` del DAC. Después de actualizar, revisar el bloque con `grep -A5 '^audio_output' /etc/mpd.conf`.
