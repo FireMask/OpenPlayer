@@ -1,6 +1,6 @@
 # SPEC 09 — Barra de progreso y seek en la web
 
-> **Status:** Draft
+> **Status:** Approved
 > **Depends on:** SPEC 03, SPEC 08
 > **Date:** 2026-10-21
 > **Objective:** Mostrar en la página del web agent una barra de progreso de la pista actual que avanza localmente entre sondeos y permite saltar a una posición, con un nuevo mensaje IPC `player.seek` que el Service ejecuta con `IPlayer.SeekAsync`.

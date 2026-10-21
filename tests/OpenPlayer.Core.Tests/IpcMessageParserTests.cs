@@ -27,6 +27,16 @@ public class IpcMessageParserTests
         Assert.IsType<SnapshotRequested>(message);
     }
 
+    [Theory]
+    [InlineData(83)]
+    [InlineData(0)]
+    [InlineData(86400)]
+    public void Parses_seek(int seconds)
+    {
+        Assert.True(IpcMessageParser.TryParse($$"""{"type":"player.seek","positionSeconds":{{seconds}}}""", out var message, out _));
+        Assert.Equal(new SeekRequested(TimeSpan.FromSeconds(seconds)), message);
+    }
+
     [Fact]
     public void Ignores_extra_fields_with_utf8()
     {
@@ -48,6 +58,12 @@ public class IpcMessageParserTests
     [InlineData("""{"type":"button.pressed","button":3}""", "invalid button '3'")]
     [InlineData("""{"type":"button.pressed","button":"next","sequence":"1"}""", "invalid sequence")]
     [InlineData("""{"type":"button.pressed","button":"next","sequence":1.5}""", "invalid sequence")]
+    [InlineData("""{"type":"player.seek"}""", "invalid positionSeconds")]
+    [InlineData("""{"type":"player.seek","positionSeconds":83.5}""", "invalid positionSeconds")]
+    [InlineData("""{"type":"player.seek","positionSeconds":"83"}""", "invalid positionSeconds")]
+    [InlineData("""{"type":"player.seek","positionSeconds":true}""", "invalid positionSeconds")]
+    [InlineData("""{"type":"player.seek","positionSeconds":-1}""", "invalid positionSeconds")]
+    [InlineData("""{"type":"player.seek","positionSeconds":86401}""", "invalid positionSeconds")]
     public void Rejects_invalid_messages(string line, string expected)
     {
         Assert.False(IpcMessageParser.TryParse(line, out var message, out var error));
