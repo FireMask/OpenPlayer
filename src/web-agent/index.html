@@ -104,7 +104,19 @@
     <button class="small more" id="lib-more" hidden>Más</button>
   </div>
 
-  <div id="tab-lists" hidden></div>
+  <div id="tab-lists" hidden>
+    <div class="bar" id="lists-index-bar">
+      <button class="small" id="lists-new">＋ Nueva lista</button>
+    </div>
+    <div class="bar" id="list-bar" hidden>
+      <button class="small" id="list-back">← Listas</button>
+      <button class="small" id="list-play">▶ Reproducir</button>
+    </div>
+    <div class="crumbs" id="list-title" hidden></div>
+    <p class="msg" id="lists-msg" aria-live="polite"></p>
+    <ul class="list" id="lists-list"></ul>
+    <button class="small more" id="lists-more" hidden>Más</button>
+  </div>
 
   <dialog id="picker">
     <h2>Agregar a una lista</h2>
@@ -257,7 +269,7 @@
 
   // Pestañas: la de Reproductor no cambia; Biblioteca carga al abrirla por primera vez.
   const tabs = document.querySelectorAll(".tabs button");
-  const loaders = { library: () => loadLibrary(), lists: () => {} };
+  const loaders = { library: () => loadLibrary(), lists: () => showIndex() };
   const loaded = new Set(["player"]);
   tabs.forEach(t => t.addEventListener("click", () => {
     tabs.forEach(o => {
@@ -353,6 +365,118 @@
   }
 
   $("picker-cancel").addEventListener("click", () => $("picker").close());
+
+  // Listas: índice (crear, renombrar, borrar) o una lista abierta (reproducir, ↑/↓/✕).
+  let openList = null, listCount = 0, listTotal = 0;
+  const listUrl = name => "/api/playlists/" + enc(name);
+  const listsMsg = (text, isError) => setMsg("lists-msg", text, isError);
+
+  function showView(name) {
+    openList = name;
+    $("lists-index-bar").hidden = name !== null;
+    $("list-bar").hidden = $("list-title").hidden = name === null;
+    $("list-title").textContent = name || "";
+    $("lists-more").hidden = true;
+  }
+
+  async function showIndex(message = "") {
+    showView(null);
+    listsMsg("Cargando…");
+    let data;
+    try { data = await api("GET", "/api/playlists"); } catch (e) { return listsMsg(e.message, true); }
+    listsMsg(message);
+    const list = $("lists-list");
+    list.replaceChildren(...data.playlists.map(name => row(name, "", () => openPlaylist(name), [
+      { text: "✎", label: "Renombrar", onClick: () => renamePlaylist(name) },
+      { text: "🗑", label: "Borrar", onClick: () => deletePlaylist(name) },
+    ])));
+    if (!data.playlists.length) list.append(el("li", { className: "empty", textContent: "No hay listas" }));
+  }
+
+  // Ejecuta una mutación; si falla muestra el mensaje y devuelve false.
+  async function mutate(method, url, body) {
+    try { await api(method, url, body); return true; } catch (e) { listsMsg(e.message, true); return false; }
+  }
+
+  $("lists-new").addEventListener("click", async () => {
+    const name = prompt("Nombre de la nueva lista");
+    if (!name || !name.trim()) return;
+    if (await mutate("POST", "/api/playlists", { name: name.trim() })) showIndex(`Lista “${name.trim()}” creada`);
+  });
+
+  async function renamePlaylist(name) {
+    const newName = prompt("Nuevo nombre", name);
+    if (!newName || !newName.trim() || newName.trim() === name) return;
+    if (await mutate("POST", listUrl(name) + "/rename", { newName: newName.trim() })) showIndex("Lista renombrada");
+  }
+
+  async function deletePlaylist(name) {
+    if (!confirm(`¿Borrar la lista “${name}”? La música no se borra.`)) return;
+    if (await mutate("DELETE", listUrl(name))) showIndex(`Lista “${name}” borrada`);
+  }
+
+  function openPlaylist(name) {
+    showView(name);
+    $("lists-list").replaceChildren();
+    listCount = 0;
+    loadPlaylist();
+  }
+
+  // Carga la página siguiente; reload vuelve a pedir desde 0 tantas pistas como había (tras ↑/↓/✕).
+  async function loadPlaylist(reload = false) {
+    const name = openList;
+    const want = reload ? Math.max(listCount, 1) : listCount + 1;
+    let offset = reload ? 0 : listCount;
+    const tracks = [];
+    listsMsg("Cargando…");
+    try {
+      do {
+        const page = await api("GET", `${listUrl(name)}?offset=${offset}`);
+        tracks.push(...page.entries);
+        listTotal = page.total;
+        offset = page.offset + page.entries.length;
+        if (!page.entries.length) break;
+      } while (reload && offset < Math.min(want, listTotal));
+    } catch (e) { return listsMsg(e.message, true); }
+    if (name !== openList) return;  // el usuario volvió al índice mientras cargaba
+    listsMsg("");
+    const list = $("lists-list");
+    if (reload) { list.replaceChildren(); listCount = 0; }
+    tracks.forEach((e, i) => list.append(trackRow(e, listCount + i)));
+    listCount += tracks.length;
+    if (!listCount) list.append(el("li", { className: "empty", textContent: "Lista vacía. Agrega música desde Biblioteca." }));
+    $("lists-more").hidden = listCount >= listTotal;
+  }
+
+  function trackRow(e, pos) {
+    const r = row(`${pos + 1}. ${e.title || baseName(e.uri)}`, trackMeta(e), () => playPlaylist(pos), [
+      { text: "↑", label: "Subir", onClick: () => moveTrack(pos, pos - 1) },
+      { text: "↓", label: "Bajar", onClick: () => moveTrack(pos, pos + 1) },
+      { text: "✕", label: "Quitar", onClick: () => removeTrack(pos) },
+    ]);
+    const [, up, down] = r.querySelectorAll("button");
+    up.disabled = pos === 0;
+    down.disabled = pos === listTotal - 1;
+    return r;
+  }
+
+  async function moveTrack(from, to) {
+    if (await mutate("POST", listUrl(openList) + "/move", { from, to })) loadPlaylist(true);
+  }
+
+  async function removeTrack(pos) {
+    if (await mutate("DELETE", `${listUrl(openList)}/tracks/${pos}`)) loadPlaylist(true);
+  }
+
+  async function playPlaylist(position) {
+    if (!(await mutate("POST", listUrl(openList) + "/play", { position }))) return;
+    listsMsg(`Reproduciendo “${openList}”`);
+    refresh();
+  }
+
+  $("list-back").addEventListener("click", () => showIndex());
+  $("list-play").addEventListener("click", () => playPlaylist(0));
+  $("lists-more").addEventListener("click", () => loadPlaylist());
 </script>
 </body>
 </html>
