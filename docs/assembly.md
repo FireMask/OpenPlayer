@@ -58,6 +58,18 @@ cat /proc/asound/cards
 
 Reproducir un archivo WAV de prueba mediante ALSA una vez identificada la tarjeta y el dispositivo correctos. No copiar comandos con un índice de tarjeta asumido: los números dependen del hardware detectado. Si no aparece el DAC, comprobar adaptador OTG, cable, alimentación y compatibilidad.
 
+El índice (`card 0`, `card 1`) cambia según el orden de detección; el **id** de la tarjeta no. Es la palabra entre corchetes en `/proc/asound/cards` (o la que sigue a `card N:` en `aplay -l`). Con el DAC C-Media validado:
+
+```text
+$ cat /proc/asound/cards
+ 0 [Device         ]: USB-Audio - USB Audio Device
+                      C-Media Electronics Inc. USB Audio Device at usb-3f980000.usb-1, full speed
+ 1 [vc4hdmi        ]: vc4-hdmi - vc4-hdmi
+                      vc4-hdmi
+```
+
+Aquí el id es `Device`, y el dispositivo ALSA es `hw:CARD=Device,DEV=0`. Probar con `speaker-test -D hw:CARD=Device,DEV=0 -c 2 -t wav -l 1`. Este nombre es el que va a MPD (§5).
+
 ## 5. Configurar música y MPD
 
 Crear el directorio de música y copiar algunos archivos:
@@ -78,6 +90,19 @@ port "6600"
 ```
 
 No reemplazar ciegamente el archivo completo: conservar la configuración necesaria del paquete, configurar un `audio_output` que corresponda al DAC detectado y revisar los logs.
+
+El `audio_output` usa el id de la tarjeta (§4), nunca el índice: con `hw:<índice>,0`, si el DAC cambia de número tras un reinicio, MPD abre otra tarjeta (p. ej. HDMI) o falla. Bloque de referencia (sustituir `<id>`; `Device` en el DAC validado):
+
+```conf
+audio_output {
+	type		"alsa"
+	name		"USB DAC"
+	device		"hw:CARD=<id>,DEV=0"
+	mixer_type	"software"
+}
+```
+
+`mixer_type "software"` hace que MPD controle el volumen y lo reporte en `mpc volume` y en el snapshot. Tras editar: `sudo systemctl restart mpd` y comprobar con `mpc play` y `journalctl -u mpd -b`.
 
 ```bash
 sudo systemctl enable --now mpd
@@ -248,6 +273,14 @@ Seguir `battery-design.md`. No imprimir la carcasa definitiva antes de medir DAC
 - Revisar `journalctl -u mpd -b`.
 - Verificar el bloque `audio_output` de MPD y permisos.
 - Confirmar que el volumen no está en cero y que el DAC/auriculares funcionan en otro equipo.
+
+### MPD: `Failed to open ALSA device "hw:N,0"`
+
+Aparece en `mpc status` o `journalctl -u mpd -b`, y los botones registran `Button Next failed: … Not playing`. Causa: el `device` de `audio_output` usa un índice y el DAC cambió de número (p. ej. pasó a `card 0` y `hw:1,0` ahora es HDMI). Solución: usar el id de la tarjeta, `hw:CARD=<id>,DEV=0` (§4–5), y `sudo systemctl restart mpd`.
+
+### Tras actualizar el paquete `mpd`
+
+Si `apt` pregunta si reemplazar `/etc/mpd.conf`, conservar la versión local (opción por defecto `N`): la del paquete no trae el `audio_output` del DAC. Después de actualizar, revisar el bloque con `grep -A5 '^audio_output' /etc/mpd.conf`.
 
 ### MPD no puede leer música
 
