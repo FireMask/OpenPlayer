@@ -16,8 +16,8 @@ $remote = '/tmp/openplayer-deploy'
 dotnet publish (Join-Path $PSScriptRoot 'src\OpenPlayer.Service') -c Release -r linux-arm64 --self-contained true -o $out
 if ($LASTEXITCODE) { throw 'dotnet publish falló' }
 
-# Un solo archivo comprimido: scp de 225 archivos sueltos es lento. Incluye el hardware agent (solo .py).
-tar -czf $tgz --exclude=__pycache__ --exclude=requirements-dev.txt -C $out . -C (Join-Path $PSScriptRoot 'src') hardware-agent
+# Un solo archivo comprimido: scp de 225 archivos sueltos es lento. Incluye los agentes Python (hardware y web).
+tar -czf $tgz --exclude=__pycache__ --exclude=requirements-dev.txt -C $out . -C (Join-Path $PSScriptRoot 'src') hardware-agent web-agent
 if ($LASTEXITCODE) { throw 'tar falló' }
 
 if ($Password) {
@@ -32,7 +32,7 @@ try {
     ssh -o StrictHostKeyChecking=accept-new $target "mkdir -p $remote"
     if ($LASTEXITCODE) { throw 'ssh falló' }
     $deploy = Join-Path $PSScriptRoot 'deploy'
-    scp $tgz "$deploy\install.sh" "$deploy\openplayer.service" "$deploy\openplayer-hardware.service" "${target}:$remote/"
+    scp $tgz "$deploy\install.sh" "$deploy\openplayer.service" "$deploy\openplayer-hardware.service" "$deploy\openplayer-web.service" "${target}:$remote/"
     if ($LASTEXITCODE) { throw 'scp falló' }
 
     $install = "bash $remote/install.sh $remote/openplayer.tgz $remote/openplayer.service $User"

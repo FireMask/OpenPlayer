@@ -1,7 +1,7 @@
 #!/bin/bash
-# Instala OpenPlayer.Service (SPEC 04) y el hardware agent (SPEC 05) en /opt/openplayer como unidades systemd. Idempotente.
+# Instala OpenPlayer.Service (SPEC 04), el hardware agent (SPEC 05) y el web agent (SPEC 08) en /opt/openplayer como unidades systemd. Idempotente.
 # Uso: sudo bash install.sh <ruta.tgz> <openplayer.service> <usuario-que-despliega>
-# El .tgz trae el publish del Service y hardware-agent/; openplayer-hardware.service va junto a openplayer.service.
+# El .tgz trae el publish del Service, hardware-agent/ y web-agent/; las unidades de los agentes van junto a openplayer.service.
 set -euo pipefail
 
 if [ $# -ne 3 ]; then
@@ -11,6 +11,7 @@ fi
 TGZ=$1
 UNIT=$2
 AGENT_UNIT=$(dirname "$UNIT")/openplayer-hardware.service
+WEB_UNIT=$(dirname "$UNIT")/openplayer-web.service
 DEPLOYER=$3
 DIR=/opt/openplayer
 SOCK=/run/openplayer/hardware.sock
@@ -19,6 +20,7 @@ SOCK=/run/openplayer/hardware.sock
 [ -f "$TGZ" ] || { echo "Not found: $TGZ" >&2; exit 1; }
 [ -f "$UNIT" ] || { echo "Not found: $UNIT" >&2; exit 1; }
 [ -f "$AGENT_UNIT" ] || { echo "Not found: $AGENT_UNIT" >&2; exit 1; }
+[ -f "$WEB_UNIT" ] || { echo "Not found: $WEB_UNIT" >&2; exit 1; }
 id "$DEPLOYER" >/dev/null 2>&1 || { echo "Unknown user: $DEPLOYER" >&2; exit 1; }
 
 # El agente usa los paquetes del sistema (sin venv). Solo se verifican: instalarlos es decisión del administrador.
@@ -43,10 +45,11 @@ chmod 755 "$DIR/OpenPlayer.Service"
 
 install -m 644 "$UNIT" /etc/systemd/system/openplayer.service
 install -m 644 "$AGENT_UNIT" /etc/systemd/system/openplayer-hardware.service
+install -m 644 "$WEB_UNIT" /etc/systemd/system/openplayer-web.service
 systemctl daemon-reload
-systemctl enable --quiet openplayer openplayer-hardware
+systemctl enable --quiet openplayer openplayer-hardware openplayer-web
 # Un "failed" previo por StartLimitBurst bloquearía el restart.
-systemctl reset-failed openplayer openplayer-hardware 2>/dev/null || true
+systemctl reset-failed openplayer openplayer-hardware openplayer-web 2>/dev/null || true
 systemctl restart openplayer
 
 # Type=simple da "active" apenas arranca el proceso; el socket confirma que el Service llegó a escuchar.
@@ -61,17 +64,21 @@ if ! systemctl is-active --quiet openplayer || [ ! -S "$SOCK" ]; then
 fi
 echo "openplayer: active, listening on $SOCK"
 
-# El agente confirma con "ready:" que configuró los GPIO; se busca solo en los logs de este arranque.
-systemctl restart openplayer-hardware
-for _ in $(seq 30); do
-    invocation=$(systemctl show -p InvocationID --value openplayer-hardware)
-    if systemctl is-active --quiet openplayer-hardware && [ -n "$invocation" ] &&
-        journalctl _SYSTEMD_INVOCATION_ID="$invocation" --no-pager -q | grep -q "ready:"; then
-        echo "openplayer-hardware: active"
-        exit 0
-    fi
-    sleep 0.5
-done
-echo "openplayer-hardware did not become active" >&2
-journalctl -u openplayer-hardware -n 20 --no-pager >&2
-exit 1
+# Los agentes confirman con "ready:" (GPIO configurados / HTTP escuchando); se busca solo en los logs de este arranque.
+wait_ready() {
+    systemctl restart "$1"
+    for _ in $(seq 30); do
+        invocation=$(systemctl show -p InvocationID --value "$1")
+        if systemctl is-active --quiet "$1" && [ -n "$invocation" ] &&
+            journalctl _SYSTEMD_INVOCATION_ID="$invocation" --no-pager -q | grep -q "ready:"; then
+            echo "$1: active"
+            return 0
+        fi
+        sleep 0.5
+    done
+    echo "$1 did not become active" >&2
+    journalctl -u "$1" -n 20 --no-pager >&2
+    exit 1
+}
+wait_ready openplayer-hardware
+wait_ready openplayer-web

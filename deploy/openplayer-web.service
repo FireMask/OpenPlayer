@@ -1,0 +1,23 @@
+[Unit]
+Description=OpenPlayer Web Agent
+After=openplayer.service network.target
+Wants=openplayer.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=openplayer
+Group=openplayer
+WorkingDirectory=/opt/openplayer/web-agent
+ExecStart=/usr/bin/python3 /opt/openplayer/web-agent/main.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# Sin ReadWritePaths=/run/openplayer: ver openplayer-hardware.service.
+
+[Install]
+WantedBy=multi-user.target
