@@ -316,6 +316,7 @@ public sealed class IpcServerTests : IAsyncLifetime
 
         Assert.Equal(QueuePageMessage.Serialize(_library.Page, null), await client.ReadLineAsync());
         Assert.Equal(["QueueGet(100)"], _library.Calls);
+        Assert.Contains("queue.get ok (offset 100)", _logger.Messages);
     }
 
     [Fact]

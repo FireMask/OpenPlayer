@@ -206,7 +206,10 @@ public sealed class IpcServer(
             case PlaylistGetRequested m:
                 return LibraryPageMessage.Serialize(await playlists.GetAsync(m.Name, m.Offset, ct));
             case QueueGetRequested m:
-                return QueuePageMessage.Serialize(await queue.GetAsync(m.Offset, ct), _loadedPlaylist);
+                // Se loguea (a diferencia de las otras consultas) para verificar que la web no sondea la cola.
+                var page = await queue.GetAsync(m.Offset, ct);
+                logger.LogInformation("{Request} ok (offset {Offset})", request, m.Offset);
+                return QueuePageMessage.Serialize(page, _loadedPlaylist);
             case QueuePlayRequested m:
                 await queue.PlayAsync(m.Position, ct);
                 break;
