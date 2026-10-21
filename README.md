@@ -90,7 +90,7 @@ Publicación autocontenida (no requiere instalar .NET en la Pi). Desde Windows, 
 .\deploy.ps1 -Device openplayer.local -User <usuario> [-Password <contraseña>]
 ```
 
-`install.sh` es idempotente: verifica `python3-gpiozero` y `python3-lgpio` (no los instala), crea el usuario y grupo `openplayer` si faltan, añade `<usuario>` al grupo, instala en `/opt/openplayer` el Service y `hardware-agent/` (sin sobrescribir un `player.json` existente), instala `deploy/openplayer.service` y `deploy/openplayer-hardware.service`, las habilita y las reinicia. Termina con error y muestra `journalctl` si alguna unidad no queda lista.
+`install.sh` es idempotente: verifica `python3-gpiozero` y `python3-lgpio` (no los instala), crea el usuario y grupo `openplayer` si faltan, añade `<usuario>` al grupo, instala en `/opt/openplayer` el Service, `hardware-agent/` y `web-agent/` (sin sobrescribir un `player.json` existente; solo le agrega la sección `web` si falta), instala `deploy/openplayer.service`, `deploy/openplayer-hardware.service` y `deploy/openplayer-web.service`, las habilita y las reinicia. Termina con error y muestra `journalctl` si alguna unidad no queda lista.
 
 `-Password` sirve para ssh y sudo, pero queda en el historial de PowerShell; sin él, ssh usa tu clave (`ssh-copy-id`) y sudo pide la contraseña en la terminal.
 
@@ -98,8 +98,8 @@ Sin PowerShell, el equivalente manual:
 
 ```bash
 dotnet publish src/OpenPlayer.Service -c Release -r linux-arm64 --self-contained true -o publish/linux-arm64
-tar -czf openplayer.tgz --exclude=__pycache__ --exclude=requirements-dev.txt -C publish/linux-arm64 . -C "$PWD/src" hardware-agent
-scp openplayer.tgz deploy/install.sh deploy/openplayer.service deploy/openplayer-hardware.service <usuario>@openplayer.local:/tmp/
+tar -czf openplayer.tgz --exclude=__pycache__ --exclude=requirements-dev.txt -C publish/linux-arm64 . -C "$PWD/src" hardware-agent web-agent
+scp openplayer.tgz deploy/install.sh deploy/openplayer.service deploy/openplayer-hardware.service deploy/openplayer-web.service <usuario>@openplayer.local:/tmp/
 ssh -t <usuario>@openplayer.local 'sudo bash /tmp/install.sh /tmp/openplayer.tgz /tmp/openplayer.service $USER'
 ```
 
@@ -125,6 +125,23 @@ python -m venv .venv
 ```
 
 Para correrlo en Windows sin hardware: `GPIOZERO_PIN_FACTORY=mock python src/hardware-agent/main.py config/player.example.json` (sin `AF_UNIX`, solo queda desconectado).
+
+## Web agent (control desde el navegador)
+
+`src/web-agent` (Python, solo stdlib) sirve una página con los 6 botones y el estado actual en `http://mpi3-player.local:8080` (puerto `web.port` de `player.json`). Cada botón envía el mismo `button.pressed` que el botón físico. Solo responde a la red local (rangos privados, `::1`, `fe80::/10`) y no pide contraseña; si el Service no está disponible, la página muestra "Sin conexión con el reproductor". Corre como unidad `openplayer-web`; contrato HTTP en [`docs/architecture.md`](docs/architecture.md) §5.
+
+```bash
+systemctl status openplayer-web
+journalctl -u openplayer-web -b -f   # ready / button <nombre> / warnings
+```
+
+Pruebas (Windows o Linux; HTTP real en puerto aleatorio, socket simulado). Correr cada carpeta por separado: ambos agentes tienen su propio `config.py`.
+
+```bash
+.venv/Scripts/python -m pytest tests/web-agent
+```
+
+Para correrlo en Windows: `python src/web-agent/main.py config/player.example.json` y abrir `http://localhost:8080` (sin `AF_UNIX`, los botones responden 503).
 
 ## Estructura
 
@@ -152,15 +169,18 @@ OpenPlayer/
 │   │   └── Interfaces/
 │   ├── OpenPlayer.Mpd/
 │   ├── OpenPlayer.Service/
-│   └── hardware-agent/
+│   ├── hardware-agent/
+│   └── web-agent/
 ├── deploy/
 │   ├── openplayer.service
-│   └── openplayer-hardware.service
+│   ├── openplayer-hardware.service
+│   └── openplayer-web.service
 └── tests/
     ├── OpenPlayer.Core.Tests/
     ├── OpenPlayer.Mpd.Tests/
     ├── OpenPlayer.Service.Tests/
-    └── hardware-agent/
+    ├── hardware-agent/
+    └── web-agent/
 ```
 
 ## Convenciones para un LLM que trabaje en el repositorio

@@ -37,7 +37,7 @@ No se ha confirmado el modelo exacto del DAC, la distribución de Raspberry Pi O
                                                                          |
 [SSH: mpc / diagnóstico] -----------------------------------------------+--> [OpenPlayer.Service: C#]
                                                                          |       |
-[Cliente remoto futuro] -------------------------- API local futura -----+       +--> [OpenPlayer.Core]
+[Navegador en la LAN] -- HTTP :8080 --> [Web Agent: Python] -------------+       +--> [OpenPlayer.Core]
                                                                                  |
                                                                                  +--> [OpenPlayer.Mpd] --> [MPD]
                                                                                                       |
@@ -46,7 +46,7 @@ No se ha confirmado el modelo exacto del DAC, la distribución de Raspberry Pi O
                                                                                      [DAC USB]    [Bluetooth A2DP]
 ```
 
-SSH es un canal de administración; no implica que la aplicación deba aceptar comandos shell desde la red. La API HTTP es futura, no un requisito del MVP.
+SSH es un canal de administración; no implica que la aplicación deba aceptar comandos shell desde la red. El web agent (SPEC 08) es otra entrada como el hardware agent: traduce HTTP a mensajes IPC y nunca habla con MPD.
 
 ## 5. Componentes y responsabilidades
 
@@ -83,7 +83,7 @@ Proceso principal C#/.NET:
 - Coordina el adaptador MPD.
 - Expone estado normalizado para futuras interfaces.
 - Escribe logs estructurados y maneja cancelación/apagado.
-- Más adelante puede hospedar una API HTTP local autenticada.
+- No expone HTTP: la web vive en el web agent (SPEC 08), que usa el mismo socket.
 
 ### `src/hardware-agent`
 
@@ -102,6 +102,26 @@ Implementado en SPEC 05 (Python 3, solo stdlib y `gpiozero` con `lgpio`, paquete
 - `sender.py`: hilo que envía `button.pressed` con `sequence` por proceso. Reconexión con espera incremental 0.5–10 s; registra solo `connected`/`disconnected`; detecta el cierre del Service en reposo (`select`). Sin conexión, la pulsación se descarta (no se reenvía).
 - `main.py`: entrada; SIGTERM/Ctrl+C → exit 0.
 - Unidad `deploy/openplayer-hardware.service` (usuario `openplayer`, grupo `gpio`), instalada por `deploy/install.sh`. Pruebas en `tests/hardware-agent` con `MockFactory` y un servidor TCP local.
+
+### `src/web-agent`
+
+Proceso Python (SPEC 08, solo stdlib): página con los 6 botones y el estado, para controlar el reproductor desde un navegador de la red local sin GPIO.
+
+- `config.py`: lee `ipc.unixSocketPath` y `web.port` (1024–65535) de `player.json`; ignora `hardware`. Config inválida → exit 1 nombrando el campo.
+- `ipc.py`: una conexión al socket por pedido HTTP; `button.pressed` sin `sequence`; `player.get_snapshot` con timeout de 2 s.
+- `server.py`: `ThreadingHTTPServer` en `::` (IPv4 e IPv6). Solo acepta clientes de `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `::1` y `fe80::/10` (IPv4 mapeadas se evalúan como IPv4); el resto recibe `403`. Sin autenticación ni HTTPS.
+- `index.html`: botones y línea de estado (sondeo cada 2 s); título y artista se insertan como texto, nunca como HTML.
+- `main.py`: logs `ready:` / `button <nombre>` / warnings; SIGTERM → exit 0. Unidad `deploy/openplayer-web.service` (usuario `openplayer`). Pruebas en `tests/web-agent`.
+
+Contrato HTTP:
+
+| Método y ruta | Éxito | Errores |
+|---|---|---|
+| `GET /` | `200` `text/html` | — |
+| `POST /api/buttons/<nombre>` (los 6 de §8) | `204` | `404` nombre desconocido; `503` Service inalcanzable |
+| `GET /api/snapshot` | `200` `application/json`: la línea `player.snapshot` de §7 tal cual | `502` si el Service responde `error`; `503` inalcanzable o sin respuesta en 2 s |
+| Otra ruta / otro método | — | `404` / `405` |
+| Cliente fuera de los rangos | — | `403` en todas las rutas |
 
 ### MPD y salida de audio
 
@@ -211,6 +231,7 @@ Archivo `config/player.example.json`; el build y el publish del Service lo copia
 | `ipc.unixSocketPath` | Ruta del socket Unix; el directorio debe existir | Usado |
 | `ipc.maxMessageBytes` | Tamaño máximo de un mensaje IPC, 256–65536 bytes | Usado |
 | `hardware.*` | Pines BCM, debounce, OLED; los lee el agente Python | Reservado (agente) |
+| `web.port` | Puerto HTTP del web agent, 1024–65535 (por defecto 8080); `install.sh` lo agrega si falta | Usado (web agent) |
 
 El Service abre una conexión TCP a MPD por operación (sin conexión persistente ni reconexión con backoff); un MPD caído solo hace fallar esa operación con un warning.
 

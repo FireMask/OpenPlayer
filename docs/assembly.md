@@ -244,6 +244,19 @@ journalctl -u openplayer-hardware -b -f
 
 Sin botones, probar con un cable de puente siguiendo `gpio-map.md` §9. Más adelante: OLED y visualización de snapshots.
 
+### Control desde el navegador (web agent)
+
+El mismo `deploy.ps1` instala el web agent (SPEC 08) en `/opt/openplayer/web-agent` con la unidad `openplayer-web` (usuario `openplayer`). No necesita paquetes extra: solo Python 3 de la imagen. Escucha en el puerto `web.port` de `/opt/openplayer/player.json` (8080; `install.sh` agrega la sección si un `player.json` anterior no la tiene).
+
+Abrir `http://mpi3-player.local:8080` desde un navegador de la misma red (PC o móvil). Si `.local` no resuelve en el móvil, usar la IP (`hostname -I`). Solo responde a direcciones privadas; no abrir el puerto 8080 en el router.
+
+```bash
+systemctl status openplayer-web
+journalctl -u openplayer-web -b -f
+```
+
+Para cambiar el puerto: editar `web.port` (1024–65535) y `sudo systemctl restart openplayer-web`.
+
 ## 9. Socket Unix y systemd
 
 Implementado en `deploy/openplayer.service` (SPEC 04):
