@@ -109,3 +109,5 @@ Procedimiento:
 Reglas: el cable va **solo** entre un GPIO de la tabla y GND. Nunca tocar los pines de 3.3 V (1, 17) ni de 5 V (2, 4), ni otros GPIO: un cortocircuito a 3.3 V o 5 V puede dañar la Pi.
 
 Debounce: un cable rebota más que un botón. Si un toque genera dos líneas `button …` en el log, subir `hardware.debounceSeconds` en `/opt/openplayer/player.json` (rango 0.01–1) y aplicar con `sudo systemctl restart openplayer-hardware`. Recalibrar al cablear los botones reales.
+
+Validado (2026-10-20, Pi Zero 2 W, cable dupont): con `debounceSeconds` 0.08 (valor por defecto), 31 toques dieron 31 eventos, sin dobles.

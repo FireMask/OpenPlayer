@@ -1,6 +1,6 @@
 # SPEC 05 — Agente Python de hardware: botones GPIO
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 04
 > **Date:** 2026-10-20
 > **Objective:** Implementar el hardware agent en Python que lee los 6 botones GPIO con `gpiozero` y envía `button.pressed` por el socket IPC, instalado como unidad systemd con el mismo deploy y verificable en la Pi con un cable de puente a GND.
@@ -174,35 +174,35 @@ warning: dropped next: not connected
 
 **Windows (automatizable):**
 
-- [ ] `pytest tests/hardware-agent` pasa todas las pruebas.
-- [ ] `config.py` rechaza con `ConfigError`, nombrando el campo: botón faltante o extra, pin fuera de 0–27, no entero o repetido, `debounceSeconds` fuera de 0.01–1 y `unixSocketPath` vacío.
-- [ ] El `Sender` envía exactamente `{"type":"button.pressed","button":…,"sequence":N}\n`, con `sequence` incremental desde 1.
-- [ ] Sin servidor, `press()` vuelve de inmediato y el evento se descarta (nunca se envía más tarde).
-- [ ] Si el servidor cierra la conexión en reposo, el `Sender` lo detecta en 2 s o menos y reconecta cuando el servidor vuelve.
-- [ ] El backoff de reconexión no supera `max_backoff` y vuelve al mínimo tras conectar.
-- [ ] Con `MockFactory`, activar el pin de cada botón produce `on_press` con su nombre, y cada pin queda configurado con `bounce_time` igual a `debounceSeconds`.
-- [ ] `main.py` con config inválida sale con exit 1 y un mensaje que nombra el campo.
-- [ ] El agente solo importa stdlib y `gpiozero` (verificable con grep).
-- [ ] `dotnet build` y `dotnet test` siguen pasando.
+- [x] `pytest tests/hardware-agent` pasa todas las pruebas.
+- [x] `config.py` rechaza con `ConfigError`, nombrando el campo: botón faltante o extra, pin fuera de 0–27, no entero o repetido, `debounceSeconds` fuera de 0.01–1 y `unixSocketPath` vacío.
+- [x] El `Sender` envía exactamente `{"type":"button.pressed","button":…,"sequence":N}\n`, con `sequence` incremental desde 1.
+- [x] Sin servidor, `press()` vuelve de inmediato y el evento se descarta (nunca se envía más tarde).
+- [x] Si el servidor cierra la conexión en reposo, el `Sender` lo detecta en 2 s o menos y reconecta cuando el servidor vuelve.
+- [x] El backoff de reconexión no supera `max_backoff` y vuelve al mínimo tras conectar.
+- [x] Con `MockFactory`, activar el pin de cada botón produce `on_press` con su nombre, y cada pin queda configurado con `bounce_time` igual a `debounceSeconds`.
+- [x] `main.py` con config inválida sale con exit 1 y un mensaje que nombra el campo.
+- [x] El agente solo importa stdlib y `gpiozero` (verificable con grep).
+- [x] `dotnet build` y `dotnet test` siguen pasando.
 
 **Raspberry Pi (manual; cable dupont solo entre GPIO y GND):**
 
-- [ ] `deploy.ps1` termina con exit 0, y `openplayer` y `openplayer-hardware` quedan `active`.
-- [ ] `ps -o user= -C python3` muestra `openplayer` para el agente, y `journalctl -u openplayer-hardware` muestra `connected to /run/openplayer/hardware.sock`.
-- [ ] Puentear GPIO17 (pin 11) a GND (pin 9) alterna play/pause según `mpc status`.
-- [ ] Puentear GPIO22 (pin 15) a GND (pin 14) hace `next` según `mpc status`.
-- [ ] Puentear GPIO23 o GPIO24 cambia el volumen en 5 según `mpc volume`.
-- [ ] 10 toques sobre un mismo pin producen 10 líneas `button` en el log del agente y 10 en el del Service. Si hay eventos dobles, se ajusta `hardware.debounceSeconds` y el valor final queda documentado.
-- [ ] `sudo systemctl restart openplayer`: el agente registra `disconnected` y luego `connected` en 10 s o menos, y el siguiente toque funciona.
-- [ ] Con el Service detenido (`sudo systemctl stop openplayer`), un toque produce `dropped …: not connected` y el agente sigue `active`.
-- [ ] Después de `sudo reboot`, las dos unidades están `active` y un toque funciona sin intervención.
+- [x] `deploy.ps1` termina con exit 0, y `openplayer` y `openplayer-hardware` quedan `active`.
+- [x] `ps -o user= -C python3` muestra `openplayer` para el agente, y `journalctl -u openplayer-hardware` muestra `connected to /run/openplayer/hardware.sock`.
+- [x] Puentear GPIO17 (pin 11) a GND (pin 9) alterna play/pause según `mpc status`.
+- [x] Puentear GPIO22 (pin 15) a GND (pin 14) hace `next` según `mpc status`.
+- [x] Puentear GPIO23 o GPIO24 cambia el volumen en 5 según `mpc volume`.
+- [x] 10 toques sobre un mismo pin producen 10 líneas `button` en el log del agente y 10 en el del Service. Si hay eventos dobles, se ajusta `hardware.debounceSeconds` y el valor final queda documentado.
+- [x] `sudo systemctl restart openplayer`: el agente registra `disconnected` y luego `connected` en 10 s o menos, y el siguiente toque funciona.
+- [x] Con el Service detenido (`sudo systemctl stop openplayer`), un toque produce `dropped …: not connected` y el agente sigue `active`.
+- [x] Después de `sudo reboot`, las dos unidades están `active` y un toque funciona sin intervención.
 
 **Documentación:**
 
-- [ ] `gpio-map.md` describe la prueba con el cable de puente (solo GPIO↔GND, nunca 3.3 V ni 5 V) y el ajuste de debounce.
-- [ ] `architecture.md` §5 describe el agente implementado y §13 marca la fase.
-- [ ] El README explica cómo ver los logs del agente, cómo probar con el cable y cómo correr las pruebas Python.
-- [ ] `assembly.md` §8 describe la instalación del agente con el deploy.
+- [x] `gpio-map.md` describe la prueba con el cable de puente (solo GPIO↔GND, nunca 3.3 V ni 5 V) y el ajuste de debounce.
+- [x] `architecture.md` §5 describe el agente implementado y §13 marca la fase.
+- [x] El README explica cómo ver los logs del agente, cómo probar con el cable y cómo correr las pruebas Python.
+- [x] `assembly.md` §8 describe la instalación del agente con el deploy.
 
 ## Decisions
 
