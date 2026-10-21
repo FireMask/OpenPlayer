@@ -274,6 +274,14 @@ Seguir `battery-design.md`. No imprimir la carcasa definitiva antes de medir DAC
 - Verificar el bloque `audio_output` de MPD y permisos.
 - Confirmar que el volumen no está en cero y que el DAC/auriculares funcionan en otro equipo.
 
+### MPD: `Failed to open ALSA device "hw:N,0"`
+
+Aparece en `mpc status` o `journalctl -u mpd -b`, y los botones registran `Button Next failed: … Not playing`. Causa: el `device` de `audio_output` usa un índice y el DAC cambió de número (p. ej. pasó a `card 0` y `hw:1,0` ahora es HDMI). Solución: usar el id de la tarjeta, `hw:CARD=<id>,DEV=0` (§4–5), y `sudo systemctl restart mpd`.
+
+### Tras actualizar el paquete `mpd`
+
+Si `apt` pregunta si reemplazar `/etc/mpd.conf`, conservar la versión local (opción por defecto `N`): la del paquete no trae el `audio_output` del DAC. Después de actualizar, revisar el bloque con `grep -A5 '^audio_output' /etc/mpd.conf`.
+
 ### MPD no puede leer música
 
 - Confirmar la ruta exacta en `music_directory`.
