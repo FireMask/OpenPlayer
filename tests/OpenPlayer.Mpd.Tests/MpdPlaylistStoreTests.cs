@@ -63,18 +63,18 @@ public class MpdPlaylistStoreTests
     }
 
     [Fact]
-    public async Task Create_new_sends_playlistclear()
+    public async Task Create_new_adds_root_then_clears_in_one_connection()
     {
         await using var server = new FakeMpdServer { Respond = c => c == "listplaylists" ? Listing : "OK\n" };
 
         await StoreFor(server).CreateAsync("Nueva");
         await server.AllClosed();
 
-        Assert.Equal([["listplaylists"], ["playlistclear \"Nueva\""]], server.Connections);
+        Assert.Equal([["listplaylists"], ["playlistadd \"Nueva\" \"\"", "playlistclear \"Nueva\""]], server.Connections);
     }
 
     [Fact]
-    public async Task Create_existing_throws_without_playlistclear()
+    public async Task Create_existing_throws_without_touching_the_playlist()
     {
         await using var server = new FakeMpdServer { Respond = _ => Listing };
 

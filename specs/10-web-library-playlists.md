@@ -1,6 +1,6 @@
 # SPEC 10 — Biblioteca y playlists desde la web
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 02, SPEC 03, SPEC 07, SPEC 08, SPEC 09
 > **Date:** 2026-10-21
 > **Objective:** Agregar a la página del web agent una pestaña de biblioteca (carpetas + búsqueda, paginada) y otra de playlists guardadas de MPD (crear, renombrar, borrar, agregar pista o carpeta, quitar, reordenar, reproducir), sobre nuevos mensajes IPC con respuesta que el Service ejecuta mediante `ILibrary` e `IPlaylistStore`.
@@ -55,7 +55,7 @@ Task PlayTrackAsync(string uri, CancellationToken ct = default);                
 // Interfaces/IPlaylistStore.cs
 Task<IReadOnlyList<string>> ListAsync(CancellationToken ct = default);
 Task<LibraryPage> GetAsync(string name, int offset, CancellationToken ct = default);      // listplaylistinfo
-Task CreateAsync(string name, CancellationToken ct = default);                            // existe → error; playlistclear
+Task CreateAsync(string name, CancellationToken ct = default);                            // existe → error; playlistadd "" + playlistclear
 Task RenameAsync(string name, string newName, CancellationToken ct = default);
 Task DeleteAsync(string name, CancellationToken ct = default);                            // rm
 Task AddAsync(string name, string uri, CancellationToken ct = default);                   // pista o carpeta (recursivo)
@@ -187,39 +187,39 @@ Cada paso deja `dotnet test` y `pytest` en verde. Los pasos 1–6 no agregan nad
 
 **Windows (automatizable):**
 
-- [ ] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
-- [ ] `MpdClient.Quote` convierte `a "b" \c` en `"a \"b\" \\c"`; un nombre con espacios y tildes llega a `FakeMpdServer` como un solo argumento.
-- [ ] `PlaylistName.EnsureValid` acepta `Viaje 2026` y `Ñandú` y rechaza `""`, 101 caracteres, `a/b`, `a\b`, `a\nb` y `.x`.
-- [ ] `IpcMessageParser` devuelve el record correcto para cada uno de los 12 mensajes; sin `offset`/`position` usa 0; `name` faltante, `offset` `-1`, `"3"` o `3.5`, `query` de 1 carácter y `uri` vacío son inválidos sin lanzar.
-- [ ] Un mensaje inválido de los nuevos responde `error` con su `request` y la conexión procesa el siguiente.
-- [ ] `BrowseAsync("", 0)` sobre 3 carpetas y 150 pistas devuelve `total` 153, 100 entradas con las 3 carpetas primero; `offset` 100 devuelve las 53 restantes; las entradas `playlist:` no aparecen.
-- [ ] `PlayTrackAsync` envía `clear`, `add "<uri>"` y `play 0` en ese orden en una conexión; `PlayAsync("Viaje", 4)` envía `clear`, `load "Viaje"` y `play 4`.
-- [ ] `CreateAsync` con un nombre existente lanza sin enviar `playlistclear`; con uno nuevo envía `playlistclear "<name>"`.
-- [ ] `AddAsync`, `RemoveAsync`, `MoveAsync`, `RenameAsync` y `DeleteAsync` envían `playlistadd`, `playlistdelete`, `playlistmove`, `rename` y `rm` con los argumentos citados.
-- [ ] Un `ACK` de MPD en cualquier operación llega al cliente IPC como `error` con el mensaje de MPD, y el Service sigue corriendo.
-- [ ] Cada fila de la tabla HTTP devuelve su código de éxito con el IPC esperado; cuerpo > 4 KB, JSON inválido o campo inválido → `400`; Service `error` → `502` con la línea como cuerpo; Service caído → `503`; método incorrecto → `405`; cliente fuera de rango → `403`.
-- [ ] `GET /api/playlists/Mi%20lista%20100%25` llega como `playlist.get` con `name` `Mi lista 100%`.
-- [ ] El web agent sigue usando solo stdlib.
+- [x] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
+- [x] `MpdClient.Quote` convierte `a "b" \c` en `"a \"b\" \\c"`; un nombre con espacios y tildes llega a `FakeMpdServer` como un solo argumento.
+- [x] `PlaylistName.EnsureValid` acepta `Viaje 2026` y `Ñandú` y rechaza `""`, 101 caracteres, `a/b`, `a\b`, `a\nb` y `.x`.
+- [x] `IpcMessageParser` devuelve el record correcto para cada uno de los 12 mensajes; sin `offset`/`position` usa 0; `name` faltante, `offset` `-1`, `"3"` o `3.5`, `query` de 1 carácter y `uri` vacío son inválidos sin lanzar.
+- [x] Un mensaje inválido de los nuevos responde `error` con su `request` y la conexión procesa el siguiente.
+- [x] `BrowseAsync("", 0)` sobre 3 carpetas y 150 pistas devuelve `total` 153, 100 entradas con las 3 carpetas primero; `offset` 100 devuelve las 53 restantes; las entradas `playlist:` no aparecen.
+- [x] `PlayTrackAsync` envía `clear`, `add "<uri>"` y `play 0` en ese orden en una conexión; `PlayAsync("Viaje", 4)` envía `clear`, `load "Viaje"` y `play 4`.
+- [x] `CreateAsync` con un nombre existente lanza sin tocar la lista; con uno nuevo envía `playlistadd "<name>" ""` y `playlistclear "<name>"` en una conexión.
+- [x] `AddAsync`, `RemoveAsync`, `MoveAsync`, `RenameAsync` y `DeleteAsync` envían `playlistadd`, `playlistdelete`, `playlistmove`, `rename` y `rm` con los argumentos citados.
+- [x] Un `ACK` de MPD en cualquier operación llega al cliente IPC como `error` con el mensaje de MPD, y el Service sigue corriendo.
+- [x] Cada fila de la tabla HTTP devuelve su código de éxito con el IPC esperado; cuerpo > 4 KB, JSON inválido o campo inválido → `400`; Service `error` → `502` con la línea como cuerpo; Service caído → `503`; método incorrecto → `405`; cliente fuera de rango → `403`.
+- [x] `GET /api/playlists/Mi%20lista%20100%25` llega como `playlist.get` con `name` `Mi lista 100%`.
+- [x] El web agent sigue usando solo stdlib.
 
 **Raspberry Pi (`deploy.ps1` y navegador en PC y móvil):**
 
-- [ ] La pestaña Biblioteca muestra la raíz de `/home/andres/Music`; entrar a una carpeta y volver con las migas funciona; con más de 100 entradas aparece "Más" y carga el resto.
-- [ ] Buscar un texto de un título conocido lo muestra en 3 s o menos.
-- [ ] Tocar una pista de la biblioteca reemplaza la cola y `mpc status` muestra esa pista reproduciendo.
-- [ ] Crear "Prueba", agregar 2 pistas y una carpeta: `mpc playlist Prueba` lista esas pistas en ese orden, con la carpeta expandida.
-- [ ] ↑ sobre la segunda pista la deja primera en `mpc playlist Prueba`; ✕ la quita.
-- [ ] Renombrar "Prueba" a "Prueba 2" se refleja en `mpc lsplaylists`; crear "Prueba 2" otra vez muestra el mensaje de error en la página.
-- [ ] Borrar pide confirmación; al cancelar no cambia nada; al aceptar desaparece de `mpc lsplaylists` y ningún archivo de música se borra.
-- [ ] "Reproducir" de una lista y tocar su tercera pista dejan `mpc status` en la pista 1 y la 3 de la cola, respectivamente.
-- [ ] Un nombre con espacios, tildes y `"` funciona en crear, abrir, agregar y borrar.
-- [ ] Con el Service detenido, cualquier acción de Biblioteca o Listas muestra "Sin conexión con el reproductor"; al reiniciarlo vuelve a funcionar sin recargar.
-- [ ] La pestaña Reproductor (botones, estado, barra de SPEC 09) funciona como antes.
+- [x] La pestaña Biblioteca muestra la raíz de `/home/andres/Music`; entrar a una carpeta y volver con las migas funciona; con más de 100 entradas aparece "Más" y carga el resto.
+- [x] Buscar un texto de un título conocido lo muestra en 3 s o menos.
+- [x] Tocar una pista de la biblioteca reemplaza la cola y `mpc status` muestra esa pista reproduciendo.
+- [x] Crear "Prueba", agregar 2 pistas y una carpeta: `mpc playlist Prueba` lista esas pistas en ese orden, con la carpeta expandida.
+- [x] ↑ sobre la segunda pista la deja primera en `mpc playlist Prueba`; ✕ la quita.
+- [x] Renombrar "Prueba" a "Prueba 2" se refleja en `mpc lsplaylists`; crear "Prueba 2" otra vez muestra el mensaje de error en la página.
+- [x] Borrar pide confirmación; al cancelar no cambia nada; al aceptar desaparece de `mpc lsplaylists` y ningún archivo de música se borra.
+- [x] "Reproducir" de una lista y tocar su tercera pista dejan `mpc status` en la pista 1 y la 3 de la cola, respectivamente.
+- [x] Un nombre con espacios, tildes y `"` funciona en crear, abrir, agregar y borrar.
+- [x] Con el Service detenido, cualquier acción de Biblioteca o Listas muestra "Sin conexión con el reproductor"; al reiniciarlo vuelve a funcionar sin recargar.
+- [x] La pestaña Reproductor (botones, estado, barra de SPEC 09) funciona como antes.
 
 **Documentación:**
 
-- [ ] `architecture.md` §5, §6, §7 y §9 describen contrato HTTP, contratos, mensajes y lo implementado.
-- [ ] README menciona las pestañas Biblioteca y Listas.
-- [ ] SPEC 09 ya no reserva "SPEC 10".
+- [x] `architecture.md` §5, §6, §7 y §9 describen contrato HTTP, contratos, mensajes y lo implementado.
+- [x] README menciona las pestañas Biblioteca y Listas.
+- [x] SPEC 09 ya no reserva "SPEC 10".
 
 ## Decisions
 
@@ -232,7 +232,8 @@ Cada paso deja `dotnet test` y `pytest` en verde. Los pasos 1–6 no agregan nad
 - **Navegación por carpetas + búsqueda.** Coincide con cómo se copia la música por Samba (SPEC 07); no depende de etiquetas bien puestas.
 - **Paginado de 100 en el Service, sin tope de búsqueda.** `lsinfo` y `search` no paginan en MPD 0.23; cortar en el Service mantiene las respuestas IPC chicas (~30 KB). Una sola regla para biblioteca, búsqueda y playlists.
 - **Reproducir reemplaza la cola (`clear` + `load`/`add` + `play N`).** Sin UI de cola en esta spec; el comportamiento es predecible.
-- **Crear con `playlistclear`, verificando antes con `listplaylists`.** MPD no tiene "crear vacía"; `save` copiaría la cola actual.
+- **Crear con `playlistadd "<nombre>" ""` + `playlistclear`, verificando antes con `listplaylists`.** MPD no tiene "crear vacía"; `save` copiaría la cola actual. Hallado en la Pi (MPD 0.23): `playlistclear` de un nombre inexistente responde `No such playlist` en vez de crear el `.m3u`. Agregar la raíz crea el archivo y `playlistclear` lo vacía, en una conexión; la UI no cambia. Se descartó "agregar una pista cualquiera + `playlistdelete 0`": obtener una pista barata exige filtros de `find`/`search` dependientes de versión. Con una biblioteca vacía, crear falla con el mensaje de MPD.
+- **`~/Playlists` con dueño `mpd` (`chown mpd:andres`, `chmod 2775`).** Hallado en la Pi: MPD corre como `mpd` y no podía escribir en la carpeta de `andres` (`Permission denied`). Documentado en `assembly.md`; faltaba desde SPEC 07.
 - **Escape de argumentos en `MpdClient`.** Nombres y URIs son entrada de usuario; hasta ahora solo se enviaban números.
 - **Validación en Core y forma en el web agent.** El Core es la autoridad (también para SPEC 11); el web agent rechaza temprano con `400`.
 - **Agregar pista o carpeta.** `playlistadd` con una carpeta la expande recursivamente sin código propio.
@@ -260,7 +261,7 @@ Cada paso deja `dotnet test` y `pytest` en verde. Los pasos 1–6 no agregan nad
 |---|---|
 | `lsinfo` de la raíz o `search` sobre miles de pistas supera `mpd.connectTimeoutMs` (un solo timeout por operación en `MpdClient`) | Medir en la Pi con la biblioteca real; si pasa, subir `mpd.connectTimeoutMs` en `player.json`. Navegar por carpetas mantiene cada `lsinfo` chico. |
 | Una consulta larga retiene `_commandLock` y retrasa los botones físicos | Aceptado: las consultas pagan solo al navegar. Si molesta, lock separado para lecturas en otra spec. |
-| `playlistclear` sobre un nombre inexistente no crea el `.m3u` en la versión de MPD de la Pi | Verificarlo en el paso 5 con `mpc lsplaylists`; si falla, crear con `playlistadd` de la primera pista y deshabilitar "crear vacía" (registrar en Decisiones). |
+| `playlistclear` sobre un nombre inexistente no crea el `.m3u` en la versión de MPD de la Pi | **Ocurrió** (MPD 0.23: `No such playlist`). Se crea con `playlistadd` de la raíz + `playlistclear` (ver Decisiones). Con decenas de miles de pistas, ese `playlistadd` escribe un `.m3u` grande una vez antes de vaciarlo; si pesa, cambiar a una sola pista. |
 | Paginado inconsistente si la biblioteca o la lista cambia entre dos páginas (`auto_update`, otra pestaña) | Aceptado: "Más" puede repetir o saltar entradas; recargar la carpeta lo corrige. |
 | Reordenar o quitar con posiciones viejas (otra pestaña o `mpc` cambió la lista) | MPD responde `ACK` si la posición no existe; si existe, mueve otra pista. La página recarga la lista después de cada operación. |
 | "Reproducir" borra la cola actual sin aviso | Aceptado y documentado en README; no hay UI de cola que perder. |

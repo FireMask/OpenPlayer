@@ -185,7 +185,7 @@ public interface IPlaylistStore
 {
     Task<IReadOnlyList<string>> ListAsync(CancellationToken ct = default);
     Task<LibraryPage> GetAsync(string name, int offset, CancellationToken ct = default);
-    Task CreateAsync(string name, CancellationToken ct = default);          // existe → error; si no, playlistclear
+    Task CreateAsync(string name, CancellationToken ct = default);          // existe → error; si no, playlistadd "" + playlistclear (MPD 0.23)
     Task RenameAsync(string name, string newName, CancellationToken ct = default);
     Task DeleteAsync(string name, CancellationToken ct = default);
     Task AddAsync(string name, string uri, CancellationToken ct = default); // pista o carpeta (recursivo)

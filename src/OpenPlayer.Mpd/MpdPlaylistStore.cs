@@ -19,13 +19,15 @@ public sealed class MpdPlaylistStore(MpdClient client) : IPlaylistStore
         return MpdEntryParser.Page(MpdEntryParser.Parse(response), offset);
     }
 
-    // MPD no tiene "crear vacía": playlistclear crea el .m3u, pero también vaciaría una existente.
+    // MPD no tiene "crear vacía" y en 0.23 playlistclear de un nombre inexistente responde "No such playlist":
+    // playlistadd de la raíz ("") crea el .m3u con toda la biblioteca y playlistclear lo vacía.
+    // ponytail: escribe la biblioteca entera una vez; si pesa con decenas de miles de pistas, agregar una sola pista.
     public async Task CreateAsync(string name, CancellationToken ct = default)
     {
-        var command = $"playlistclear {Name(name)}";
+        var quoted = Name(name);
         if ((await ListAsync(ct)).Contains(name))
-            throw new MpdException(command, $"Playlist '{name}' already exists");
-        await client.ExecuteAsync([command], ct);
+            throw new MpdException($"playlistclear {quoted}", $"Playlist '{name}' already exists");
+        await client.ExecuteAsync([$"playlistadd {quoted} {MpdClient.Quote("")}", $"playlistclear {quoted}"], ct);
     }
 
     public Task RenameAsync(string name, string newName, CancellationToken ct = default) =>
