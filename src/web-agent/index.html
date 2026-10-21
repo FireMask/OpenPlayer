@@ -23,18 +23,55 @@
   .progress input { width: 100%; margin: 0; accent-color: var(--accent); }
   .time { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; text-align: right; }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  button { background: var(--card); color: var(--text); border: 0; border-radius: 12px; padding: 16px 8px;
+  .grid button { background: var(--card); color: var(--text); border: 0; border-radius: 12px; padding: 16px 8px;
            font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px;
            min-height: 88px; touch-action: manipulation; }
-  button .icon { font-size: 1.8rem; line-height: 1; }
-  button .label { font-size: .8rem; color: var(--muted); }
-  button:active { outline: 2px solid var(--accent); }
-  button.primary .icon { color: var(--accent); }
+  .grid button .icon { font-size: 1.8rem; line-height: 1; }
+  .grid button .label { font-size: .8rem; color: var(--muted); }
+  .grid button:active { outline: 2px solid var(--accent); }
+  .grid button.primary .icon { color: var(--accent); }
+
+  /* Pestañas, biblioteca y listas (SPEC 10) */
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; background: var(--card); border-radius: 12px; padding: 4px; }
+  .tabs button { flex: 1; border: 0; border-radius: 8px; padding: 10px 4px; background: none; color: var(--muted);
+                 font: inherit; cursor: pointer; touch-action: manipulation; }
+  .tabs button[aria-selected="true"] { background: var(--bg); color: var(--text); font-weight: 600; }
+  .bar { display: flex; gap: 8px; margin-bottom: 12px; }
+  .bar input { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border-radius: 8px;
+               border: 1px solid var(--muted); background: var(--card); color: var(--text); }
+  .small { border: 0; border-radius: 8px; padding: 8px 12px; background: var(--card); color: var(--text);
+           font: inherit; cursor: pointer; touch-action: manipulation; }
+  .small:active { outline: 2px solid var(--accent); }
+  .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 8px; color: var(--muted); }
+  .crumbs button { border: 0; background: none; color: var(--accent); font: inherit; padding: 4px; cursor: pointer; }
+  .list { list-style: none; margin: 0; padding: 0; background: var(--card); border-radius: 12px; overflow: hidden; }
+  .list li { display: flex; align-items: center; gap: 4px; border-top: 1px solid var(--bg); }
+  .list li:first-child { border-top: 0; }
+  .list .main { flex: 1; min-width: 0; text-align: left; border: 0; background: none; color: var(--text);
+                font: inherit; padding: 10px 12px; cursor: pointer; }
+  .list .name { display: block; overflow-wrap: anywhere; }
+  .list .meta { display: block; color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
+  .list .act { border: 0; background: none; color: var(--accent); font-size: 1.2rem; padding: 10px; cursor: pointer;
+               min-width: 44px; touch-action: manipulation; }
+  .empty { color: var(--muted); padding: 12px; }
+  .msg { min-height: 1.4em; margin: 8px 0; color: var(--muted); }
+  .msg.error { color: var(--warn); font-weight: 600; }
+  .more { width: 100%; margin-top: 8px; }
+  dialog { border: 0; border-radius: 12px; background: var(--card); color: var(--text); width: min(360px, 90vw); }
+  dialog::backdrop { background: rgb(0 0 0 / .4); }
+  dialog h2 { font-size: 1rem; margin: 0 0 8px; }
+  dialog .list { background: var(--bg); max-height: 50vh; overflow-y: auto; margin-bottom: 12px; }
 </style>
 </head>
 <body>
 <main>
   <h1>OpenPlayer</h1>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="player" aria-selected="true">Reproductor</button>
+    <button role="tab" data-tab="library" aria-selected="false">Biblioteca</button>
+    <button role="tab" data-tab="lists" aria-selected="false">Listas</button>
+  </nav>
+  <div id="tab-player">
   <section class="status" aria-live="polite">
     <div class="state" id="state">Cargando…</div>
     <div class="title" id="title"></div>
@@ -53,6 +90,27 @@
     <button data-button="volume_up"><span class="icon">🔊</span><span class="label">Subir volumen</span></button>
     <button data-button="refresh_library"><span class="icon">🔄</span><span class="label">Actualizar biblioteca</span></button>
   </div>
+  </div>
+
+  <div id="tab-library" hidden>
+    <form class="bar" id="lib-search">
+      <input type="search" id="lib-query" placeholder="Buscar título, artista, álbum…" minlength="2" maxlength="100"
+             aria-label="Buscar">
+      <button class="small" type="submit">Buscar</button>
+    </form>
+    <div class="crumbs" id="lib-crumbs"></div>
+    <p class="msg" id="lib-msg" aria-live="polite"></p>
+    <ul class="list" id="lib-list"></ul>
+    <button class="small more" id="lib-more" hidden>Más</button>
+  </div>
+
+  <div id="tab-lists" hidden></div>
+
+  <dialog id="picker">
+    <h2>Agregar a una lista</h2>
+    <ul class="list" id="picker-list"></ul>
+    <button class="small" id="picker-cancel">Cancelar</button>
+  </dialog>
 </main>
 <script>
   const STATES = { playing: "Reproduciendo", paused: "En pausa", stopped: "Detenido" };
@@ -113,7 +171,7 @@
     } catch { showOffline(); }
   }
 
-  document.querySelectorAll("button[data-button]").forEach(b => b.addEventListener("click", async () => {
+  document.querySelectorAll(".grid button[data-button]").forEach(b => b.addEventListener("click", async () => {
     try {
       const r = await fetch("/api/buttons/" + b.dataset.button, { method: "POST" });
       if (r.status === 503) return showOffline();
@@ -142,6 +200,159 @@
   refresh();
   setInterval(refresh, 2000);
   setInterval(renderProgress, 250);
+
+  // --- Biblioteca y listas (SPEC 10). Todo texto de MPD se inserta con textContent. ---
+
+  const OFFLINE = "Sin conexión con el reproductor";
+  const enc = encodeURIComponent;
+
+  // Devuelve el JSON de la respuesta (null en 204); lanza Error con un mensaje para mostrar.
+  async function api(method, url, body) {
+    let r;
+    try {
+      r = await fetch(url, {
+        method, cache: "no-store",
+        headers: body === undefined ? {} : { "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch { throw new Error(OFFLINE); }
+    if (r.status === 204) return null;
+    if (r.ok) return r.json();
+    if (r.status === 503) throw new Error(OFFLINE);
+    if (r.status === 502) {
+      const e = await r.json().catch(() => null);
+      throw new Error(e && e.message ? e.message : "El reproductor devolvió un error");
+    }
+    throw new Error(r.status === 400 ? "Pedido inválido" : `Error ${r.status}`);
+  }
+
+  function setMsg(id, text, isError = false) {
+    $(id).textContent = text;
+    $(id).className = isError ? "msg error" : "msg";
+  }
+
+  const baseName = uri => uri.split("/").pop();
+
+  function el(tag, props = {}, ...children) {
+    const e = document.createElement(tag);
+    Object.assign(e, props);
+    e.append(...children);
+    return e;
+  }
+
+  // Fila: botón principal (nombre + detalle) y botones de acción [{ text, label, onClick }].
+  function row(name, meta, onClick, actions = []) {
+    const main = el("button", { className: "main", onclick: onClick },
+      el("span", { className: "name", textContent: name }));
+    if (meta) main.append(el("span", { className: "meta", textContent: meta }));
+    return el("li", {}, main, ...actions.map(a =>
+      el("button", { className: "act", textContent: a.text, title: a.label, ariaLabel: a.label, onclick: a.onClick })));
+  }
+
+  function trackMeta(e) {
+    const parts = [e.artist, e.album].filter(Boolean);
+    if (e.durationSeconds != null) parts.push(mmss(e.durationSeconds));
+    return parts.join(" · ");
+  }
+
+  // Pestañas: la de Reproductor no cambia; Biblioteca carga al abrirla por primera vez.
+  const tabs = document.querySelectorAll(".tabs button");
+  const loaders = { library: () => loadLibrary(), lists: () => {} };
+  const loaded = new Set(["player"]);
+  tabs.forEach(t => t.addEventListener("click", () => {
+    tabs.forEach(o => {
+      o.setAttribute("aria-selected", String(o === t));
+      $("tab-" + o.dataset.tab).hidden = o !== t;
+    });
+    if (!loaded.has(t.dataset.tab)) { loaded.add(t.dataset.tab); loaders[t.dataset.tab](); }
+  }));
+
+  // Biblioteca: carpeta actual (libPath) o búsqueda (libQuery), paginado de 100 con "Más".
+  let libPath = "", libQuery = null, libNext = 0;
+
+  function renderCrumbs() {
+    const c = $("lib-crumbs");
+    c.replaceChildren();
+    if (libQuery !== null) {
+      c.append(el("span", { textContent: `Resultados de “${libQuery}”` }),
+        el("button", { textContent: "✕ Volver", onclick: () => { libQuery = null; $("lib-query").value = ""; loadLibrary(); } }));
+      return;
+    }
+    const parts = libPath ? libPath.split("/") : [];
+    c.append(el("button", { textContent: "Música", onclick: () => openFolder("") }));
+    parts.forEach((p, i) => {
+      c.append("/", el("button", { textContent: p, onclick: () => openFolder(parts.slice(0, i + 1).join("/")) }));
+    });
+  }
+
+  function openFolder(path) {
+    libPath = path;
+    libQuery = null;
+    loadLibrary();
+  }
+
+  async function loadLibrary(append = false) {
+    const offset = append ? libNext : 0;
+    const url = libQuery !== null
+      ? `/api/library/search?q=${enc(libQuery)}&offset=${offset}`
+      : `/api/library?path=${enc(libPath)}&offset=${offset}`;
+    if (!append) renderCrumbs();
+    setMsg("lib-msg", "Cargando…");
+    let page;
+    try { page = await api("GET", url); } catch (e) { return setMsg("lib-msg", e.message, true); }
+    setMsg("lib-msg", "");
+    const list = $("lib-list");
+    if (!append) list.replaceChildren();
+    for (const e of page.entries) {
+      const add = { text: "+", label: "Agregar a una lista", onClick: () => pickPlaylist(e.uri) };
+      list.append(e.directory
+        ? row("📁 " + baseName(e.uri), "", () => openFolder(e.uri), [add])
+        : row(e.title || baseName(e.uri), trackMeta(e), () => playTrack(e), [add]));
+    }
+    if (!list.children.length)
+      list.append(el("li", { className: "empty", textContent: libQuery !== null ? "Sin resultados" : "Carpeta vacía" }));
+    libNext = page.offset + page.entries.length;
+    $("lib-more").hidden = libNext >= page.total;
+  }
+
+  async function playTrack(e) {
+    try {
+      await api("POST", "/api/library/play", { uri: e.uri });
+      setMsg("lib-msg", "Reproduciendo " + (e.title || baseName(e.uri)));
+    } catch (err) { return setMsg("lib-msg", err.message, true); }
+    refresh();
+  }
+
+  $("lib-more").addEventListener("click", () => loadLibrary(true));
+  $("lib-search").addEventListener("submit", ev => {
+    ev.preventDefault();
+    const q = $("lib-query").value.trim();
+    if (q.length < 2) return setMsg("lib-msg", "Escribe al menos 2 caracteres", true);
+    libQuery = q;
+    loadLibrary();
+  });
+
+  // Selector de lista para "+": pista o carpeta (MPD expande la carpeta).
+  async function pickPlaylist(uri) {
+    let data;
+    try { data = await api("GET", "/api/playlists"); } catch (e) { return setMsg("lib-msg", e.message, true); }
+    const list = $("picker-list");
+    list.replaceChildren();
+    for (const name of data.playlists) {
+      list.append(row(name, "", async () => {
+        $("picker").close();
+        try {
+          await api("POST", `/api/playlists/${enc(name)}/tracks`, { uri });
+          setMsg("lib-msg", `Agregado a “${name}”`);
+        } catch (e) { setMsg("lib-msg", e.message, true); }
+      }));
+    }
+    if (!data.playlists.length)
+      list.append(el("li", { className: "empty", textContent: "No hay listas. Crea una en la pestaña Listas." }));
+    $("picker").showModal();
+  }
+
+  $("picker-cancel").addEventListener("click", () => $("picker").close());
 </script>
 </body>
 </html>
