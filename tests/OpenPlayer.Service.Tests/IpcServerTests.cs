@@ -34,7 +34,7 @@ public sealed class IpcServerTests : IAsyncLifetime
     private Task StartAsync()
     {
         _server = new IpcServer(new IpcOptions(SocketPath, MaxBytes), _player,
-            new ButtonCommandHandler(_player, new PlayerSettings()), _library, _library, _logger);
+            new ButtonCommandHandler(_player, new PlayerSettings()), _library, _library, _library, _logger);
         // ExecuteAsync corre síncrono hasta el primer AcceptAsync: al volver, el socket ya escucha.
         return _server.StartAsync(CancellationToken.None);
     }
@@ -238,6 +238,7 @@ public sealed class IpcServerTests : IAsyncLifetime
     [InlineData("""{"type":"playlist.remove","name":"Viaje","position":3}""", "Remove(Viaje,3)", "playlist.remove")]
     [InlineData("""{"type":"playlist.move","name":"Viaje","from":3,"to":2}""", "Move(Viaje,3,2)", "playlist.move")]
     [InlineData("""{"type":"playlist.play","name":"Viaje","position":4}""", "Play(Viaje,4)", "playlist.play")]
+    [InlineData("""{"type":"queue.play","position":3}""", "QueuePlay(3)", "queue.play")]
     public async Task Mutation_calls_store_and_replies_ok(string line, string expectedCall, string request)
     {
         await StartAsync();
@@ -303,6 +304,90 @@ public sealed class IpcServerTests : IAsyncLifetime
         await client.SendAsync("""{"type":"playlist.list"}""" + "\n");
         Assert.StartsWith("""{"type":"playlist.list",""", await client.ReadLineAsync());
         Assert.DoesNotContain(_library.Calls, c => c.StartsWith("Create"));
+    }
+
+    [Fact]
+    public async Task Queue_get_replies_queue_page_without_playlist_at_start()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync("""{"type":"queue.get","offset":100}""" + "\n");
+
+        Assert.Equal(QueuePageMessage.Serialize(_library.Page, null), await client.ReadLineAsync());
+        Assert.Equal(["QueueGet(100)"], _library.Calls);
+    }
+
+    [Fact]
+    public async Task Loaded_playlist_follows_play_rename_and_delete()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        async Task Send(string line)
+        {
+            await client.SendAsync(line + "\n");
+            Assert.StartsWith("""{"type":"ok",""", await client.ReadLineAsync());
+        }
+        async Task<string?> LoadedPlaylist()
+        {
+            await client.SendAsync("""{"type":"queue.get"}""" + "\n");
+            using var doc = System.Text.Json.JsonDocument.Parse((await client.ReadLineAsync())!);
+            return doc.RootElement.GetProperty("playlist").GetString();
+        }
+
+        await Send("""{"type":"playlist.play","name":"Viaje"}""");
+        Assert.Equal("Viaje", await LoadedPlaylist());
+
+        await Send("""{"type":"playlist.rename","name":"Otra","newName":"Otra 2"}""");
+        Assert.Equal("Viaje", await LoadedPlaylist());
+
+        await Send("""{"type":"playlist.rename","name":"Viaje","newName":"Gym"}""");
+        Assert.Equal("Gym", await LoadedPlaylist());
+
+        await Send("""{"type":"playlist.delete","name":"Otra 2"}""");
+        Assert.Equal("Gym", await LoadedPlaylist());
+
+        await Send("""{"type":"playlist.delete","name":"Gym"}""");
+        Assert.Null(await LoadedPlaylist());
+
+        await Send("""{"type":"playlist.play","name":"Viaje"}""");
+        await Send("""{"type":"library.play","uri":"Rock/a.mp3"}""");
+        Assert.Null(await LoadedPlaylist());
+    }
+
+    [Fact]
+    public async Task Failed_playlist_play_keeps_loaded_playlist()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync("""{"type":"playlist.play","name":"Viaje"}""" + "\n");
+        await client.ReadLineAsync();
+        _library.Error = new MpdException("load \"Nope\"", "No such playlist");
+        await client.SendAsync("""{"type":"playlist.play","name":"Nope"}""" + "\n");
+        Assert.StartsWith("""{"type":"error","request":"playlist.play",""", await client.ReadLineAsync());
+
+        _library.Error = null;
+        await client.SendAsync("""{"type":"queue.get"}""" + "\n");
+        Assert.StartsWith("""{"type":"queue.page","playlist":"Viaje",""", await client.ReadLineAsync());
+    }
+
+    [Theory]
+    [InlineData("""{"type":"queue.get"}""", "queue.get")]
+    [InlineData("""{"type":"queue.play","position":99}""", "queue.play")]
+    public async Task Queue_failure_replies_error_and_keeps_connection(string line, string request)
+    {
+        _library.Error = new MpdException("play 99", "Bad song index");
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync(line + "\n");
+        Assert.Equal($$"""{"type":"error","request":"{{request}}","message":"Bad song index"}""", await client.ReadLineAsync());
+
+        _library.Error = null;
+        await client.SendAsync("""{"type":"playlist.list"}""" + "\n");
+        Assert.StartsWith("""{"type":"playlist.list",""", await client.ReadLineAsync());
     }
 
     private sealed class ListLogger : ILogger<IpcServer>
