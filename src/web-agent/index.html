@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenPlayer</title>
+<style>
+  :root { --bg: #f4f4f5; --card: #fff; --text: #18181b; --muted: #71717a; --accent: #2563eb; --warn: #b91c1c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #18181b; --card: #27272a; --text: #f4f4f5; --muted: #a1a1aa; --accent: #60a5fa; --warn: #f87171; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+         font: 16px/1.4 system-ui, sans-serif; }
+  main { max-width: 420px; margin: 0 auto; }
+  h1 { font-size: 1.1rem; margin: 0 0 12px; color: var(--muted); font-weight: 600; }
+  .status { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 16px; min-height: 96px; }
+  .state { color: var(--muted); font-size: .9rem; }
+  .title { font-size: 1.2rem; font-weight: 600; margin-top: 4px; overflow-wrap: anywhere; }
+  .artist { color: var(--muted); overflow-wrap: anywhere; }
+  .offline { color: var(--warn); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  button { background: var(--card); color: var(--text); border: 0; border-radius: 12px; padding: 16px 8px;
+           font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px;
+           min-height: 88px; touch-action: manipulation; }
+  button .icon { font-size: 1.8rem; line-height: 1; }
+  button .label { font-size: .8rem; color: var(--muted); }
+  button:active { outline: 2px solid var(--accent); }
+  button.primary .icon { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>OpenPlayer</h1>
+  <section class="status" aria-live="polite">
+    <div class="state" id="state">Cargando…</div>
+    <div class="title" id="title"></div>
+    <div class="artist" id="artist"></div>
+  </section>
+  <div class="grid">
+    <button data-button="previous"><span class="icon">⏮</span><span class="label">Anterior</span></button>
+    <button data-button="play_pause" class="primary"><span class="icon">⏯</span><span class="label">Play / Pausa</span></button>
+    <button data-button="next"><span class="icon">⏭</span><span class="label">Siguiente</span></button>
+    <button data-button="volume_down"><span class="icon">🔉</span><span class="label">Bajar volumen</span></button>
+    <button data-button="menu"><span class="icon">☰</span><span class="label">Menú</span></button>
+    <button data-button="volume_up"><span class="icon">🔊</span><span class="label">Subir volumen</span></button>
+  </div>
+</main>
+<script>
+  const STATES = { playing: "Reproduciendo", paused: "En pausa", stopped: "Detenido" };
+  const $ = id => document.getElementById(id);
+
+  function showOffline() {
+    $("state").className = "state offline";
+    $("state").textContent = "Sin conexión con el reproductor";
+    $("title").textContent = "";
+    $("artist").textContent = "";
+  }
+
+  // textContent, nunca innerHTML: título y artista vienen de los archivos de música.
+  function show(s) {
+    const volume = s.volume == null ? "" : ` · Volumen ${s.volume}%`;
+    $("state").className = "state";
+    $("state").textContent = (STATES[s.state] || s.state) + volume;
+    $("title").textContent = s.trackTitle || (s.state === "stopped" ? "" : "Sin título");
+    $("artist").textContent = s.trackArtist || "";
+  }
+
+  async function refresh() {
+    try {
+      const r = await fetch("/api/snapshot", { cache: "no-store" });
+      if (r.ok) show(await r.json()); else showOffline();
+    } catch { showOffline(); }
+  }
+
+  document.querySelectorAll("button[data-button]").forEach(b => b.addEventListener("click", async () => {
+    try {
+      const r = await fetch("/api/buttons/" + b.dataset.button, { method: "POST" });
+      if (r.status === 503) return showOffline();
+    } catch { return showOffline(); }
+    refresh();
+  }));
+
+  refresh();
+  setInterval(refresh, 2000);
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 using System.Net.Sockets;
 using System.Text;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using OpenPlayer.Core.Commands;
 using OpenPlayer.Core.Messages;
 using OpenPlayer.Core.Models;
@@ -16,6 +16,7 @@ public sealed class IpcServerTests : IAsyncLifetime
 
     private readonly DirectoryInfo _dir = Directory.CreateTempSubdirectory("op");
     private readonly FakePlayer _player = new();
+    private readonly ListLogger _logger = new();
     private IpcServer _server = null!;
 
     private string SocketPath => Path.Combine(_dir.FullName, "h.sock");
@@ -32,7 +33,7 @@ public sealed class IpcServerTests : IAsyncLifetime
     private Task StartAsync()
     {
         _server = new IpcServer(new IpcOptions(SocketPath, MaxBytes), _player,
-            new ButtonCommandHandler(_player, new PlayerSettings()), NullLogger<IpcServer>.Instance);
+            new ButtonCommandHandler(_player, new PlayerSettings()), _logger);
         // ExecuteAsync corre síncrono hasta el primer AcceptAsync: al volver, el socket ya escucha.
         return _server.StartAsync(CancellationToken.None);
     }
@@ -48,6 +49,21 @@ public sealed class IpcServerTests : IAsyncLifetime
         await client.ReadLineAsync();
 
         Assert.Equal(["Next", "GetSnapshot"], _player.Calls);
+        Assert.Contains("Button Next (sequence 7)", _logger.Messages);
+    }
+
+    [Fact]
+    public async Task Button_pressed_without_sequence_logs_only_button()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync("""{"type":"button.pressed","button":"next"}""" + "\n");
+        await client.SendAsync(GetSnapshot + "\n");
+        await client.ReadLineAsync();
+
+        Assert.Contains("Button Next", _logger.Messages);
+        Assert.DoesNotContain(_logger.Messages, m => m.Contains("sequence"));
     }
 
     [Fact]
@@ -181,6 +197,20 @@ public sealed class IpcServerTests : IAsyncLifetime
         await _server.StopAsync(CancellationToken.None);
 
         Assert.False(File.Exists(SocketPath));
+    }
+
+    private sealed class ListLogger : ILogger<IpcServer>
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<string> _messages = new();
+
+        public IReadOnlyCollection<string> Messages => _messages.ToArray();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => _messages.Enqueue(formatter(state, exception));
     }
 
     private sealed class Client : IAsyncDisposable

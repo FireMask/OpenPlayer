@@ -26,5 +26,8 @@
     },
     "debounceSeconds": 0.08,
     "oledEnabled": false
+  },
+  "web": {
+    "port": 8080
   }
 }

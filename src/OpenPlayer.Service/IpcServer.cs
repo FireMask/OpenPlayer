@@ -120,7 +120,11 @@ public sealed class IpcServer(
         switch (message)
         {
             case ButtonPressed pressed:
-                logger.LogInformation("Button {Button} (sequence {Sequence})", pressed.Button, pressed.Sequence);
+                // sequence es opcional: el web agent no la envía (SPEC 08).
+                if (pressed.Sequence is { } sequence)
+                    logger.LogInformation("Button {Button} (sequence {Sequence})", pressed.Button, sequence);
+                else
+                    logger.LogInformation("Button {Button}", pressed.Button);
                 try
                 {
                     await LockedAsync(() => buttons.HandleAsync(pressed.Button, ct), ct);
