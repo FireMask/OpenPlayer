@@ -122,6 +122,55 @@ mpc next
 
 Si `mpc` no conecta, verificar servicio, puerto, instancia de MPD y configuración de `mpc`. No abrir el puerto 6600 a la red como solución rápida.
 
+### Importar música por Samba
+
+Comparte `music_directory` en la red local para copiar música desde el Explorador de Windows; MPD la agrega sola a la biblioteca. Solo red local y con contraseña: no exponer el puerto 445 a Internet.
+
+```bash
+sudo apt install samba
+sudo systemctl disable --now nmbd   # sin NetBIOS: se accede por ruta, no por "Red"
+```
+
+En `/etc/samba/smb.conf`, añadir dentro de la sección `[global]` existente:
+
+```ini
+   hosts allow = 127. 10. 172.16.0.0/12 192.168. ::1 fe80::/10
+   hosts deny = ALL
+   server min protocol = SMB2
+```
+
+Y al final del archivo:
+
+```ini
+[music]
+   path = /home/andres/Music
+   valid users = andres
+   read only = no
+   create mask = 0664
+   directory mask = 0775
+```
+
+Las máscaras dejan lo copiado legible para el usuario `mpd`. Aplicar y crear la contraseña Samba (distinta de la de SSH; se pide en la terminal):
+
+```bash
+testparm -s                      # sin errores; muestra [music]
+sudo systemctl restart smbd
+sudo smbpasswd -a andres
+```
+
+En `/etc/mpd.conf`, para que MPD vigile la carpeta (inotify) y no haga falta `mpc update`; crear también `playlist_directory`, que MPD registra como error si falta:
+
+```conf
+auto_update "yes"
+```
+
+```bash
+mkdir -p ~/Playlists
+sudo systemctl restart mpd
+```
+
+Desde Windows: abrir `\\mpi3-player.local\music` en el Explorador e iniciar sesión con `andres` y la contraseña Samba. Opcional, como unidad fija: clic derecho en "Este equipo" → "Conectar a unidad de red". Lo copiado aparece en `mpc listall` en segundos; lo borrado desaparece.
+
 ## 6. Controles iniciales por SSH
 
 Comandos de diagnóstico útiles:
@@ -277,6 +326,20 @@ Seguir `battery-design.md`. No imprimir la carcasa definitiva antes de medir DAC
 ### MPD: `Failed to open ALSA device "hw:N,0"`
 
 Aparece en `mpc status` o `journalctl -u mpd -b`, y los botones registran `Button Next failed: … Not playing`. Causa: el `device` de `audio_output` usa un índice y el DAC cambió de número (p. ej. pasó a `card 0` y `hw:1,0` ahora es HDMI). Solución: usar el id de la tarjeta, `hw:CARD=<id>,DEV=0` (§4–5), y `sudo systemctl restart mpd`.
+
+### Samba rechaza las credenciales
+
+- El usuario es `andres` y la contraseña es la de `smbpasswd`, no la de SSH. Rehacerla con `sudo smbpasswd -a andres`.
+- Windows reutiliza una sesión previa con otras credenciales: `net use \\mpi3-player.local\music /delete` en `cmd` y volver a abrir la ruta.
+- `Acceso denegado` o `System error 64` sin pedir contraseña: la IP del equipo no está en `hosts allow` (`sudo journalctl -u smbd -b`). Windows suele conectar por IPv6 link-local (`fe80::…`) al usar `.local`; por eso `fe80::/10` va en la lista.
+- La ruta no se encuentra: probar `\\<IP de la Pi>\music` (`hostname -I`); si funciona, el problema es la resolución mDNS de `.local`.
+
+### Archivo copiado por Samba que no aparece en `mpc listall`
+
+- Confirmar `auto_update "yes"` en `/etc/mpd.conf` y que MPD se reinició después.
+- Permisos: `ls -l ~/Music/...` debe mostrar lectura para otros (`-rw-rw-r--`, carpetas `drwxrwxr-x`); si no, revisar `create mask` y `directory mask` de `[music]`.
+- Formato no soportado o archivo copiado a medias: `journalctl -u mpd -b` y forzar con `mpc update`.
+- Errores `inotify` en el log de MPD: subir `fs.inotify.max_user_watches` con `sysctl`.
 
 ### Tras actualizar el paquete `mpd`
 
