@@ -10,11 +10,13 @@ using OpenPlayer.Mpd;
 
 namespace OpenPlayer.Service;
 
-/// <summary>Socket Unix con JSON Lines (architecture.md §7): botones y consultas de snapshot del hardware agent.</summary>
+/// <summary>Socket Unix con JSON Lines (architecture.md §7): botones, snapshot, seek, biblioteca y playlists.</summary>
 public sealed class IpcServer(
     IpcOptions options,
     IPlayer player,
     ButtonCommandHandler buttons,
+    ILibrary library,
+    IPlaylistStore playlists,
     ILogger<IpcServer> logger) : BackgroundService
 {
     // ponytail: lock global para todos los comandos; evita que dos volume_up lean el mismo volumen.
@@ -111,9 +113,30 @@ public sealed class IpcServer(
     {
         if (line.Length == 0)
             return;
-        if (!IpcMessageParser.TryParse(line, out var message, out var error))
+        if (!IpcMessageParser.TryParse(line, out var message, out var error, out var request))
         {
             logger.LogWarning("Invalid IPC message: {Error}", error);
+            if (request is not null)
+                await WriteLineAsync(stream, ErrorMessage.Serialize(request, error!), ct);
+            return;
+        }
+
+        // Biblioteca y playlists (SPEC 10): siempre una línea de respuesta, ok/página/lista o error.
+        if (request is not null)
+        {
+            string reply;
+            try
+            {
+                string? result = null;
+                await LockedAsync(async () => result = await ReplyAsync(message!, request, ct), ct);
+                reply = result!;
+            }
+            catch (Exception e) when (e is MpdException or MpdUnavailableException or ArgumentException)
+            {
+                logger.LogWarning("{Request} failed: {Error}", request, e.Message);
+                reply = ErrorMessage.Serialize(request, e.Message);
+            }
+            await WriteLineAsync(stream, reply, ct);
             return;
         }
 
@@ -161,10 +184,56 @@ public sealed class IpcServer(
                     logger.LogWarning("player.get_snapshot failed: {Error}", e.Message);
                     reply = ErrorMessage.Serialize("player.get_snapshot", e.Message);
                 }
-                await stream.WriteAsync(Encoding.UTF8.GetBytes(reply + "\n"), ct);
+                await WriteLineAsync(stream, reply, ct);
                 break;
         }
     }
+
+    private async Task<string> ReplyAsync(IpcMessage message, string request, CancellationToken ct)
+    {
+        switch (message)
+        {
+            case LibraryBrowseRequested m:
+                return LibraryPageMessage.Serialize(await library.BrowseAsync(m.Path, m.Offset, ct));
+            case LibrarySearchRequested m:
+                return LibraryPageMessage.Serialize(await library.SearchAsync(m.Query, m.Offset, ct));
+            case PlaylistListRequested:
+                return PlaylistListMessage.Serialize(await playlists.ListAsync(ct));
+            case PlaylistGetRequested m:
+                return LibraryPageMessage.Serialize(await playlists.GetAsync(m.Name, m.Offset, ct));
+            case LibraryPlayRequested m:
+                await library.PlayTrackAsync(m.Uri, ct);
+                break;
+            case PlaylistCreateRequested m:
+                await playlists.CreateAsync(m.Name, ct);
+                break;
+            case PlaylistRenameRequested m:
+                await playlists.RenameAsync(m.Name, m.NewName, ct);
+                break;
+            case PlaylistDeleteRequested m:
+                await playlists.DeleteAsync(m.Name, ct);
+                break;
+            case PlaylistAddRequested m:
+                await playlists.AddAsync(m.Name, m.Uri, ct);
+                break;
+            case PlaylistRemoveRequested m:
+                await playlists.RemoveAsync(m.Name, m.Position, ct);
+                break;
+            case PlaylistMoveRequested m:
+                await playlists.MoveAsync(m.Name, m.From, m.To, ct);
+                break;
+            case PlaylistPlayRequested m:
+                await playlists.PlayAsync(m.Name, m.Position, ct);
+                break;
+            default:
+                throw new InvalidOperationException($"No handler for {request}");
+        }
+        logger.LogInformation("{Request} ok", request);
+        return OkMessage.Serialize(request);
+    }
+
+    private static Task WriteLineAsync(NetworkStream stream, string line, CancellationToken ct) =>
+        stream.WriteAsync(Encoding.UTF8.GetBytes(line + "\n"), ct).AsTask();
 
     private async Task LockedAsync(Func<Task> action, CancellationToken ct)
     {
