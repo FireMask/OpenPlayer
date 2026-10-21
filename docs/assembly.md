@@ -166,8 +166,14 @@ auto_update "yes"
 
 ```bash
 mkdir -p ~/Playlists
+# MPD corre como usuario mpd: necesita escribir aquí para guardar listas (SPEC 10, mpc save).
+# setgid: los .m3u nuevos quedan con grupo andres.
+sudo chown mpd:andres ~/Playlists
+sudo chmod 2775 ~/Playlists
 sudo systemctl restart mpd
 ```
+
+Sin el `chown`, crear o editar una lista desde la web falla con `Failed to append to …/Playlists/<lista>.m3u: Permission denied`.
 
 Desde Windows: abrir `\\mpi3-player.local\music` en el Explorador e iniciar sesión con `andres` y la contraseña Samba. Opcional, como unidad fija: clic derecho en "Este equipo" → "Conectar a unidad de red". Lo copiado aparece en `mpc listall` en segundos; lo borrado desaparece.
 

@@ -142,3 +142,79 @@ def test_default_timeout_is_two_seconds():
 def test_snapshot_closed_without_reply_is_unavailable():
     with pytest.raises(IpcUnavailable):
         Ipc("/x", connect=one_shot_server(lambda conn: None)).snapshot()
+
+
+OK = '{"type":"ok","request":"playlist.add"}'
+
+LIBRARY_CALLS = [
+    (lambda i: i.browse("Rock/AC DC", 100), '{"type":"library.browse","path":"Rock/AC DC","offset":100}'),
+    (lambda i: i.search("thunder", 0), '{"type":"library.search","query":"thunder","offset":0}'),
+    (lambda i: i.play_track("Rock/a.flac"), '{"type":"library.play","uri":"Rock/a.flac"}'),
+    (lambda i: i.playlists(), '{"type":"playlist.list"}'),
+    (lambda i: i.playlist("Viaje", 0), '{"type":"playlist.get","name":"Viaje","offset":0}'),
+    (lambda i: i.create_playlist("Viaje"), '{"type":"playlist.create","name":"Viaje"}'),
+    (lambda i: i.rename_playlist("Viaje", "Gym"), '{"type":"playlist.rename","name":"Viaje","newName":"Gym"}'),
+    (lambda i: i.delete_playlist("Viaje"), '{"type":"playlist.delete","name":"Viaje"}'),
+    (lambda i: i.add_to_playlist("Viaje", "Rock"), '{"type":"playlist.add","name":"Viaje","uri":"Rock"}'),
+    (lambda i: i.remove_from_playlist("Viaje", 3), '{"type":"playlist.remove","name":"Viaje","position":3}'),
+    (lambda i: i.move_in_playlist("Viaje", 3, 2), '{"type":"playlist.move","name":"Viaje","from":3,"to":2}'),
+    (lambda i: i.play_playlist("Viaje", 4), '{"type":"playlist.play","name":"Viaje","position":4}'),
+]
+
+
+@pytest.mark.parametrize("call,expected", LIBRARY_CALLS)
+def test_library_methods_send_exact_line_and_return_reply(server, call, expected):
+    server.reply = OK.encode() + b"\n"
+
+    assert call(Ipc("/x", connect=server.connect)) == OK
+    assert wait_for(server.received) == [expected.encode() + b"\n"]
+
+
+def test_request_returns_error_reply_unchanged(server):
+    error = '{"type":"error","request":"playlist.create","message":"Playlist \'Viaje\' already exists"}'
+    server.reply = error.encode() + b"\n"
+
+    assert Ipc("/x", connect=server.connect).create_playlist("Viaje") == error
+
+
+def test_request_accepts_reply_larger_than_snapshot_limit():
+    big = '{"type":"library.page","entries":["' + "a" * 200_000 + '"]}'
+
+    def send_big(conn):
+        conn.sendall(big.encode() + b"\n")
+
+    assert Ipc("/x", connect=one_shot_server(send_big)).playlists() == big
+
+
+def test_request_reply_over_one_megabyte_is_unavailable():
+    def send_huge(conn):
+        try:
+            conn.sendall(b"a" * (1024 * 1024 + 70_000))
+        except OSError:
+            pass  # el cliente cortó al pasar el límite
+
+    with pytest.raises(IpcUnavailable):
+        Ipc("/x", connect=one_shot_server(send_huge)).playlists()
+
+
+def test_request_uses_library_timeout(server):
+    server.reply = None
+    start = time.monotonic()
+
+    with pytest.raises(IpcUnavailable):
+        Ipc("/x", connect=server.connect, timeout=5, library_timeout=0.3).playlists()
+    assert time.monotonic() - start < 1.5
+
+
+def test_default_library_timeout_is_five_seconds():
+    import ipc
+    assert ipc.LIBRARY_TIMEOUT_SECONDS == 5.0
+    assert ipc.MAX_LIBRARY_REPLY_BYTES == 1024 * 1024
+
+
+def test_request_connect_failure_is_unavailable():
+    def refuse():
+        raise ConnectionRefusedError("down")
+
+    with pytest.raises(IpcUnavailable):
+        Ipc("/x", connect=refuse).playlists()

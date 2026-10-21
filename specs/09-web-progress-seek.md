@@ -20,7 +20,7 @@
 
 **Out of scope (for future specs):**
 
-- Actualización instantánea (MPD `idle` → push → SSE) — SPEC 10.
+- Actualización instantánea (MPD `idle` → push → SSE) — spec futura.
 - Respuesta/ack de `player.seek`.
 - Recortar la posición contra la duración en el Service.
 - Fracciones de segundo.
@@ -92,7 +92,7 @@ public sealed record SeekRequested(TimeSpan Position) : IpcMessage;
 
 **Tomadas:**
 
-- **Separar en SPEC 09 (barra + seek) y SPEC 10 (actualización instantánea).** La instantánea exige conexión `idle` persistente a MPD y push por el socket: otro modelo de IPC. Esta spec no toca `OpenPlayer.Mpd`.
+- **Separar en SPEC 09 (barra + seek) y una spec futura (actualización instantánea).** La instantánea exige conexión `idle` persistente a MPD y push por el socket: otro modelo de IPC. Esta spec no toca `OpenPlayer.Mpd`.
 - **`player.seek` sin respuesta, como `button.pressed`.** La web ve el resultado en el siguiente sondeo; un ack agregaría un camino de respuesta sin necesidad.
 - **Validación en Core: entero 0–86400.** El Service no consulta la duración antes de saltar (evita una consulta extra a MPD); fuera de la pista o detenido, MPD falla y se registra warning, igual que `next` sin reproducir.
 - **Segundos enteros.** Coinciden con el snapshot; fracciones no aportan con un dedo en una barra.
@@ -109,7 +109,7 @@ public sealed record SeekRequested(TimeSpan Position) : IpcMessage;
 
 ## Risks
 
-- **Seek mientras se cambia de pista.** Si la pista cambia entre el último sondeo y soltar la barra, el seek se aplica a la nueva pista con la posición elegida para la anterior. Ventana ≤ 2 s; aceptado hasta SPEC 10.
+- **Seek mientras se cambia de pista.** Si la pista cambia entre el último sondeo y soltar la barra, el seek se aplica a la nueva pista con la posición elegida para la anterior. Ventana ≤ 2 s; aceptado hasta la spec de actualización instantánea.
 - **Extrapolación desfasada.** Si el reloj del navegador se suspende (pestaña en segundo plano en el móvil), la barra puede quedar adelantada o atrasada hasta el siguiente sondeo; cada sondeo la corrige.
 - **Seek fuera de la pista.** Con una duración vieja en la página, MPD puede rechazar el `seekcur`; solo warning en el log y la barra vuelve a la posición real en el siguiente sondeo.
 - **Seeks repetidos.** Soltar varias veces seguidas envía varios `player.seek`; el lock del Service los serializa. Sin límite de frecuencia: aceptable en LAN.

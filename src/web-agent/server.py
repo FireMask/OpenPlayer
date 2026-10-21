@@ -1,4 +1,4 @@
-"""Servidor HTTP del web agent: página con los botones y API que reenvía al socket IPC (SPEC 08)."""
+"""Servidor HTTP del web agent: página con los botones y API que reenvía al socket IPC (SPEC 08, 09 y 10)."""
 
 import ipaddress
 import json
@@ -7,7 +7,7 @@ import os
 import socket
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from ipc import IpcUnavailable
 
@@ -17,6 +17,7 @@ BUTTON_NAMES = ("play_pause", "previous", "next", "volume_up", "volume_down", "m
 BUTTONS_PREFIX = "/api/buttons/"
 MAX_BODY_BYTES = 1024
 MAX_SEEK_SECONDS = 86400
+MAX_LIBRARY_BODY_BYTES = 4096
 
 # Solo red local; fe80::/10 porque Windows resuelve .local primero a IPv6 link-local (SPEC 07).
 ALLOWED_NETWORKS = [ipaddress.ip_network(n) for n in (
@@ -88,7 +89,85 @@ class Handler(BaseHTTPRequestHandler):
             if method != "POST":
                 return self._reply(HTTPStatus.METHOD_NOT_ALLOWED)
             return self._seek()
+        routes = self._library_routes(path)
+        if routes is not None:
+            if method not in routes:
+                return self._reply(HTTPStatus.METHOD_NOT_ALLOWED)
+            return self._library(routes[method])
         self._reply(HTTPStatus.NOT_FOUND)
+
+    def _library_routes(self, path):
+        """Rutas de biblioteca y playlists (SPEC 10): {método: () -> línea IPC}, o None si la ruta no existe.
+
+        Cada función valida la forma del pedido y lanza ValueError (→ 400); el Core valida el contenido."""
+        ipc = self.server.ipc
+        query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+        if path == "/api/library":
+            return {"GET": lambda: ipc.browse(_param(query, "path", ""), _offset(query))}
+        if path == "/api/library/search":
+            return {"GET": lambda: ipc.search(_nonempty(_param(query, "q"), "q"), _offset(query))}
+        if path == "/api/library/play":
+            return {"POST": lambda: ipc.play_track(_text(self._json_body(), "uri"))}
+        if path == "/api/playlists":
+            return {"GET": ipc.playlists, "POST": lambda: ipc.create_playlist(_text(self._json_body(), "name"))}
+        if not path.startswith("/api/playlists/"):
+            return None
+        # Partir antes de decodificar: un %2F en el nombre no crea un segmento nuevo.
+        parts = [unquote(p) for p in path[len("/api/playlists/"):].split("/")]
+        action = parts[1:]
+
+        def name():
+            return _nonempty(parts[0], "name")
+
+        if not action:
+            return {"GET": lambda: ipc.playlist(name(), _offset(query)),
+                    "DELETE": lambda: ipc.delete_playlist(name())}
+        if action == ["rename"]:
+            return {"POST": lambda: ipc.rename_playlist(name(), _text(self._json_body(), "newName"))}
+        if action == ["tracks"]:
+            return {"POST": lambda: ipc.add_to_playlist(name(), _text(self._json_body(), "uri"))}
+        if len(action) == 2 and action[0] == "tracks":
+            return {"DELETE": lambda: ipc.remove_from_playlist(name(), _index(action[1]))}
+        if action == ["move"]:
+            def move():
+                body = self._json_body()
+                return ipc.move_in_playlist(name(), _int(body, "from"), _int(body, "to"))
+            return {"POST": move}
+        if action == ["play"]:
+            return {"POST": lambda: ipc.play_playlist(name(), _int(self._json_body(optional=True), "position", 0))}
+        return None
+
+    def _library(self, call):
+        try:
+            line = call()
+        except ValueError:
+            return self._reply(HTTPStatus.BAD_REQUEST)
+        except IpcUnavailable as e:
+            log.warning("library request unavailable: %s", e)
+            return self._reply(HTTPStatus.SERVICE_UNAVAILABLE)
+        try:
+            kind = json.loads(line).get("type")
+        except (ValueError, AttributeError):
+            kind = None
+        if kind == "ok":
+            return self._reply(HTTPStatus.NO_CONTENT)
+        status = HTTPStatus.BAD_GATEWAY if kind in ("error", None) else HTTPStatus.OK
+        self._reply(status, line.encode("utf-8"), "application/json; charset=utf-8")
+
+    def _json_body(self, optional=False):
+        """Objeto JSON del cuerpo (≤ 4 KB); ValueError si falta o es inválido. optional: sin cuerpo → {}."""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            raise ValueError("invalid Content-Length") from None
+        if length == 0 and optional:
+            return {}
+        if not 0 < length <= MAX_LIBRARY_BODY_BYTES:
+            raise ValueError("body missing or too large")  # sin leer: no aceptamos cuerpos arbitrarios
+        body = json.loads(self.rfile.read(length))  # JSONDecodeError y UnicodeDecodeError son ValueError
+        if not isinstance(body, dict):
+            raise ValueError("body is not an object")
+        return body
 
     def _press(self, name):
         try:
@@ -156,3 +235,44 @@ class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         pass  # sin log por pedido: el sondeo cada 2 s llenaría el journal
+
+
+def _nonempty(value, field):
+    """Cadena no vacía; longitud y caracteres permitidos los valida el Core."""
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"invalid {field}")
+    return value
+
+
+def _text(body, field):
+    return _nonempty(body.get(field), field)
+
+
+def _int(body, field, default=None):
+    """Entero JSON ≥ 0; bool no cuenta. Si falta y hay default, el default."""
+    if field not in body and default is not None:
+        return default
+    value = body.get(field)
+    if type(value) is not int or value < 0:
+        raise ValueError(f"invalid {field}")
+    return value
+
+
+def _index(text):
+    """Entero ≥ 0 escrito en la ruta o en la query."""
+    if not text.isascii() or not text.isdigit():
+        raise ValueError("invalid index")
+    return int(text)
+
+
+def _param(query, name, default=None):
+    values = query.get(name)
+    if not values:
+        if default is None:
+            raise ValueError(f"missing {name}")
+        return default
+    return values[0]
+
+
+def _offset(query):
+    return _index(_param(query, "offset", "0"))

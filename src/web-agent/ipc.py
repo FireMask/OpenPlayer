@@ -5,6 +5,9 @@ import socket
 
 TIMEOUT_SECONDS = 2.0
 MAX_REPLY_BYTES = 65536
+# Biblioteca y playlists (SPEC 10): lsinfo/search sobre miles de pistas tardan más y responden más.
+LIBRARY_TIMEOUT_SECONDS = 5.0
+MAX_LIBRARY_REPLY_BYTES = 1024 * 1024
 
 
 class IpcUnavailable(Exception):
@@ -12,9 +15,11 @@ class IpcUnavailable(Exception):
 
 
 class Ipc:
-    def __init__(self, socket_path, *, connect=None, timeout=TIMEOUT_SECONDS):
+    def __init__(self, socket_path, *, connect=None, timeout=TIMEOUT_SECONDS,
+                 library_timeout=LIBRARY_TIMEOUT_SECONDS):
         self._path = socket_path
         self._timeout = timeout
+        self._library_timeout = library_timeout
         # Inyectable: en Windows no hay AF_UNIX y las pruebas usan TCP local.
         self._connect = connect or self._connect_unix
 
@@ -28,26 +33,72 @@ class Ipc:
 
     def snapshot(self):
         """Devuelve la línea de respuesta (player.snapshot o error) sin el salto de línea."""
-        with self._open() as sock:
+        with self._open(self._timeout) as sock:
             self._send(sock, {"type": "player.get_snapshot"})
-            reply = b""
-            try:
-                while b"\n" not in reply:
-                    chunk = sock.recv(4096)
-                    if not chunk or len(reply) > MAX_REPLY_BYTES:
-                        raise IpcUnavailable("connection closed without a reply")
-                    reply += chunk
-            except OSError as e:  # incluye socket.timeout
-                raise IpcUnavailable(f"no reply: {e}") from e
-        return reply.split(b"\n", 1)[0].decode("utf-8")
+            return self._read_line(sock, MAX_REPLY_BYTES)
 
-    def _open(self):
+    def request(self, message):
+        """Envía un mensaje de biblioteca/playlists y devuelve su línea de respuesta (ok, página, lista o error)."""
+        with self._open(self._library_timeout) as sock:
+            self._send(sock, message)
+            return self._read_line(sock, MAX_LIBRARY_REPLY_BYTES)
+
+    def browse(self, path, offset):
+        return self.request({"type": "library.browse", "path": path, "offset": offset})
+
+    def search(self, query, offset):
+        return self.request({"type": "library.search", "query": query, "offset": offset})
+
+    def play_track(self, uri):
+        return self.request({"type": "library.play", "uri": uri})
+
+    def playlists(self):
+        return self.request({"type": "playlist.list"})
+
+    def playlist(self, name, offset):
+        return self.request({"type": "playlist.get", "name": name, "offset": offset})
+
+    def create_playlist(self, name):
+        return self.request({"type": "playlist.create", "name": name})
+
+    def rename_playlist(self, name, new_name):
+        return self.request({"type": "playlist.rename", "name": name, "newName": new_name})
+
+    def delete_playlist(self, name):
+        return self.request({"type": "playlist.delete", "name": name})
+
+    def add_to_playlist(self, name, uri):
+        return self.request({"type": "playlist.add", "name": name, "uri": uri})
+
+    def remove_from_playlist(self, name, position):
+        return self.request({"type": "playlist.remove", "name": name, "position": position})
+
+    def move_in_playlist(self, name, from_position, to_position):
+        return self.request({"type": "playlist.move", "name": name, "from": from_position, "to": to_position})
+
+    def play_playlist(self, name, position):
+        return self.request({"type": "playlist.play", "name": name, "position": position})
+
+    def _open(self, timeout=None):
         try:
             sock = self._connect()
         except OSError as e:
             raise IpcUnavailable(f"cannot connect to {self._path}: {e}") from e
-        sock.settimeout(self._timeout)
+        sock.settimeout(timeout or self._timeout)
         return sock
+
+    @staticmethod
+    def _read_line(sock, max_bytes):
+        reply = b""
+        try:
+            while b"\n" not in reply:
+                chunk = sock.recv(65536)
+                if not chunk or len(reply) > max_bytes:
+                    raise IpcUnavailable("connection closed without a reply")
+                reply += chunk
+        except OSError as e:  # incluye socket.timeout
+            raise IpcUnavailable(f"no reply: {e}") from e
+        return reply.split(b"\n", 1)[0].decode("utf-8")
 
     def _send(self, sock, message):
         line = json.dumps(message, separators=(",", ":")) + "\n"

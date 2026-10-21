@@ -29,7 +29,7 @@ public static class MpdSnapshotParser
             now);
     }
 
-    private static TimeSpan? Seconds(string? value) =>
+    internal static TimeSpan? Seconds(string? value) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var s) && s >= 0
             ? TimeSpan.FromSeconds(s)
             : null;

@@ -16,6 +16,7 @@ public sealed class IpcServerTests : IAsyncLifetime
 
     private readonly DirectoryInfo _dir = Directory.CreateTempSubdirectory("op");
     private readonly FakePlayer _player = new();
+    private readonly FakeLibrary _library = new();
     private readonly ListLogger _logger = new();
     private IpcServer _server = null!;
 
@@ -33,7 +34,7 @@ public sealed class IpcServerTests : IAsyncLifetime
     private Task StartAsync()
     {
         _server = new IpcServer(new IpcOptions(SocketPath, MaxBytes), _player,
-            new ButtonCommandHandler(_player, new PlayerSettings()), _logger);
+            new ButtonCommandHandler(_player, new PlayerSettings()), _library, _library, _logger);
         // ExecuteAsync corre síncrono hasta el primer AcceptAsync: al volver, el socket ya escucha.
         return _server.StartAsync(CancellationToken.None);
     }
@@ -226,6 +227,82 @@ public sealed class IpcServerTests : IAsyncLifetime
         await _server.StopAsync(CancellationToken.None);
 
         Assert.False(File.Exists(SocketPath));
+    }
+
+    [Theory]
+    [InlineData("""{"type":"library.play","uri":"Rock/a.mp3"}""", "PlayTrack(Rock/a.mp3)", "library.play")]
+    [InlineData("""{"type":"playlist.create","name":"Viaje"}""", "Create(Viaje)", "playlist.create")]
+    [InlineData("""{"type":"playlist.rename","name":"Viaje","newName":"Gym 2"}""", "Rename(Viaje,Gym 2)", "playlist.rename")]
+    [InlineData("""{"type":"playlist.delete","name":"Viaje"}""", "Delete(Viaje)", "playlist.delete")]
+    [InlineData("""{"type":"playlist.add","name":"Viaje","uri":"Rock"}""", "Add(Viaje,Rock)", "playlist.add")]
+    [InlineData("""{"type":"playlist.remove","name":"Viaje","position":3}""", "Remove(Viaje,3)", "playlist.remove")]
+    [InlineData("""{"type":"playlist.move","name":"Viaje","from":3,"to":2}""", "Move(Viaje,3,2)", "playlist.move")]
+    [InlineData("""{"type":"playlist.play","name":"Viaje","position":4}""", "Play(Viaje,4)", "playlist.play")]
+    public async Task Mutation_calls_store_and_replies_ok(string line, string expectedCall, string request)
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync(line + "\n");
+
+        Assert.Equal(OkMessage.Serialize(request), await client.ReadLineAsync());
+        Assert.Equal([expectedCall], _library.Calls);
+    }
+
+    [Theory]
+    [InlineData("""{"type":"library.browse","path":"","offset":100}""", "Browse(,100)")]
+    [InlineData("""{"type":"library.search","query":"thunder"}""", "Search(thunder,0)")]
+    [InlineData("""{"type":"playlist.get","name":"Viaje"}""", "Get(Viaje,0)")]
+    public async Task Query_replies_library_page(string line, string expectedCall)
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync(line + "\n");
+
+        Assert.Equal(LibraryPageMessage.Serialize(_library.Page), await client.ReadLineAsync());
+        Assert.Equal([expectedCall], _library.Calls);
+    }
+
+    [Fact]
+    public async Task Playlist_list_replies_names()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync("""{"type":"playlist.list"}""" + "\n");
+
+        Assert.Equal("""{"type":"playlist.list","playlists":["Viaje","Gym"]}""", await client.ReadLineAsync());
+    }
+
+    [Fact]
+    public async Task Store_failure_replies_error_and_keeps_connection()
+    {
+        _library.Error = new MpdException("rm \"Nope\"", "No such playlist");
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync("""{"type":"playlist.delete","name":"Nope"}""" + "\n");
+        Assert.Equal("""{"type":"error","request":"playlist.delete","message":"No such playlist"}""", await client.ReadLineAsync());
+
+        _library.Error = null;
+        await client.SendAsync("""{"type":"playlist.list"}""" + "\n");
+        Assert.StartsWith("""{"type":"playlist.list",""", await client.ReadLineAsync());
+        Assert.Contains("playlist.delete failed: No such playlist", _logger.Messages);
+    }
+
+    [Fact]
+    public async Task Invalid_new_message_replies_error_and_keeps_connection()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync("""{"type":"playlist.create","name":"a/b"}""" + "\n");
+        Assert.Equal("""{"type":"error","request":"playlist.create","message":"invalid name"}""", await client.ReadLineAsync());
+
+        await client.SendAsync("""{"type":"playlist.list"}""" + "\n");
+        Assert.StartsWith("""{"type":"playlist.list",""", await client.ReadLineAsync());
+        Assert.DoesNotContain(_library.Calls, c => c.StartsWith("Create"));
     }
 
     private sealed class ListLogger : ILogger<IpcServer>
