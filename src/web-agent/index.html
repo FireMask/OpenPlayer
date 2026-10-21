@@ -70,6 +70,22 @@
                   font-variant-numeric: tabular-nums; }
   .list .q .body { flex: 1; min-width: 0; }
   .list .q .dur { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+  .queue .list { position: relative; }  /* offsetTop de las filas relativo a la lista, para el auto-scroll */
+  .list li.current .q, .list li.current .q .num { color: var(--accent); font-weight: 600; }
+  /* Barras de ecualizador: solo en la actual; congeladas en pausa, ocultas en stopped, quietas con reduced motion. */
+  .eq { display: none; align-items: flex-end; gap: 2px; width: 14px; height: 14px; flex: none; }
+  .eq i { flex: 1; height: 100%; background: var(--accent); transform-origin: bottom;
+          animation: eq .9s ease-in-out infinite alternate; }
+  .eq i:nth-child(2) { animation-delay: -.3s; }
+  .eq i:nth-child(3) { animation-delay: -.6s; }
+  @keyframes eq { from { transform: scaleY(.25); } to { transform: scaleY(1); } }
+  li.current .eq { display: flex; }
+  #queue-list[data-state="paused"] .eq i { animation-play-state: paused; }
+  #queue-list[data-state="stopped"] .eq { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .eq i { animation: none; transform: scaleY(.6); }
+    .eq i:nth-child(2) { transform: scaleY(1); }
+  }
   @media (min-width: 900px) {
     .layout { display: grid; grid-template-columns: 420px minmax(320px, 1fr); gap: 24px; align-items: start;
               max-width: 1100px; margin: 0 auto; }
@@ -517,11 +533,41 @@
   // --- Cola (SPEC 11): se pide solo cuando el snapshot trae otro queueVersion. ---
 
   let qVersion, qLoading = false, qCount = 0, qTotal = 0;  // qVersion undefined = sin cargar
+  let qPos = null, userScrollAt = -Infinity, autoScrollTop = null;
+  const SCROLL_PAUSE_MS = 10000;
   const queueMsg = (text, isError) => setMsg("queue-msg", text, isError);
 
+  // Cada sondeo mueve el resaltado sin pedir la cola; la pide si cambió la versión
+  // o si la actual quedó pasada las páginas cargadas (p. ej. al avanzar de la #100 a la #101).
   function syncQueue(s) {
-    if (!qLoading && s.queueVersion !== qVersion) loadQueue(s.queueVersion, s.queuePosition);
+    qPos = s.queuePosition;
+    $("queue-list").dataset.state = s.state;
+    if (!qLoading && (s.queueVersion !== qVersion || (qPos != null && qPos >= qCount && qPos < qTotal)))
+      loadQueue(s.queueVersion, qPos);
+    else
+      markCurrent();
   }
+
+  function markCurrent() {
+    const list = $("queue-list");
+    list.querySelector("li.current")?.classList.remove("current");
+    const li = qPos != null && qPos < qCount ? list.children[qPos] : null;
+    if (!li) return;
+    li.classList.add("current");
+    // Centra la actual si no está visible, salvo si el usuario desplazó el panel hace menos de 10 s.
+    if (performance.now() - userScrollAt < SCROLL_PAUSE_MS) return;
+    if (li.offsetTop >= list.scrollTop && li.offsetTop + li.offsetHeight <= list.scrollTop + list.clientHeight) return;
+    list.scrollTop = li.offsetTop - (list.clientHeight - li.offsetHeight) / 2;
+    autoScrollTop = list.scrollTop;
+  }
+
+  // Un scroll que no deja la lista donde la puso markCurrent lo hizo el usuario.
+  $("queue-list").addEventListener("scroll", () => {
+    const list = $("queue-list");
+    if (autoScrollTop !== null && Math.abs(list.scrollTop - autoScrollTop) < 2) return;
+    autoScrollTop = null;
+    userScrollAt = performance.now();
+  });
 
   function reloadQueue() {
     qVersion = undefined;
@@ -562,6 +608,7 @@
       + ` · ${qTotal} ${qTotal === 1 ? "canción" : "canciones"}`;
     $("queue-list").replaceChildren();
     appendQueue(entries);
+    markCurrent();
   }
 
   function appendQueue(entries) {
@@ -576,8 +623,9 @@
     const meta = [e.artist, e.album].filter(Boolean).join(" · ");
     const body = el("span", { className: "body" }, el("span", { className: "name", textContent: e.title || baseName(e.uri) }));
     if (meta) body.append(el("span", { className: "meta", textContent: meta }));
-    return el("li", {}, el("button", { className: "main q" },
+    return el("li", {}, el("button", { className: "main q", onclick: () => playQueue(pos) },
       el("span", { className: "num", textContent: pos + 1 }),
+      el("span", { className: "eq", ariaHidden: "true" }, el("i"), el("i"), el("i")),
       body,
       el("span", { className: "dur", textContent: e.durationSeconds == null ? "" : mmss(e.durationSeconds) })));
   }
@@ -586,7 +634,14 @@
     let page;
     try { page = await api("GET", `/api/queue?offset=${qCount}`); } catch (e) { return queueMsg(e.message, true); }
     appendQueue(page.entries);
+    markCurrent();
   });
+
+  async function playQueue(position) {
+    try { await api("POST", "/api/queue/play", { position }); } catch (e) { return queueMsg(e.message, true); }
+    queueMsg("");
+    refresh();
+  }
 </script>
 </body>
 </html>
