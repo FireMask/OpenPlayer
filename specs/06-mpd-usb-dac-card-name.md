@@ -1,6 +1,6 @@
 # SPEC 06 — Configuración MPD del DAC USB por nombre de tarjeta
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 02
 > **Date:** 2026-10-20
 > **Objective:** Documentar cómo configurar el `audio_output` de MPD con el id ALSA de la tarjeta (`hw:CARD=<id>,DEV=0`) en lugar del índice, y validar en la Pi que MPD reproduce por el DAC USB tras un reinicio.
@@ -39,17 +39,17 @@ No aplica: solo documentación y configuración del sistema (`/etc/mpd.conf`) en
 
 **Documentación:**
 
-- [ ] `assembly.md` §5 muestra cómo leer el id de la tarjeta en `aplay -l` o `/proc/asound/cards` y el bloque `audio_output` con `device "hw:CARD=<id>,DEV=0"` y `mixer_type "software"`.
-- [ ] `assembly.md` no contiene `hw:<número>` como valor recomendado (verificable con `grep -nE 'hw:[0-9]' docs/`; solo puede aparecer citando el mensaje de error).
-- [ ] La sección de solución de problemas de `assembly.md` cubre `Failed to open ALSA device "hw:N,0"`.
-- [ ] `architecture.md` (MPD y salida de audio) menciona el formato `hw:CARD=<id>,DEV=0`.
+- [x] `assembly.md` §5 muestra cómo leer el id de la tarjeta en `aplay -l` o `/proc/asound/cards` y el bloque `audio_output` con `device "hw:CARD=<id>,DEV=0"` y `mixer_type "software"`.
+- [x] `assembly.md` no contiene `hw:<número>` como valor recomendado (verificable con `grep -nE 'hw:[0-9]' docs/`; solo puede aparecer citando el mensaje de error).
+- [x] La sección de solución de problemas de `assembly.md` cubre `Failed to open ALSA device "hw:N,0"`.
+- [x] `architecture.md` (MPD y salida de audio) menciona el formato `hw:CARD=<id>,DEV=0`.
 
 **Raspberry Pi:**
 
-- [ ] `grep device /etc/mpd.conf` (líneas sin comentar) muestra `hw:CARD=Device,DEV=0` y ningún índice numérico.
-- [ ] Tras `sudo reboot`: `mpc play` muestra `[playing]` y `journalctl -u mpd -b` no tiene `Failed to open`.
-- [ ] Tras la prueba, MPD queda detenido y `/etc/mpd.conf.bak` no existe.
-- [ ] `dotnet test` y `pytest tests/hardware-agent` siguen pasando (sin cambios de código).
+- [x] `grep device /etc/mpd.conf` (líneas sin comentar) muestra `hw:CARD=Device,DEV=0` y ningún índice numérico.
+- [x] Tras `sudo reboot`: `mpc play` muestra `[playing]` y `journalctl -u mpd -b` no tiene `Failed to open`.
+- [x] Tras la prueba, MPD queda detenido y `/etc/mpd.conf.bak` no existe.
+- [x] `dotnet test` y `pytest tests/hardware-agent` siguen pasando (sin cambios de código).
 
 ## Decisions
 
