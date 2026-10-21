@@ -13,6 +13,8 @@ internal sealed class FakePlayer : IPlayer
 
     public Exception? SnapshotError { get; set; }
 
+    public Exception? SeekError { get; set; }
+
     public static PlaybackSnapshot SnapshotWith(TimeSpan? position = null, int? volume = null) =>
         new(PlaybackState.Playing, null, position, null, volume, DateTimeOffset.UnixEpoch);
 
@@ -21,7 +23,11 @@ internal sealed class FakePlayer : IPlayer
     public Task TogglePlaybackAsync(CancellationToken ct = default) => Record("TogglePlayback");
     public Task NextAsync(CancellationToken ct = default) => Record("Next");
     public Task PreviousAsync(CancellationToken ct = default) => Record("Previous");
-    public Task SeekAsync(TimeSpan position, CancellationToken ct = default) => Record($"Seek({position})");
+    public Task SeekAsync(TimeSpan position, CancellationToken ct = default)
+    {
+        Calls.Add($"Seek({position})");
+        return SeekError is { } e ? Task.FromException(e) : Task.CompletedTask;
+    }
 
     public Task UpdateLibraryAsync(CancellationToken ct = default) => Record("UpdateLibrary");
 

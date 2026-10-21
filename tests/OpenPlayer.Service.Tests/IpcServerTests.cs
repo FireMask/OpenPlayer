@@ -67,6 +67,35 @@ public sealed class IpcServerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Seek_runs_seek_without_reply()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync("""{"type":"player.seek","positionSeconds":83}""" + "\n");
+        await client.SendAsync(GetSnapshot + "\n");
+
+        // La primera línea recibida es la del snapshot: el seek no respondió nada.
+        Assert.StartsWith("""{"type":"player.snapshot",""", await client.ReadLineAsync());
+        Assert.Equal(["Seek(00:01:23)", "GetSnapshot"], _player.Calls);
+        Assert.Contains("Seek to 83 s", _logger.Messages);
+    }
+
+    [Fact]
+    public async Task Seek_failure_keeps_connection()
+    {
+        _player.SeekError = new MpdException("seekcur", "Not playing");
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync("""{"type":"player.seek","positionSeconds":83}""" + "\n");
+        await client.SendAsync(GetSnapshot + "\n");
+
+        Assert.StartsWith("""{"type":"player.snapshot",""", await client.ReadLineAsync());
+        Assert.Contains("Seek failed: Not playing", _logger.Messages);
+    }
+
+    [Fact]
     public async Task Snapshot_request_replies_snapshot()
     {
         _player.Snapshot = new PlaybackSnapshot(PlaybackState.Playing,

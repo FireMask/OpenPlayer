@@ -135,6 +135,19 @@ public sealed class IpcServer(
                 }
                 break;
 
+            case SeekRequested seek:
+                var seconds = (int)seek.Position.TotalSeconds;
+                logger.LogInformation("Seek to {Seconds} s", seconds);
+                try
+                {
+                    await LockedAsync(() => player.SeekAsync(seek.Position, ct), ct);
+                }
+                catch (Exception e) when (e is MpdException or MpdUnavailableException)
+                {
+                    logger.LogWarning("Seek failed: {Error}", e.Message);
+                }
+                break;
+
             case SnapshotRequested:
                 string reply;
                 try
