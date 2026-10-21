@@ -1,6 +1,6 @@
 # SPEC 09 — Barra de progreso y seek en la web
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 03, SPEC 08
 > **Date:** 2026-10-21
 > **Objective:** Mostrar en la página del web agent una barra de progreso de la pista actual que avanza localmente entre sondeos y permite saltar a una posición, con un nuevo mensaje IPC `player.seek` que el Service ejecuta con `IPlayer.SeekAsync`.
@@ -67,26 +67,26 @@ public sealed record SeekRequested(TimeSpan Position) : IpcMessage;
 
 **Windows (automatizable):**
 
-- [ ] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
-- [ ] `IpcMessageParser` devuelve `SeekRequested(83 s)` para `{"type":"player.seek","positionSeconds":83}`, acepta 0 y 86400, y rechaza (sin lanzar) ausente, `83.5`, `"83"`, `true`, `-1` y `86401`.
-- [ ] El Service llama `SeekAsync(83 s)` al recibir `player.seek` y no responde nada; si `SeekAsync` lanza `MpdException`, la conexión sigue y el siguiente mensaje se procesa.
-- [ ] `Ipc.seek(83)` envía exactamente `{"type":"player.seek","positionSeconds":83}\n` y cierra.
-- [ ] `POST /api/seek` con `{"positionSeconds":83}` → `204` y llega `seek(83)`; cuerpo vacío, > 1 KB, JSON inválido, `"83"`, `83.5`, `-1` o `86401` → `400`; Service caído → `503`; `GET /api/seek` → `405`; cliente fuera de rango → `403`.
-- [ ] El web agent sigue usando solo stdlib.
+- [x] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
+- [x] `IpcMessageParser` devuelve `SeekRequested(83 s)` para `{"type":"player.seek","positionSeconds":83}`, acepta 0 y 86400, y rechaza (sin lanzar) ausente, `83.5`, `"83"`, `true`, `-1` y `86401`.
+- [x] El Service llama `SeekAsync(83 s)` al recibir `player.seek` y no responde nada; si `SeekAsync` lanza `MpdException`, la conexión sigue y el siguiente mensaje se procesa.
+- [x] `Ipc.seek(83)` envía exactamente `{"type":"player.seek","positionSeconds":83}\n` y cierra.
+- [x] `POST /api/seek` con `{"positionSeconds":83}` → `204` y llega `seek(83)`; cuerpo vacío, > 1 KB, JSON inválido, `"83"`, `83.5`, `-1` o `86401` → `400`; Service caído → `503`; `GET /api/seek` → `405`; cliente fuera de rango → `403`.
+- [x] El web agent sigue usando solo stdlib.
 
 **Raspberry Pi (`deploy.ps1` y navegador en PC y móvil):**
 
-- [ ] Reproduciendo, la barra y la etiqueta avanzan cada segundo y no saltan atrás al llegar cada sondeo (diferencia ≤ 1 s con `mpc status`).
-- [ ] Arrastrar la barra y soltar en 2:00 deja `mpc status` en `2:00`–`2:02`, y el log del Service muestra `Seek to 120 s`.
-- [ ] Mientras se arrastra, el sondeo no mueve la barra.
-- [ ] En pausa, la barra no avanza y el seek cambia la posición sin reanudar.
-- [ ] Detenido o sin pista, la barra está deshabilitada u oculta y la etiqueta no muestra tiempos inválidos.
-- [ ] Con el Service detenido, soltar la barra muestra "Sin conexión con el reproductor".
+- [x] Reproduciendo, la barra y la etiqueta avanzan cada segundo y no saltan atrás al llegar cada sondeo (diferencia ≤ 1 s con `mpc status`).
+- [x] Arrastrar la barra y soltar en 2:00 deja `mpc status` en `2:00`–`2:02`, y el log del Service muestra `Seek to 120 s`.
+- [x] Mientras se arrastra, el sondeo no mueve la barra.
+- [x] En pausa, la barra no avanza y el seek cambia la posición sin reanudar.
+- [x] Detenido o sin pista, la barra está deshabilitada u oculta y la etiqueta no muestra tiempos inválidos.
+- [x] Con el Service detenido, soltar la barra muestra "Sin conexión con el reproductor".
 
 **Documentación:**
 
-- [ ] `architecture.md` §7 describe `player.seek` y §5 suma `POST /api/seek` al contrato.
-- [ ] README menciona la barra y el seek.
+- [x] `architecture.md` §7 describe `player.seek` y §5 suma `POST /api/seek` al contrato.
+- [x] README menciona la barra y el seek.
 
 ## Decisions
 
