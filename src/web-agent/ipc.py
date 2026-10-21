@@ -38,7 +38,7 @@ class Ipc:
             return self._read_line(sock, MAX_REPLY_BYTES)
 
     def request(self, message):
-        """Envía un mensaje de biblioteca/playlists y devuelve su línea de respuesta (ok, página, lista o error)."""
+        """Envía un mensaje de biblioteca/playlists/cola y devuelve su línea de respuesta (ok, página, lista o error)."""
         with self._open(self._library_timeout) as sock:
             self._send(sock, message)
             return self._read_line(sock, MAX_LIBRARY_REPLY_BYTES)
@@ -78,6 +78,12 @@ class Ipc:
 
     def play_playlist(self, name, position):
         return self.request({"type": "playlist.play", "name": name, "position": position})
+
+    def queue(self, offset):
+        return self.request({"type": "queue.get", "offset": offset})
+
+    def play_queue(self, position):
+        return self.request({"type": "queue.play", "position": position})
 
     def _open(self, timeout=None):
         try:
