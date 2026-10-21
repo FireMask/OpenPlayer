@@ -1,6 +1,6 @@
 # SPEC 08 — Web agent: control remoto que imita los botones
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 03, SPEC 04, SPEC 05
 > **Date:** 2026-10-20
 > **Objective:** Agregar un web agent en Python (solo stdlib) que sirve una página con los 6 botones y el estado actual, y los traduce a `button.pressed` / `player.get_snapshot` por el socket IPC, accesible solo desde la red local e instalado como unidad systemd con el mismo deploy.
@@ -79,30 +79,30 @@ Rangos permitidos: `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16
 
 **Windows (automatizable):**
 
-- [ ] `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
-- [ ] `config.py` rechaza con `ConfigError`, nombrando el campo: `web.port` faltante, no entero, bool o fuera de 1024–65535, y `ipc.unixSocketPath` vacío.
-- [ ] `press("next")` envía exactamente `{"type":"button.pressed","button":"next"}\n` y cierra la conexión.
-- [ ] `snapshot()` devuelve la línea de respuesta; con el servidor caído o sin respuesta en 2 s lanza un error que el servidor convierte en `503`.
-- [ ] Cada fila del contrato HTTP devuelve el código indicado (204, 404, 405, 502, 503, 200 con `text/html` y `application/json`).
-- [ ] Un cliente fuera de los rangos permitidos recibe `403`; `::ffff:192.168.x.x` se trata como permitido.
-- [ ] `main.py` con config inválida sale con exit 1 y un mensaje que nombra el campo.
-- [ ] El web agent solo importa stdlib (verificable con grep).
-- [ ] El Service registra `Button Next` (sin `sequence`) cuando el mensaje no la trae; `dotnet test` pasa.
+- [x] `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
+- [x] `config.py` rechaza con `ConfigError`, nombrando el campo: `web.port` faltante, no entero, bool o fuera de 1024–65535, y `ipc.unixSocketPath` vacío.
+- [x] `press("next")` envía exactamente `{"type":"button.pressed","button":"next"}\n` y cierra la conexión.
+- [x] `snapshot()` devuelve la línea de respuesta; con el servidor caído o sin respuesta en 2 s lanza un error que el servidor convierte en `503`.
+- [x] Cada fila del contrato HTTP devuelve el código indicado (204, 404, 405, 502, 503, 200 con `text/html` y `application/json`).
+- [x] Un cliente fuera de los rangos permitidos recibe `403`; `::ffff:192.168.x.x` se trata como permitido.
+- [x] `main.py` con config inválida sale con exit 1 y un mensaje que nombra el campo.
+- [x] El web agent solo importa stdlib (verificable con grep).
+- [x] El Service registra `Button Next` (sin `sequence`) cuando el mensaje no la trae; `dotnet test` pasa.
 
 **Raspberry Pi:**
 
-- [ ] `deploy.ps1` termina con exit 0 y `openplayer`, `openplayer-hardware` y `openplayer-web` quedan `active`; el web agent corre como `openplayer`.
-- [ ] `http://mpi3-player.local:8080` abre desde el navegador de Windows y desde un móvil en la misma red.
-- [ ] Cada uno de los 6 botones produce una línea `Button …` en el log del Service; play/pause, next, previous y volumen cambian `mpc status` como los botones físicos.
-- [ ] La línea de estado refleja estado, pista y volumen en 2 s o menos tras un cambio hecho con `mpc`.
-- [ ] Con el Service detenido, un botón devuelve `503` y la página muestra "Sin conexión con el reproductor"; al reiniciarlo, vuelve a funcionar sin recargar.
-- [ ] Tras `sudo reboot`, la página funciona sin intervención.
+- [x] `deploy.ps1` termina con exit 0 y `openplayer`, `openplayer-hardware` y `openplayer-web` quedan `active`; el web agent corre como `openplayer`.
+- [x] `http://mpi3-player.local:8080` abre desde el navegador de Windows y desde un móvil en la misma red.
+- [x] Cada uno de los 6 botones produce una línea `Button …` en el log del Service; play/pause, next, previous y volumen cambian `mpc status` como los botones físicos.
+- [x] La línea de estado refleja estado, pista y volumen en 2 s o menos tras un cambio hecho con `mpc`.
+- [x] Con el Service detenido, un botón devuelve `503` y la página muestra "Sin conexión con el reproductor"; al reiniciarlo, vuelve a funcionar sin recargar.
+- [x] Tras `sudo reboot`, la página funciona sin intervención.
 
 **Documentación:**
 
-- [ ] `architecture.md` describe el web agent y el contrato HTTP.
-- [ ] README explica la URL, `systemctl`/`journalctl` de `openplayer-web` y cómo correr las pruebas.
-- [ ] `assembly.md` menciona la instalación con el deploy y el puerto 8080.
+- [x] `architecture.md` describe el web agent y el contrato HTTP.
+- [x] README explica la URL, `systemctl`/`journalctl` de `openplayer-web` y cómo correr las pruebas.
+- [x] `assembly.md` menciona la instalación con el deploy y el puerto 8080.
 
 ## Decisions
 
