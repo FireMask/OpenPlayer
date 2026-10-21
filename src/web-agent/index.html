@@ -19,6 +19,9 @@
   .title { font-size: 1.2rem; font-weight: 600; margin-top: 4px; overflow-wrap: anywhere; }
   .artist { color: var(--muted); overflow-wrap: anywhere; }
   .offline { color: var(--warn); font-weight: 600; }
+  .progress { margin-top: 12px; }
+  .progress input { width: 100%; margin: 0; accent-color: var(--accent); }
+  .time { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; text-align: right; }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
   button { background: var(--card); color: var(--text); border: 0; border-radius: 12px; padding: 16px 8px;
            font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 4px;
@@ -36,6 +39,10 @@
     <div class="state" id="state">Cargando…</div>
     <div class="title" id="title"></div>
     <div class="artist" id="artist"></div>
+    <div class="progress" id="progress" hidden>
+      <input type="range" id="seek" min="0" max="0" step="1" value="0" aria-label="Posición">
+      <div class="time" id="time"></div>
+    </div>
   </section>
   <div class="grid">
     <button data-button="previous"><span class="icon">⏮</span><span class="label">Anterior</span></button>
@@ -51,11 +58,42 @@
   const STATES = { playing: "Reproduciendo", paused: "En pausa", stopped: "Detenido" };
   const $ = id => document.getElementById(id);
 
+  // Posición del último sondeo (s) y cuándo llegó; entre sondeos se extrapola si playing.
+  let base = 0, baseAt = 0, duration = 0, playing = false, dragging = false;
+
+  const mmss = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  const estimate = () => Math.min(duration, playing ? base + (performance.now() - baseAt) / 1000 : base);
+
+  function renderProgress() {
+    if (!duration) return;
+    const t = dragging ? Number($("seek").value) : estimate();
+    if (!dragging) $("seek").value = Math.floor(t);
+    $("time").textContent = `${mmss(t)} / ${mmss(duration)}`;
+  }
+
+  function showProgress(s) {
+    const was = playing ? estimate() : null;
+    duration = s.durationSeconds || 0;
+    playing = s.state === "playing";
+    $("progress").hidden = !duration;
+    $("seek").disabled = s.state === "stopped";
+    if (!duration) return;
+    $("seek").max = duration;
+    // El snapshot trunca a segundos: si queda < 1 s detrás de lo extrapolado, se conserva para no saltar atrás.
+    const pos = s.positionSeconds || 0;
+    const behind = was == null ? -1 : was - pos;
+    base = playing && behind >= 0 && behind < 1 ? was : pos;
+    baseAt = performance.now();
+    renderProgress();
+  }
+
   function showOffline() {
     $("state").className = "state offline";
     $("state").textContent = "Sin conexión con el reproductor";
     $("title").textContent = "";
     $("artist").textContent = "";
+    $("progress").hidden = true;
+    duration = 0;
   }
 
   // textContent, nunca innerHTML: título y artista vienen de los archivos de música.
@@ -65,6 +103,7 @@
     $("state").textContent = (STATES[s.state] || s.state) + volume;
     $("title").textContent = s.trackTitle || (s.state === "stopped" ? "" : "Sin título");
     $("artist").textContent = s.trackArtist || "";
+    showProgress(s);
   }
 
   async function refresh() {
@@ -82,8 +121,27 @@
     refresh();
   }));
 
+  // Mientras se arrastra, el sondeo no mueve la barra; el seek se envía solo al soltar (change).
+  $("seek").addEventListener("input", () => { dragging = true; renderProgress(); });
+  $("seek").addEventListener("change", async () => {
+    const seconds = Number($("seek").value);
+    dragging = false;
+    base = seconds;
+    baseAt = performance.now();
+    renderProgress();
+    try {
+      const r = await fetch("/api/seek", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ positionSeconds: seconds }),
+      });
+      if (r.status === 503) return showOffline();
+    } catch { return showOffline(); }
+    refresh();
+  });
+
   refresh();
   setInterval(refresh, 2000);
+  setInterval(renderProgress, 250);
 </script>
 </body>
 </html>
