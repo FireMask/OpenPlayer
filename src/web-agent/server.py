@@ -15,6 +15,8 @@ log = logging.getLogger(__name__)
 
 BUTTON_NAMES = ("play_pause", "previous", "next", "volume_up", "volume_down", "menu", "refresh_library")
 BUTTONS_PREFIX = "/api/buttons/"
+MAX_BODY_BYTES = 1024
+MAX_SEEK_SECONDS = 86400
 
 # Solo red local; fe80::/10 porque Windows resuelve .local primero a IPv6 link-local (SPEC 07).
 ALLOWED_NETWORKS = [ipaddress.ip_network(n) for n in (
@@ -82,6 +84,10 @@ class Handler(BaseHTTPRequestHandler):
             if method != "POST":
                 return self._reply(HTTPStatus.METHOD_NOT_ALLOWED)
             return self._press(path[len(BUTTONS_PREFIX):])
+        if path == "/api/seek":
+            if method != "POST":
+                return self._reply(HTTPStatus.METHOD_NOT_ALLOWED)
+            return self._seek()
         self._reply(HTTPStatus.NOT_FOUND)
 
     def _press(self, name):
@@ -92,6 +98,36 @@ class Handler(BaseHTTPRequestHandler):
             return self._reply(HTTPStatus.SERVICE_UNAVAILABLE)
         log.info("button %s", name)
         self._reply(HTTPStatus.NO_CONTENT)
+
+    def _seek(self):
+        seconds = self._read_seek_seconds()
+        if seconds is None:
+            return self._reply(HTTPStatus.BAD_REQUEST)
+        try:
+            self.server.ipc.seek(seconds)
+        except IpcUnavailable as e:
+            log.warning("dropped seek %s: %s", seconds, e)
+            return self._reply(HTTPStatus.SERVICE_UNAVAILABLE)
+        log.info("seek %s", seconds)
+        self._reply(HTTPStatus.NO_CONTENT)
+
+    def _read_seek_seconds(self):
+        """positionSeconds del cuerpo JSON, o None si el cuerpo es inválido."""
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return None
+        if not 0 < length <= MAX_BODY_BYTES:
+            return None  # sin leer: no aceptamos cuerpos arbitrarios
+        try:
+            body = json.loads(self.rfile.read(length))
+        except ValueError:  # incluye UnicodeDecodeError
+            return None
+        seconds = body.get("positionSeconds") if isinstance(body, dict) else None
+        # bool es subclase de int: true no es un número de segundos.
+        if type(seconds) is not int or not 0 <= seconds <= MAX_SEEK_SECONDS:
+            return None
+        return seconds
 
     def _snapshot(self):
         try:

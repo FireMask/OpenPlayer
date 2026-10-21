@@ -13,6 +13,7 @@ ERROR = '{"type":"error","request":"player.get_snapshot","message":"MPD did not 
 class FakeIpc:
     def __init__(self):
         self.pressed = []
+        self.seeks = []
         self.reply = SNAPSHOT
         self.available = True
 
@@ -20,6 +21,11 @@ class FakeIpc:
         if not self.available:
             raise IpcUnavailable("down")
         self.pressed.append(name)
+
+    def seek(self, seconds):
+        if not self.available:
+            raise IpcUnavailable("down")
+        self.seeks.append(seconds)
 
     def snapshot(self):
         if not self.available:
@@ -38,10 +44,10 @@ def web():
     server.server_close()
 
 
-def request(server, method, path, host="127.0.0.1"):
+def request(server, method, path, host="127.0.0.1", body=None):
     # Cliente IPv4 contra el socket dual stack: llega como ::ffff:127.0.0.1.
     conn = http.client.HTTPConnection(host, server.server_address[1], timeout=5)
-    conn.request(method, path)
+    conn.request(method, path, body=body)
     response = conn.getresponse()
     body = response.read()
     conn.close()
@@ -82,6 +88,50 @@ def test_button_with_service_down_is_503(web):
     assert request(server, "POST", "/api/buttons/next")[0].status == 503
 
 
+def test_seek_returns_204_and_forwards(web):
+    server, ipc = web
+    response, body = request(server, "POST", "/api/seek", body=b'{"positionSeconds":83}')
+
+    assert response.status == 204
+    assert body == b""
+    assert ipc.seeks == [83]
+
+
+@pytest.mark.parametrize("body", [
+    None,
+    b"",
+    b'{"positionSeconds":83,"pad":"' + b"x" * 1024 + b'"}',
+    b"{positionSeconds:83}",
+    b"\xff",
+    b"[83]",
+    b"{}",
+    b'{"positionSeconds":"83"}',
+    b'{"positionSeconds":83.5}',
+    b'{"positionSeconds":true}',
+    b'{"positionSeconds":-1}',
+    b'{"positionSeconds":86401}',
+])
+def test_seek_invalid_body_is_400(web, body):
+    server, ipc = web
+
+    assert request(server, "POST", "/api/seek", body=body)[0].status == 400
+    assert ipc.seeks == []
+
+
+def test_seek_accepts_bounds(web):
+    server, ipc = web
+    for seconds in (0, 86400):
+        assert request(server, "POST", "/api/seek", body=f'{{"positionSeconds":{seconds}}}'.encode())[0].status == 204
+    assert ipc.seeks == [0, 86400]
+
+
+def test_seek_with_service_down_is_503(web):
+    server, ipc = web
+    ipc.available = False
+
+    assert request(server, "POST", "/api/seek", body=b'{"positionSeconds":83}')[0].status == 503
+
+
 def test_snapshot_returns_line_as_json(web):
     server, _ = web
     response, body = request(server, "GET", "/api/snapshot")
@@ -109,6 +159,7 @@ def test_snapshot_with_service_down_is_503(web):
 
 @pytest.mark.parametrize("method, path", [
     ("GET", "/api/buttons/next"),
+    ("GET", "/api/seek"),
     ("POST", "/api/snapshot"),
     ("POST", "/"),
     ("DELETE", "/api/snapshot"),
@@ -143,9 +194,10 @@ def test_disallowed_client_is_403_on_every_route(web):
     server, ipc = web
     server.is_allowed = lambda host: False
 
-    for method, path in [("GET", "/"), ("GET", "/api/snapshot"), ("POST", "/api/buttons/next"), ("GET", "/x")]:
+    for method, path in [("GET", "/"), ("GET", "/api/snapshot"), ("POST", "/api/buttons/next"), ("POST", "/api/seek"),
+                         ("GET", "/x")]:
         assert request(server, method, path)[0].status == 403
-    assert ipc.pressed == []
+    assert ipc.pressed == [] and ipc.seeks == []
 
 
 @pytest.mark.parametrize("host, allowed", [
