@@ -128,11 +128,11 @@ Para correrlo en Windows sin hardware: `GPIOZERO_PIN_FACTORY=mock python src/har
 
 ## Web agent (control desde el navegador)
 
-`src/web-agent` (Python, solo stdlib) sirve una página con los 6 botones y el estado actual en `http://mpi3-player.local:8080` (puerto `web.port` de `player.json`). Cada botón envía el mismo `button.pressed` que el botón físico. Solo responde a la red local (rangos privados, `::1`, `fe80::/10`) y no pide contraseña; si el Service no está disponible, la página muestra "Sin conexión con el reproductor". Corre como unidad `openplayer-web`; contrato HTTP en [`docs/architecture.md`](docs/architecture.md) §5.
+`src/web-agent` (Python, solo stdlib) sirve una página con los 6 botones y el estado actual en `http://mpi3-player.local:8080` (puerto `web.port` de `player.json`). Cada botón envía el mismo `button.pressed` que el botón físico. Una barra de progreso muestra la posición de la pista (`m:ss / m:ss`) y avanza entre sondeos; arrastrarla y soltarla salta a esa posición (`player.seek`). Solo responde a la red local (rangos privados, `::1`, `fe80::/10`) y no pide contraseña; si el Service no está disponible, la página muestra "Sin conexión con el reproductor". Corre como unidad `openplayer-web`; contrato HTTP en [`docs/architecture.md`](docs/architecture.md) §5.
 
 ```bash
 systemctl status openplayer-web
-journalctl -u openplayer-web -b -f   # ready / button <nombre> / warnings
+journalctl -u openplayer-web -b -f   # ready / button <nombre> / seek <N> / warnings
 ```
 
 Pruebas (Windows o Linux; HTTP real en puerto aleatorio, socket simulado). Correr cada carpeta por separado: ambos agentes tienen su propio `config.py`.

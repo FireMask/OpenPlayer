@@ -108,10 +108,10 @@ Implementado en SPEC 05 (Python 3, solo stdlib y `gpiozero` con `lgpio`, paquete
 Proceso Python (SPEC 08, solo stdlib): página con los 6 botones y el estado, para controlar el reproductor desde un navegador de la red local sin GPIO.
 
 - `config.py`: lee `ipc.unixSocketPath` y `web.port` (1024–65535) de `player.json`; ignora `hardware`. Config inválida → exit 1 nombrando el campo.
-- `ipc.py`: una conexión al socket por pedido HTTP; `button.pressed` sin `sequence`; `player.get_snapshot` con timeout de 2 s.
+- `ipc.py`: una conexión al socket por pedido HTTP; `button.pressed` sin `sequence`; `player.get_snapshot` con timeout de 2 s; `player.seek` (SPEC 09).
 - `server.py`: `ThreadingHTTPServer` en `::` (IPv4 e IPv6). Solo acepta clientes de `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `::1` y `fe80::/10` (IPv4 mapeadas se evalúan como IPv4); el resto recibe `403`. Sin autenticación ni HTTPS.
-- `index.html`: botones y línea de estado (sondeo cada 2 s); título y artista se insertan como texto, nunca como HTML.
-- `main.py`: logs `ready:` / `button <nombre>` / warnings; SIGTERM → exit 0. Unidad `deploy/openplayer-web.service` (usuario `openplayer`). Pruebas en `tests/web-agent`.
+- `index.html`: botones y línea de estado (sondeo cada 2 s); título y artista se insertan como texto, nunca como HTML. Barra de progreso (`<input type="range">` + `m:ss / m:ss`, SPEC 09): avanza localmente entre sondeos si `playing`, el sondeo no la mueve mientras se arrastra, al soltar envía `POST /api/seek`; oculta sin `durationSeconds`, deshabilitada en `stopped`.
+- `main.py`: logs `ready:` / `button <nombre>` / `seek <N>` / warnings; SIGTERM → exit 0. Unidad `deploy/openplayer-web.service` (usuario `openplayer`). Pruebas en `tests/web-agent`.
 
 Contrato HTTP:
 
@@ -119,6 +119,7 @@ Contrato HTTP:
 |---|---|---|
 | `GET /` | `200` `text/html` | — |
 | `POST /api/buttons/<nombre>` (los 6 de §8) | `204` | `404` nombre desconocido; `503` Service inalcanzable |
+| `POST /api/seek` con cuerpo `{"positionSeconds": N}` | `204` | `400` cuerpo ausente, > 1 KB, JSON inválido, o `positionSeconds` no entero / fuera de 0–86400; `503` Service inalcanzable |
 | `GET /api/snapshot` | `200` `application/json`: la línea `player.snapshot` de §7 tal cual | `502` si el Service responde `error`; `503` inalcanzable o sin respuesta en 2 s |
 | Otra ruta / otro método | — | `404` / `405` |
 | Cliente fuera de los rangos | — | `403` en todas las rutas |
@@ -162,11 +163,13 @@ Mensajes de entrada:
 ```json
 {"type":"button.pressed","button":"next","sequence":1}
 {"type":"player.get_snapshot"}
+{"type":"player.seek","positionSeconds":83}
 ```
 
 - `type` obligatorio. Campos extra se ignoran.
 - `button.pressed`: `button` obligatorio, uno de `play_pause`, `previous`, `next`, `volume_up`, `volume_down`, `menu` (exacto). `sequence` opcional (entero); solo se registra en el log. No hay respuesta.
 - `player.get_snapshot`: responde una línea solo al cliente que la pidió.
+- `player.seek` (SPEC 09): `positionSeconds` obligatorio, entero JSON 0–86400 (no `83.5`, `"83"` ni `true`). Ejecuta `IPlayer.SeekAsync` (`seekcur`) y registra `Seek to N s`. No hay respuesta; si MPD falla (detenido, posición fuera de la pista) solo registra warning `Seek failed: …`. No se recorta contra la duración.
 
 Respuestas:
 
@@ -182,9 +185,9 @@ Framing y errores:
 
 - El servidor lee bytes y parte por `\n`; un `\r` final se descarta y las líneas vacías se ignoran. Un mensaje puede llegar partido en varias lecturas y una lectura puede traer varios mensajes.
 - Límite `ipc.maxMessageBytes` (por defecto 4096) medido en bytes sin contar el `\n`. Si se acumulan más bytes sin `\n`, se registra un warning y se cierra esa conexión; el cliente debe reconectar.
-- JSON inválido, `type` desconocido, botón inválido o `sequence` no entero: warning en el log y la conexión sigue abierta. Nunca termina el proceso.
+- JSON inválido, `type` desconocido, botón inválido, `sequence` no entero o `positionSeconds` inválido: warning en el log y la conexión sigue abierta. Nunca termina el proceso.
 - Varios clientes a la vez (agente y `socat` de diagnóstico). Todos los comandos se ejecutan en serie con un lock global.
-- No hay acknowledgements de `button.pressed`; el log y el estado de MPD bastan para el MVP. No se aceptan comandos arbitrarios ni nombres de ejecutables.
+- No hay acknowledgements de `button.pressed` ni de `player.seek`; el log y el estado de MPD bastan para el MVP. No se aceptan comandos arbitrarios ni nombres de ejecutables.
 
 Socket:
 
