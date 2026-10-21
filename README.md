@@ -90,7 +90,7 @@ Publicación autocontenida (no requiere instalar .NET en la Pi). Desde Windows, 
 .\deploy.ps1 -Device openplayer.local -User <usuario> [-Password <contraseña>]
 ```
 
-`install.sh` es idempotente: crea el usuario y grupo `openplayer` si faltan, añade `<usuario>` al grupo, instala en `/opt/openplayer` (sin sobrescribir un `player.json` existente), instala `deploy/openplayer.service`, la habilita y la reinicia. Termina con error y muestra `journalctl` si la unidad no queda escuchando.
+`install.sh` es idempotente: verifica `python3-gpiozero` y `python3-lgpio` (no los instala), crea el usuario y grupo `openplayer` si faltan, añade `<usuario>` al grupo, instala en `/opt/openplayer` el Service y `hardware-agent/` (sin sobrescribir un `player.json` existente), instala `deploy/openplayer.service` y `deploy/openplayer-hardware.service`, las habilita y las reinicia. Termina con error y muestra `journalctl` si alguna unidad no queda lista.
 
 `-Password` sirve para ssh y sudo, pero queda en el historial de PowerShell; sin él, ssh usa tu clave (`ssh-copy-id`) y sudo pide la contraseña en la terminal.
 
@@ -98,12 +98,33 @@ Sin PowerShell, el equivalente manual:
 
 ```bash
 dotnet publish src/OpenPlayer.Service -c Release -r linux-arm64 --self-contained true -o publish/linux-arm64
-tar -czf openplayer.tgz -C publish/linux-arm64 .
-scp openplayer.tgz deploy/install.sh deploy/openplayer.service <usuario>@openplayer.local:/tmp/
+tar -czf openplayer.tgz --exclude=__pycache__ --exclude=requirements-dev.txt -C publish/linux-arm64 . -C "$PWD/src" hardware-agent
+scp openplayer.tgz deploy/install.sh deploy/openplayer.service deploy/openplayer-hardware.service <usuario>@openplayer.local:/tmp/
 ssh -t <usuario>@openplayer.local 'sudo bash /tmp/install.sh /tmp/openplayer.tgz /tmp/openplayer.service $USER'
 ```
 
 La instalación anterior en `~/openplayer` (SPEC 02/03) ya no se usa; se puede borrar con `rm -r ~/openplayer`.
+
+## Hardware agent (botones GPIO)
+
+`src/hardware-agent` (Python, solo stdlib y `gpiozero`) lee los botones de `hardware.buttons` en `player.json` (BCM, pull-up interno, debounce `hardware.debounceSeconds`) y envía `button.pressed` al socket. Corre como unidad `openplayer-hardware`; si el Service no está disponible, descarta la pulsación con un warning y reconecta solo.
+
+```bash
+systemctl status openplayer-hardware
+journalctl -u openplayer-hardware -b -f   # connected / disconnected / button <nombre> (sequence N)
+```
+
+Sin botones cableados se prueba con un cable dupont entre el GPIO y GND, siguiendo el procedimiento seguro de [`docs/gpio-map.md`](docs/gpio-map.md) §9. Nunca tocar pines de 3.3 V o 5 V.
+
+Pruebas en Windows o Linux (GPIO simulado con `MockFactory`, socket con un servidor TCP local):
+
+```bash
+python -m venv .venv
+.venv/Scripts/python -m pip install -r src/hardware-agent/requirements-dev.txt   # Linux: .venv/bin/python
+.venv/Scripts/python -m pytest tests/hardware-agent
+```
+
+Para correrlo en Windows sin hardware: `GPIOZERO_PIN_FACTORY=mock python src/hardware-agent/main.py config/player.example.json` (sin `AF_UNIX`, solo queda desconectado).
 
 ## Estructura
 

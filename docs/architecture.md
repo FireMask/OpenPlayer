@@ -95,6 +95,14 @@ Proceso Python:
 - En la fase OLED, dibuja el estado recibido o consultado por un canal definido; no consulta MPD directamente.
 - Debe permitir simulación o pruebas sin hardware real.
 
+Implementado en SPEC 05 (Python 3, solo stdlib y `gpiozero` con `lgpio`, paquetes del sistema, sin venv):
+
+- `config.py`: lee `hardware.buttons`, `hardware.debounceSeconds` e `ipc.unixSocketPath` de `player.json`; config inválida → exit 1 nombrando el campo.
+- `buttons.py`: un `gpiozero.Button` por pin (pull-up, `bounce_time` = debounce, aplicado por `lgpio`); el callback solo encola.
+- `sender.py`: hilo que envía `button.pressed` con `sequence` por proceso. Reconexión con espera incremental 0.5–10 s; registra solo `connected`/`disconnected`; detecta el cierre del Service en reposo (`select`). Sin conexión, la pulsación se descarta (no se reenvía).
+- `main.py`: entrada; SIGTERM/Ctrl+C → exit 0.
+- Unidad `deploy/openplayer-hardware.service` (usuario `openplayer`, grupo `gpio`), instalada por `deploy/install.sh`. Pruebas en `tests/hardware-agent` con `MockFactory` y un servidor TCP local.
+
 ### MPD y salida de audio
 
 MPD administra la biblioteca, la cola y la reproducción. Para el primer hito, seleccionar el DAC USB mediante ALSA. No codificar un índice de tarjeta fijo: inspeccionar `aplay -l` y `/proc/asound/cards`. Bluetooth A2DP puede requerir PipeWire/WirePlumber o una configuración equivalente de la distribución. Validar la ruta de audio en el sistema operativo elegido antes de implementar un selector automático.
@@ -242,9 +250,9 @@ Integración en Pi:
 1. Instalar Raspberry Pi OS Lite, SSH, MPD y verificar DAC USB. *(Hecho.)*
 2. Crear solución .NET, Core e interfaz `IPlayer`. *(Hecho: SPEC 01.)*
 3. Implementar adaptador MPD y snapshot de estado. *(Hecho: SPEC 02.)*
-4. Implementar socket Unix y agente Python con dos botones. *(Socket hecho: SPEC 03; agente pendiente.)*
+4. Implementar socket Unix y agente Python con dos botones. *(Hecho: socket SPEC 03, agente SPEC 05 con los 6 botones; validado con cable de puente, botones físicos pendientes.)*
 5. Añadir biblioteca y playlists.
-6. Instalar servicios systemd y validar arranque automático. *(Service C# hecho: SPEC 04, `deploy/openplayer.service`; unidad del agente pendiente.)*
+6. Instalar servicios systemd y validar arranque automático. *(Hecho: SPEC 04 `deploy/openplayer.service`, SPEC 05 `deploy/openplayer-hardware.service`.)*
 7. Configurar Bluetooth A2DP y selector de salida.
 8. Añadir OLED.
 9. Medir consumo y desarrollar alimentación portátil segura.

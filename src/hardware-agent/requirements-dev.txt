@@ -1,0 +1,4 @@
+# Solo desarrollo y pruebas (Windows/Linux). En la Pi se usan los paquetes del sistema
+# python3-gpiozero y python3-lgpio; gpiozero fijado a la versión de la Pi (apt).
+gpiozero==2.0.1
+pytest

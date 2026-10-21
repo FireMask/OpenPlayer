@@ -154,16 +154,21 @@ La instalación manual de SPEC 02/03 (`~/openplayer` y `mkdir /run/openplayer` a
 
 ## 8. Agente Python y GPIO
 
-Instalar/configurar la biblioteca GPIO compatible con el sistema. Probar un botón a la vez con un script mínimo. Usar los GPIO BCM documentados en `gpio-map.md` y pull-up interno. No conectar botones a 3.3 V; el esquema previsto es GPIO ↔ botón ↔ GND.
+El agente (SPEC 05, `src/hardware-agent`) usa los paquetes del sistema, ya presentes en Raspberry Pi OS. Comprobarlos (y, si faltan, instalarlos; `install.sh` solo los verifica):
 
-Implementar el agente en este orden:
+```bash
+apt-cache policy python3-gpiozero python3-lgpio
+sudo apt install python3-gpiozero python3-lgpio
+```
 
-1. Lectura GPIO y debounce.
-2. Conversión a nombres de evento.
-3. Cliente Unix socket con mensajes JSON Lines.
-4. Reintentos y logs.
-5. Integración con el servicio C#.
-6. Más adelante, OLED y visualización de snapshots.
+El mismo `deploy.ps1` de §7 lo instala en `/opt/openplayer/hardware-agent` con la unidad `openplayer-hardware` (usuario `openplayer` en el grupo `gpio`, que da acceso a `/dev/gpiochip0`). Lee pines y debounce de `/opt/openplayer/player.json`. Usar los GPIO BCM de `gpio-map.md` con pull-up interno; el esquema es GPIO ↔ botón ↔ GND, nunca a 3.3 V ni 5 V.
+
+```bash
+systemctl status openplayer-hardware
+journalctl -u openplayer-hardware -b -f
+```
+
+Sin botones, probar con un cable de puente siguiendo `gpio-map.md` §9. Más adelante: OLED y visualización de snapshots.
 
 ## 9. Socket Unix y systemd
 

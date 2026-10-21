@@ -9,3 +9,4 @@ publish/
 .env
 *.user
 *.suo
+.pytest_cache/

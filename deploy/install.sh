@@ -1,6 +1,7 @@
 #!/bin/bash
-# Instala OpenPlayer.Service en /opt/openplayer como unidad systemd (SPEC 04). Idempotente.
-# Uso: sudo bash install.sh <ruta.tgz> <unit.service> <usuario-que-despliega>
+# Instala OpenPlayer.Service (SPEC 04) y el hardware agent (SPEC 05) en /opt/openplayer como unidades systemd. Idempotente.
+# Uso: sudo bash install.sh <ruta.tgz> <openplayer.service> <usuario-que-despliega>
+# El .tgz trae el publish del Service y hardware-agent/; openplayer-hardware.service va junto a openplayer.service.
 set -euo pipefail
 
 if [ $# -ne 3 ]; then
@@ -9,6 +10,7 @@ if [ $# -ne 3 ]; then
 fi
 TGZ=$1
 UNIT=$2
+AGENT_UNIT=$(dirname "$UNIT")/openplayer-hardware.service
 DEPLOYER=$3
 DIR=/opt/openplayer
 SOCK=/run/openplayer/hardware.sock
@@ -16,7 +18,14 @@ SOCK=/run/openplayer/hardware.sock
 [ "$(id -u)" -eq 0 ] || { echo "Must run as root (sudo)" >&2; exit 1; }
 [ -f "$TGZ" ] || { echo "Not found: $TGZ" >&2; exit 1; }
 [ -f "$UNIT" ] || { echo "Not found: $UNIT" >&2; exit 1; }
+[ -f "$AGENT_UNIT" ] || { echo "Not found: $AGENT_UNIT" >&2; exit 1; }
 id "$DEPLOYER" >/dev/null 2>&1 || { echo "Unknown user: $DEPLOYER" >&2; exit 1; }
+
+# El agente usa los paquetes del sistema (sin venv). Solo se verifican: instalarlos es decisión del administrador.
+for pkg in python3-gpiozero python3-lgpio; do
+    dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed" ||
+        { echo "Missing package $pkg: sudo apt install python3-gpiozero python3-lgpio" >&2; exit 1; }
+done
 
 # Usuario de sistema sin login ni home; el que despliega entra al grupo para usar el socket (socat).
 getent group openplayer >/dev/null || groupadd --system openplayer
@@ -33,20 +42,36 @@ chmod -R u=rwX,go=rX "$DIR"
 chmod 755 "$DIR/OpenPlayer.Service"
 
 install -m 644 "$UNIT" /etc/systemd/system/openplayer.service
+install -m 644 "$AGENT_UNIT" /etc/systemd/system/openplayer-hardware.service
 systemctl daemon-reload
-systemctl enable --quiet openplayer
+systemctl enable --quiet openplayer openplayer-hardware
 # Un "failed" previo por StartLimitBurst bloquearía el restart.
-systemctl reset-failed openplayer 2>/dev/null || true
+systemctl reset-failed openplayer openplayer-hardware 2>/dev/null || true
 systemctl restart openplayer
 
 # Type=simple da "active" apenas arranca el proceso; el socket confirma que el Service llegó a escuchar.
 for _ in $(seq 30); do
-    if systemctl is-active --quiet openplayer && [ -S "$SOCK" ]; then
-        echo "openplayer: active, listening on $SOCK"
+    systemctl is-active --quiet openplayer && [ -S "$SOCK" ] && break
+    sleep 0.5
+done
+if ! systemctl is-active --quiet openplayer || [ ! -S "$SOCK" ]; then
+    echo "openplayer did not become active" >&2
+    journalctl -u openplayer -n 20 --no-pager >&2
+    exit 1
+fi
+echo "openplayer: active, listening on $SOCK"
+
+# El agente confirma con "ready:" que configuró los GPIO; se busca solo en los logs de este arranque.
+systemctl restart openplayer-hardware
+for _ in $(seq 30); do
+    invocation=$(systemctl show -p InvocationID --value openplayer-hardware)
+    if systemctl is-active --quiet openplayer-hardware && [ -n "$invocation" ] &&
+        journalctl _SYSTEMD_INVOCATION_ID="$invocation" --no-pager -q | grep -q "ready:"; then
+        echo "openplayer-hardware: active"
         exit 0
     fi
     sleep 0.5
 done
-echo "openplayer did not become active" >&2
-journalctl -u openplayer -n 20 --no-pager >&2
+echo "openplayer-hardware did not become active" >&2
+journalctl -u openplayer-hardware -n 20 --no-pager >&2
 exit 1

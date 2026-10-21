@@ -83,3 +83,31 @@ Los nombres de eventos son parte del contrato IPC. Si se renombran, actualizar P
 ## 8. Reglas para LLMs
 
 No cambiar el mapa GPIO por conveniencia sin revisar conflictos con I²C, SPI, UART u otras funciones. Nunca sugerir aplicar 5 V a GPIO. No afirmar que una OLED es compatible solo por tener cuatro pines; comprobar pinout, tensión y controlador. Mantener asignaciones de hardware configurables cuando sea razonable, pero documentar un valor predeterminado único.
+
+## 9. Prueba sin botones: cable de puente
+
+Implementado por el hardware agent (SPEC 05). Mientras no haya botones cableados, un cable dupont hembra-hembra entre un GPIO y GND reproduce exactamente el circuito del botón (pull-up interno: tocar GND = pulsar).
+
+Pines (encabezado de 40 pines; confirmar con el pinout oficial antes de tocar nada):
+
+| Botón | GPIO (BCM) | Pin físico | GND más cercano |
+|---|---|---|---|
+| Play/Pause | GPIO17 | 11 | 9 |
+| Anterior | GPIO27 | 13 | 9 o 14 |
+| Siguiente | GPIO22 | 15 | 14 |
+| Volumen + | GPIO23 | 16 | 14 |
+| Volumen − | GPIO24 | 18 | 20 |
+| Menú | GPIO25 | 22 | 20 o 25 |
+
+Procedimiento:
+
+1. Identificar el pin GND en el pinout oficial (pines físicos 6, 9, 14, 20, 25, 30, 34 y 39).
+2. Conectar primero un extremo del cable en GND y dejarlo fijo.
+3. Tocar brevemente el pin del GPIO con el otro extremo y retirarlo: es una pulsación.
+4. Ver el resultado con `journalctl -u openplayer-hardware -f` y `mpc status`.
+
+Reglas: el cable va **solo** entre un GPIO de la tabla y GND. Nunca tocar los pines de 3.3 V (1, 17) ni de 5 V (2, 4), ni otros GPIO: un cortocircuito a 3.3 V o 5 V puede dañar la Pi.
+
+Debounce: un cable rebota más que un botón. Si un toque genera dos líneas `button …` en el log, subir `hardware.debounceSeconds` en `/opt/openplayer/player.json` (rango 0.01–1) y aplicar con `sudo systemctl restart openplayer-hardware`. Recalibrar al cablear los botones reales.
+
+Validado (2026-10-20, Pi Zero 2 W, cable dupont): con `debounceSeconds` 0.08 (valor por defecto), 31 toques dieron 31 eventos, sin dobles.
