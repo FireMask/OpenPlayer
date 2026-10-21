@@ -20,7 +20,7 @@ Este repositorio contiene la documentación base para que una persona o un LLM p
 - [`docs/architecture.md`](docs/architecture.md): arquitectura, contratos, IPC, software, estados y plan de implementación.
 - [`docs/gpio-map.md`](docs/gpio-map.md): asignación GPIO, cableado, seguridad eléctrica y pruebas.
 - [`docs/battery-design.md`](docs/battery-design.md): requisitos y opciones para la alimentación portátil.
-- [`docs/assembly.md`](docs/assembly.md): montaje, instalación, despliegue, pruebas y solución de problemas.
+- [`docs/assembly.md`](docs/assembly.md): montaje, instalación, despliegue, pruebas y solución de problemas. Para cargar música desde Windows, ver §5 "Importar música por Samba" (`\\mpi3-player.local\music`).
 
 > Nota sobre el nombre: el archivo se llama `battery-design.md` (ortografía corregida de `battery-desing.md`).
 

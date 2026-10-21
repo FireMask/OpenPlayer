@@ -122,6 +122,55 @@ mpc next
 
 Si `mpc` no conecta, verificar servicio, puerto, instancia de MPD y configuración de `mpc`. No abrir el puerto 6600 a la red como solución rápida.
 
+### Importar música por Samba
+
+Comparte `music_directory` en la red local para copiar música desde el Explorador de Windows; MPD la agrega sola a la biblioteca. Solo red local y con contraseña: no exponer el puerto 445 a Internet.
+
+```bash
+sudo apt install samba
+sudo systemctl disable --now nmbd   # sin NetBIOS: se accede por ruta, no por "Red"
+```
+
+En `/etc/samba/smb.conf`, añadir dentro de la sección `[global]` existente:
+
+```ini
+   hosts allow = 127. 10. 172.16.0.0/12 192.168.
+   hosts deny = ALL
+   server min protocol = SMB2
+```
+
+Y al final del archivo:
+
+```ini
+[music]
+   path = /home/andres/Music
+   valid users = andres
+   read only = no
+   create mask = 0664
+   directory mask = 0775
+```
+
+Las máscaras dejan lo copiado legible para el usuario `mpd`. Aplicar y crear la contraseña Samba (distinta de la de SSH; se pide en la terminal):
+
+```bash
+testparm -s                      # sin errores; muestra [music]
+sudo systemctl restart smbd
+sudo smbpasswd -a andres
+```
+
+En `/etc/mpd.conf`, para que MPD vigile la carpeta (inotify) y no haga falta `mpc update`; crear también `playlist_directory`, que MPD registra como error si falta:
+
+```conf
+auto_update "yes"
+```
+
+```bash
+mkdir -p ~/Playlists
+sudo systemctl restart mpd
+```
+
+Desde Windows: abrir `\\mpi3-player.local\music` en el Explorador e iniciar sesión con `andres` y la contraseña Samba. Opcional, como unidad fija: clic derecho en "Este equipo" → "Conectar a unidad de red". Lo copiado aparece en `mpc listall` en segundos; lo borrado desaparece.
+
 ## 6. Controles iniciales por SSH
 
 Comandos de diagnóstico útiles:
