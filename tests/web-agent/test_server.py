@@ -8,6 +8,8 @@ from server import BUTTON_NAMES, WebServer, is_allowed
 
 SNAPSHOT = '{"type":"player.snapshot","state":"playing","trackTitle":"Á","volume":40}'
 ERROR = '{"type":"error","request":"player.get_snapshot","message":"MPD did not respond"}'
+OK = '{"type":"ok","request":"playlist.add"}'
+PAGE = '{"type":"library.page","offset":0,"total":1,"entries":[{"uri":"Rock","directory":true}]}'
 
 
 class FakeIpc:
@@ -32,6 +34,26 @@ class FakeIpc:
             raise IpcUnavailable("down")
         return self.reply
 
+    # Biblioteca y playlists: registra (método, argumentos) y responde library_reply.
+    LIBRARY_METHODS = ("browse", "search", "play_track", "playlists", "playlist", "create_playlist",
+                       "rename_playlist", "delete_playlist", "add_to_playlist", "remove_from_playlist",
+                       "move_in_playlist", "play_playlist")
+    library_reply = OK
+    library_calls = None
+
+    def __getattr__(self, method):
+        if method not in self.LIBRARY_METHODS:
+            raise AttributeError(method)
+
+        def call(*args):
+            if not self.available:
+                raise IpcUnavailable("down")
+            if self.library_calls is None:
+                self.library_calls = []
+            self.library_calls.append((method, *args))
+            return self.library_reply
+        return call
+
 
 @pytest.fixture
 def web():
@@ -42,6 +64,10 @@ def web():
     yield server, ipc
     server.shutdown()
     server.server_close()
+
+
+def library_calls(ipc):
+    return ipc.library_calls or []
 
 
 def request(server, method, path, host="127.0.0.1", body=None):
@@ -220,3 +246,150 @@ def test_disallowed_client_is_403_on_every_route(web):
 ])
 def test_is_allowed(host, allowed):
     assert is_allowed(host) is allowed
+
+
+# --- Biblioteca y playlists (SPEC 10) ---
+
+QUERY_ROUTES = [
+    ("/api/library", ("browse", "", 0)),
+    ("/api/library?path=Rock%2FAC%20DC&offset=100", ("browse", "Rock/AC DC", 100)),
+    ("/api/library/search?q=thunder", ("search", "thunder", 0)),
+    ("/api/library/search?q=thunder&offset=200", ("search", "thunder", 200)),
+    ("/api/playlists", ("playlists",)),
+    ("/api/playlists/Viaje", ("playlist", "Viaje", 0)),
+    ("/api/playlists/Viaje?offset=100", ("playlist", "Viaje", 100)),
+    ("/api/playlists/Mi%20lista%20100%25", ("playlist", "Mi lista 100%", 0)),
+]
+
+
+@pytest.mark.parametrize("path, expected", QUERY_ROUTES)
+def test_library_queries_return_200_with_reply(web, path, expected):
+    server, ipc = web
+    ipc.library_reply = PAGE
+    response, body = request(server, "GET", path)
+
+    assert response.status == 200
+    assert response.getheader("Content-Type").startswith("application/json")
+    assert body.decode() == PAGE
+    assert library_calls(ipc) == [expected]
+
+
+MUTATION_ROUTES = [
+    ("POST", "/api/library/play", b'{"uri":"Rock/a.flac"}', ("play_track", "Rock/a.flac")),
+    ("POST", "/api/playlists", '{"name":"Ñandú \\"x\\""}'.encode(), ("create_playlist", 'Ñandú "x"')),
+    ("POST", "/api/playlists/Viaje/rename", b'{"newName":"Gym"}', ("rename_playlist", "Viaje", "Gym")),
+    ("DELETE", "/api/playlists/Mi%20lista", None, ("delete_playlist", "Mi lista")),
+    ("POST", "/api/playlists/Viaje/tracks", b'{"uri":"Rock"}', ("add_to_playlist", "Viaje", "Rock")),
+    ("DELETE", "/api/playlists/Viaje/tracks/3", None, ("remove_from_playlist", "Viaje", 3)),
+    ("POST", "/api/playlists/Viaje/move", b'{"from":3,"to":2}', ("move_in_playlist", "Viaje", 3, 2)),
+    ("POST", "/api/playlists/Viaje/play", b'{"position":4}', ("play_playlist", "Viaje", 4)),
+    ("POST", "/api/playlists/Viaje/play", None, ("play_playlist", "Viaje", 0)),
+    ("POST", "/api/playlists/Viaje/play", b"{}", ("play_playlist", "Viaje", 0)),
+]
+
+
+@pytest.mark.parametrize("method, path, body, expected", MUTATION_ROUTES)
+def test_library_mutations_return_204(web, method, path, body, expected):
+    server, ipc = web
+    response, reply = request(server, method, path, body=body)
+
+    assert response.status == 204
+    assert reply == b""
+    assert library_calls(ipc) == [expected]
+
+
+BAD_REQUESTS = [
+    ("GET", "/api/library?offset=-1", None),
+    ("GET", "/api/library?offset=abc", None),
+    ("GET", "/api/library?offset=1.5", None),
+    ("GET", "/api/library/search", None),
+    ("GET", "/api/library/search?q=", None),
+    ("GET", "/api/playlists/Viaje?offset=x", None),
+    ("POST", "/api/library/play", None),
+    ("POST", "/api/library/play", b'{"uri":""}'),
+    ("POST", "/api/library/play", b'{"uri":5}'),
+    ("POST", "/api/library/play", b"{uri}"),
+    ("POST", "/api/library/play", b"\xff"),
+    ("POST", "/api/library/play", b'["Rock"]'),
+    ("POST", "/api/library/play", b'{"uri":"' + b"x" * 4096 + b'"}'),
+    ("POST", "/api/playlists", b"{}"),
+    ("POST", "/api/playlists/Viaje/rename", b'{"name":"Gym"}'),
+    ("POST", "/api/playlists/Viaje/tracks", None),
+    ("DELETE", "/api/playlists/Viaje/tracks/-1", None),
+    ("DELETE", "/api/playlists/Viaje/tracks/x", None),
+    ("POST", "/api/playlists/Viaje/move", b'{"from":3}'),
+    ("POST", "/api/playlists/Viaje/move", b'{"from":"3","to":2}'),
+    ("POST", "/api/playlists/Viaje/move", b'{"from":true,"to":2}'),
+    ("POST", "/api/playlists/Viaje/play", b'{"position":-1}'),
+    ("POST", "/api/playlists/Viaje/play", b'{"position":1.5}'),
+    ("DELETE", "/api/playlists/", None),
+    ("POST", "/api/playlists//rename", b'{"newName":"Gym"}'),
+]
+
+
+@pytest.mark.parametrize("method, path, body", BAD_REQUESTS)
+def test_library_invalid_request_is_400(web, method, path, body):
+    server, ipc = web
+
+    assert request(server, method, path, body=body)[0].status == 400
+    assert library_calls(ipc) == []
+
+
+@pytest.mark.parametrize("method, path, body", [
+    ("GET", "/api/library", None),
+    ("POST", "/api/playlists/Viaje/tracks", b'{"uri":"Rock"}'),
+])
+def test_library_error_reply_is_502_with_line(web, method, path, body):
+    server, ipc = web
+    error = '{"type":"error","request":"playlist.add","message":"No such playlist"}'
+    ipc.library_reply = error
+    response, reply = request(server, method, path, body=body)
+
+    assert response.status == 502
+    assert reply.decode() == error
+
+
+@pytest.mark.parametrize("method, path, body", [
+    ("GET", "/api/playlists", None),
+    ("POST", "/api/playlists", b'{"name":"Viaje"}'),
+])
+def test_library_with_service_down_is_503(web, method, path, body):
+    server, ipc = web
+    ipc.available = False
+
+    assert request(server, method, path, body=body)[0].status == 503
+
+
+@pytest.mark.parametrize("method, path", [
+    ("POST", "/api/library"),
+    ("POST", "/api/library/search"),
+    ("GET", "/api/library/play"),
+    ("DELETE", "/api/playlists"),
+    ("POST", "/api/playlists/Viaje"),
+    ("GET", "/api/playlists/Viaje/rename"),
+    ("GET", "/api/playlists/Viaje/tracks"),
+    ("POST", "/api/playlists/Viaje/tracks/3"),
+    ("DELETE", "/api/playlists/Viaje/move"),
+    ("GET", "/api/playlists/Viaje/play"),
+])
+def test_library_wrong_method_is_405(web, method, path):
+    server, ipc = web
+
+    assert request(server, method, path)[0].status == 405
+    assert library_calls(ipc) == []
+
+
+@pytest.mark.parametrize("path", ["/api/library/x", "/api/playlists/Viaje/x", "/api/playlists/Viaje/tracks/3/x"])
+def test_library_unknown_route_is_404(web, path):
+    server, _ = web
+
+    assert request(server, "GET", path)[0].status == 404
+
+
+def test_library_disallowed_client_is_403(web):
+    server, ipc = web
+    server.is_allowed = lambda host: False
+
+    for method, path in [("GET", "/api/library"), ("GET", "/api/playlists"), ("DELETE", "/api/playlists/Viaje")]:
+        assert request(server, method, path)[0].status == 403
+    assert library_calls(ipc) == []
