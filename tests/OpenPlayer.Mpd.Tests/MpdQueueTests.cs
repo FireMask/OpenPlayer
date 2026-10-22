@@ -79,6 +79,50 @@ public class MpdQueueTests
         Assert.Equal([["play 3"]], server.Connections);
     }
 
+    // Clave = comando MPD esperado.
+    private static readonly Dictionary<string, Func<MpdQueue, Task>> Edits = new()
+    {
+        ["deleteid 17"] = q => q.RemoveAsync(17),
+        ["moveid 17 2"] = q => q.MoveAsync(17, 2),
+        ["clear"] = q => q.ClearAsync(),
+    };
+
+    [Theory]
+    [InlineData("deleteid 17")]
+    [InlineData("moveid 17 2")]
+    [InlineData("clear")]
+    public async Task Edits_send_exact_command(string expected)
+    {
+        await using var server = new FakeMpdServer();
+
+        await Edits[expected](QueueFor(server));
+        await server.AllClosed();
+
+        Assert.Equal([[expected]], server.Connections);
+    }
+
+    [Fact]
+    public async Task Negative_edits_throw_without_connecting()
+    {
+        await using var server = new FakeMpdServer();
+        var queue = QueueFor(server);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => queue.RemoveAsync(-1));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => queue.MoveAsync(-1, 0));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => queue.MoveAsync(17, -1));
+        Assert.Empty(server.Connections);
+    }
+
+    [Fact]
+    public async Task Remove_unknown_id_throws_MpdException()
+    {
+        await using var server = new FakeMpdServer { Respond = _ => "ACK [50@0] {deleteid} No such song\n" };
+
+        var e = await Assert.ThrowsAsync<MpdException>(() => QueueFor(server).RemoveAsync(99));
+
+        Assert.Contains("No such song", e.Message);
+    }
+
     [Fact]
     public async Task Ack_throws_MpdException()
     {
