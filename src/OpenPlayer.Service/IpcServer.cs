@@ -26,8 +26,10 @@ public sealed class IpcServer(
     private Socket? _listener;
 
     // Etiqueta de origen por id de MPD (SPEC 14): MPD no guarda metadatos propios por canción de la cola.
-    // Solo en memoria, protegido por _commandLock; se llena en el paso 5.
+    // Solo en memoria, protegido por _commandLock; se pierde al reiniciar el Service.
     private readonly Dictionary<int, string> _sources = [];
+
+    private const string LibrarySource = "Biblioteca";
 
     // Bind en StartAsync, no en ExecuteAsync (que en .NET 10 corre en segundo plano):
     // un error de bind detiene el arranque del host, y al volver el socket ya escucha.
@@ -48,7 +50,8 @@ public sealed class IpcServer(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var clients = new List<Task>();
+        // En paralelo con el accept: con MPD caído no retrasa a los clientes; el próximo play activa consume igual.
+        var clients = new List<Task> { EnableConsumeAsync(stoppingToken) };
         using (_listener)
         {
             try
@@ -222,15 +225,27 @@ public sealed class IpcServer(
                 break;
             case QueueClearRequested:
                 await queue.ClearAsync(ct);
+                _sources.Clear();
                 break;
             case QueueAddRequested m:
+                var before = await TryIdsAsync(ct);
                 await queue.AddAsync(m.Uri, m.Next, ct);
+                var after = await TryIdsAsync(ct);
+                if (after is not null)
+                {
+                    foreach (var id in _sources.Keys.Except(after).ToList())
+                        _sources.Remove(id);  // consumidas o quitadas fuera de la web
+                    if (before is not null)
+                        foreach (var id in after.Except(before))
+                            _sources[id] = LibrarySource;
+                }
                 break;
             case QueueSaveRequested m:
                 await queue.SaveAsync(m.Name, ct);
                 break;
             case LibraryPlayRequested m:
                 await library.PlayTrackAsync(m.Uri, ct);
+                await LabelQueueAsync(LibrarySource, ct);
                 break;
             case PlaylistCreateRequested m:
                 await playlists.CreateAsync(m.Name, ct);
@@ -252,6 +267,7 @@ public sealed class IpcServer(
                 break;
             case PlaylistPlayRequested m:
                 await playlists.PlayAsync(m.Name, m.Position, ct);
+                await LabelQueueAsync(m.Name, ct);
                 break;
             default:
                 throw new InvalidOperationException($"No handler for {request}");
@@ -262,6 +278,44 @@ public sealed class IpcServer(
 
     private static Task WriteLineAsync(NetworkStream stream, string line, CancellationToken ct) =>
         stream.WriteAsync(Encoding.UTF8.GetBytes(line + "\n"), ct).AsTask();
+
+    // La cola se acaba de reemplazar: todas sus canciones vienen de source.
+    private async Task LabelQueueAsync(string source, CancellationToken ct)
+    {
+        _sources.Clear();
+        foreach (var id in await TryIdsAsync(ct) ?? [])
+            _sources[id] = source;
+    }
+
+    // La acción ya tuvo éxito: si leer los ids falla, la respuesta sigue siendo ok y las canciones quedan sin etiqueta.
+    private async Task<IReadOnlyList<int>?> TryIdsAsync(CancellationToken ct)
+    {
+        try
+        {
+            return await queue.IdsAsync(ct);
+        }
+        catch (Exception e) when (e is MpdException or MpdUnavailableException)
+        {
+            logger.LogWarning("queue ids failed: {Error}", e.Message);
+            return null;
+        }
+    }
+
+    private async Task EnableConsumeAsync(CancellationToken ct)
+    {
+        try
+        {
+            await LockedAsync(() => queue.EnableConsumeAsync(ct), ct);
+            logger.LogInformation("consume on");
+        }
+        catch (Exception e) when (e is MpdException or MpdUnavailableException)
+        {
+            logger.LogWarning("consume failed: {Error}", e.Message);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+    }
 
     private async Task LockedAsync(Func<Task> action, CancellationToken ct)
     {

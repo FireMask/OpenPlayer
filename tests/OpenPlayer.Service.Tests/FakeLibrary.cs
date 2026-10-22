@@ -55,7 +55,12 @@ internal sealed class FakeLibrary : ILibrary, IPlaylistStore, IQueue
 
     public Task ClearAsync(CancellationToken ct = default) => Record("QueueClear", 0);
 
-    public Task AddAsync(string uri, bool next, CancellationToken ct = default) => Record($"QueueAdd({uri},{next})", 0);
+    // Un agregado exitoso suma un id nuevo, para que el Service lo vea en IdsAsync.
+    public async Task AddAsync(string uri, bool next, CancellationToken ct = default)
+    {
+        await Record($"QueueAdd({uri},{next})", 0);
+        Ids.Add(Ids.Count == 0 ? 1 : Ids.Max() + 1);
+    }
 
     public Task SaveAsync(string name, CancellationToken ct = default) => Record($"QueueSave({name})", 0);
 
@@ -64,7 +69,14 @@ internal sealed class FakeLibrary : ILibrary, IPlaylistStore, IQueue
 
     public Exception? IdsError { get; set; }
 
-    public Task EnableConsumeAsync(CancellationToken ct = default) => Record("QueueConsume", 0);
+    /// <summary>Veces que se activó consume; fuera de <see cref="Calls"/> porque el Service lo llama al arrancar.</summary>
+    public int ConsumeCalls { get; private set; }
+
+    public Task EnableConsumeAsync(CancellationToken ct = default)
+    {
+        ConsumeCalls++;
+        return Error is { } e ? Task.FromException(e) : Task.CompletedTask;
+    }
 
     public Task<IReadOnlyList<int>> IdsAsync(CancellationToken ct = default) =>
         IdsError is { } e ? Task.FromException<IReadOnlyList<int>>(e) : Task.FromResult<IReadOnlyList<int>>([.. Ids]);

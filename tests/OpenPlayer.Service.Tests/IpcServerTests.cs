@@ -325,6 +325,129 @@ public sealed class IpcServerTests : IAsyncLifetime
         Assert.Contains("queue.get ok (offset 100)", _logger.Messages);
     }
 
+    // SPEC 14: etiqueta de origen por id de MPD, leída de queue.get.
+    private async Task<Dictionary<int, string?>> Sources(Client client)
+    {
+        await client.SendAsync("""{"type":"queue.get"}""" + "\n");
+        using var doc = System.Text.Json.JsonDocument.Parse((await client.ReadLineAsync())!);
+        return doc.RootElement.GetProperty("entries").EnumerateArray()
+            .ToDictionary(e => e.GetProperty("id").GetInt32(), e => e.GetProperty("source").GetString());
+    }
+
+    private static async Task SendOk(Client client, string line)
+    {
+        await client.SendAsync(line + "\n");
+        Assert.StartsWith("""{"type":"ok",""", await client.ReadLineAsync());
+    }
+
+    // La página de la fake devuelve estas entradas en queue.get.
+    private void QueueOf(params int[] ids)
+    {
+        _library.Ids = [.. ids];
+        _library.Page = new LibraryPage(0, ids.Length, [.. ids.Select(id => new LibraryEntry($"{id}.flac", null, id))]);
+    }
+
+    [Fact]
+    public async Task Sources_follow_play_add_and_clear()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        QueueOf(1, 2);
+        await SendOk(client, """{"type":"playlist.play","name":"Viaje"}""");
+        Assert.Equal(new Dictionary<int, string?> { [1] = "Viaje", [2] = "Viaje" }, await Sources(client));
+
+        await SendOk(client, """{"type":"queue.add","uri":"a.flac"}""");      // id 3
+        await SendOk(client, """{"type":"queue.add","uri":"b.flac","next":true}""");  // id 4
+        QueueOf([.. _library.Ids]);
+        Assert.Equal(new Dictionary<int, string?> { [1] = "Viaje", [2] = "Viaje", [3] = "Biblioteca", [4] = "Biblioteca" },
+            await Sources(client));
+
+        await SendOk(client, """{"type":"playlist.rename","name":"Viaje","newName":"Gym"}""");
+        await SendOk(client, """{"type":"queue.save","name":"Otra"}""");
+        await SendOk(client, """{"type":"playlist.delete","name":"Gym"}""");
+        Assert.Equal("Viaje", (await Sources(client))[1]);
+
+        await SendOk(client, """{"type":"queue.clear"}""");
+        Assert.All((await Sources(client)).Values, Assert.Null);
+
+        QueueOf(7);
+        await SendOk(client, """{"type":"library.play","uri":"Rock/a.mp3"}""");
+        Assert.Equal(new Dictionary<int, string?> { [7] = "Biblioteca" }, await Sources(client));
+    }
+
+    [Fact]
+    public async Task Add_drops_sources_of_songs_no_longer_in_queue()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        QueueOf(1, 2);
+        await SendOk(client, """{"type":"playlist.play","name":"Viaje"}""");
+        _library.Ids.Remove(1);  // consumida
+        await SendOk(client, """{"type":"queue.add","uri":"a.flac"}""");  // id 3
+        QueueOf(1, 2, 3);  // la página vieja incluye la 1 para ver que perdió la etiqueta
+
+        Assert.Equal(new Dictionary<int, string?> { [1] = null, [2] = "Viaje", [3] = "Biblioteca" }, await Sources(client));
+    }
+
+    [Fact]
+    public async Task Failed_add_keeps_sources()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        QueueOf(1);
+        await SendOk(client, """{"type":"playlist.play","name":"Viaje"}""");
+        _library.Error = new MpdException("add \"x\"", "No such directory");
+        await client.SendAsync("""{"type":"queue.add","uri":"x"}""" + "\n");
+        Assert.StartsWith("""{"type":"error","request":"queue.add",""", await client.ReadLineAsync());
+
+        _library.Error = null;
+        Assert.Equal(new Dictionary<int, string?> { [1] = "Viaje" }, await Sources(client));
+    }
+
+    [Fact]
+    public async Task Ids_failure_after_add_still_replies_ok_without_label()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        _library.IdsError = new MpdUnavailableException("MPD down", new IOException());
+        await SendOk(client, """{"type":"queue.add","uri":"a.flac"}""");
+        _library.IdsError = null;
+        QueueOf(1);
+
+        Assert.Equal(new Dictionary<int, string?> { [1] = null }, await Sources(client));
+        Assert.Contains(_logger.Messages, m => m.StartsWith("queue ids failed"));
+    }
+
+    [Fact]
+    public async Task Start_enables_consume()
+    {
+        await StartAsync();
+        // ExecuteAsync corre en segundo plano: esperar a que active consume.
+        for (var i = 0; i < 100 && !_logger.Messages.Contains("consume on"); i++)
+            await Task.Delay(10);
+
+        Assert.Equal(1, _library.ConsumeCalls);
+        Assert.Contains("consume on", _logger.Messages);
+    }
+
+    [Fact]
+    public async Task Start_with_mpd_down_logs_consume_warning_and_serves()
+    {
+        _library.Error = new MpdUnavailableException("MPD down", new IOException());
+        _player.SnapshotError = new MpdUnavailableException("MPD down", new IOException());
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync(GetSnapshot + "\n");
+
+        Assert.StartsWith("""{"type":"error","request":"player.get_snapshot",""", await client.ReadLineAsync());
+        Assert.Contains(_logger.Messages, m => m.StartsWith("consume failed"));
+    }
+
     [Theory]
     [InlineData("""{"type":"queue.get"}""", "queue.get")]
     [InlineData("""{"type":"queue.play","position":99}""", "queue.play")]
