@@ -159,7 +159,7 @@
   </div>
 
   <dialog id="picker">
-    <h2>Agregar a una lista</h2>
+    <h2 id="picker-title"></h2>
     <ul class="list" id="picker-list"></ul>
     <button class="small" id="picker-cancel">Cancelar</button>
   </dialog>
@@ -370,7 +370,7 @@
     const list = $("lib-list");
     if (!append) list.replaceChildren();
     for (const e of page.entries) {
-      const add = { text: "+", label: "Agregar a una lista", onClick: () => pickPlaylist(e.uri) };
+      const add = { text: "+", label: "Opciones", onClick: () => openMenu(e) };
       list.append(e.directory
         ? row("📁 " + baseName(e.uri), "", () => openFolder(e.uri), [add])
         : row(e.title || baseName(e.uri), trackMeta(e), () => playTrack(e), [add]));
@@ -398,12 +398,34 @@
     loadLibrary();
   });
 
-  // Selector de lista para "+": pista o carpeta (MPD expande la carpeta).
-  async function pickPlaylist(uri) {
+  // Menú "+" (SPEC 13): pista o carpeta (MPD expande la carpeta). "Agregar a una lista ›" cambia el contenido
+  // del mismo diálogo por las listas; no hay submenú flotante porque en el móvil no entra.
+  let menuEntry = null;  // { uri, label } mientras el menú está abierto
+
+  function openMenu(e) {
+    menuEntry = { uri: e.uri, label: e.directory ? baseName(e.uri) : e.title || baseName(e.uri) };
+    showMenuActions();
+    $("picker").showModal();
+  }
+
+  function showMenuActions() {
+    $("picker-title").textContent = menuEntry.label;
+    $("picker-list").replaceChildren(
+      row("Reproducir siguiente", "", () => addToQueue(true)),
+      row("Agregar a la cola", "", () => addToQueue(false)),
+      row("Agregar a una lista ›", "", showMenuLists));
+  }
+
+  async function showMenuLists() {
     let data;
-    try { data = await api("GET", "/api/playlists"); } catch (e) { return setMsg("lib-msg", e.message, true); }
+    try { data = await api("GET", "/api/playlists"); } catch (e) {
+      $("picker").close();
+      return setMsg("lib-msg", e.message, true);
+    }
+    const { uri } = menuEntry;
+    $("picker-title").textContent = "Agregar a una lista";
     const list = $("picker-list");
-    list.replaceChildren();
+    list.replaceChildren(row("‹ Atrás", "", showMenuActions));
     for (const name of data.playlists) {
       list.append(row(name, "", async () => {
         $("picker").close();
@@ -415,7 +437,14 @@
     }
     if (!data.playlists.length)
       list.append(el("li", { className: "empty", textContent: "No hay listas. Crea una en la pestaña Listas." }));
-    $("picker").showModal();
+  }
+
+  async function addToQueue(next) {
+    const { uri, label } = menuEntry;
+    $("picker").close();
+    try { await api("POST", "/api/queue/tracks", { uri, next }); } catch (e) { return setMsg("lib-msg", e.message, true); }
+    setMsg("lib-msg", (next ? "Sonará a continuación: " : "Agregado a la cola: ") + label);
+    refresh();  // la cola se recarga sola al cambiar queueVersion
   }
 
   $("picker-cancel").addEventListener("click", () => $("picker").close());
