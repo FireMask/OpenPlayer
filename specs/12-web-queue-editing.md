@@ -188,7 +188,7 @@ Cada paso deja `dotnet test` y `pytest` en verde.
 
 | Riesgo | Mitigación |
 |---|---|
-| Panel angosto (900–1000 px o móvil) con ↑ / ↓ / ✕ además de número, ícono y duración | Mismos botones compactos de Listas; el título se corta con elipsis. Verificado en el criterio de la Pi en PC y móvil. |
+| Panel angosto (900–1000 px o móvil) con ↑ / ↓ / ✕ además de número, ícono y duración | Mismos botones compactos de Listas; el título pasa a varias líneas, como en Listas. Verificado en el criterio de la Pi en PC y móvil. |
 | Tocar ↑/↓ varias veces rápido usa la posición de antes de recargar | `moveid` lleva el id correcto; el destino puede quedar corrido una posición hasta la recarga. Aceptado. |
 | Quitar la última pista mientras suena detiene la reproducción | Comportamiento de MPD; la página muestra el nuevo estado en el siguiente sondeo. |
 | Recargar tras editar descarta las páginas cargadas con "Más" | Se vuelven a cargar desde 0 hasta la actual (SPEC 11); editar lejos de la actual requiere "Más" otra vez. Aceptado. |
