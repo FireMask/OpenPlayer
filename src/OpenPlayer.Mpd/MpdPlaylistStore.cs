@@ -45,7 +45,7 @@ public sealed class MpdPlaylistStore(MpdClient client) : IPlaylistStore
         Send($"playlistmove {Name(name)} {Number(from)} {Number(to)}", ct);
 
     public Task PlayAsync(string name, int position, CancellationToken ct = default) =>
-        client.ExecuteAsync(["clear", $"load {Name(name)}", $"play {Number(position)}"], ct);
+        client.ExecuteAsync(["clear", "consume 1", $"load {Name(name)}", $"play {Number(position)}"], ct);  // consume: SPEC 14
 
     private Task Send(string command, CancellationToken ct) => client.ExecuteAsync([command], ct);
 

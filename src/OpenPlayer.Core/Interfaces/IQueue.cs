@@ -25,4 +25,10 @@ public interface IQueue
 
     /// <summary>Guarda la cola como lista; si el nombre ya existe, MPD responde error y nada cambia.</summary>
     Task SaveAsync(string name, CancellationToken ct = default);
+
+    /// <summary>Activa el modo consume de MPD: cada canción terminada o saltada sale de la cola (SPEC 14).</summary>
+    Task EnableConsumeAsync(CancellationToken ct = default);
+
+    /// <summary>Ids de MPD de toda la cola, en orden.</summary>
+    Task<IReadOnlyList<int>> IdsAsync(CancellationToken ct = default);
 }

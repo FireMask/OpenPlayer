@@ -17,7 +17,7 @@ public class MpdPlaylistStoreTests
         ["playlistadd \"Viaje\" \"Rock/AC DC\""] = s => s.AddAsync("Viaje", "Rock/AC DC"),
         ["playlistdelete \"Viaje\" 3"] = s => s.RemoveAsync("Viaje", 3),
         ["playlistmove \"Viaje\" 3 2"] = s => s.MoveAsync("Viaje", 3, 2),
-        ["clear|load \"Viaje\"|play 4"] = s => s.PlayAsync("Viaje", 4),
+        ["clear|consume 1|load \"Viaje\"|play 4"] = s => s.PlayAsync("Viaje", 4),
     };
 
     [Theory]
@@ -26,7 +26,7 @@ public class MpdPlaylistStoreTests
     [InlineData("playlistadd \"Viaje\" \"Rock/AC DC\"")]
     [InlineData("playlistdelete \"Viaje\" 3")]
     [InlineData("playlistmove \"Viaje\" 3 2")]
-    [InlineData("clear|load \"Viaje\"|play 4")]
+    [InlineData("clear|consume 1|load \"Viaje\"|play 4")]
     public async Task Sends_exact_commands(string expected)
     {
         await using var server = new FakeMpdServer();

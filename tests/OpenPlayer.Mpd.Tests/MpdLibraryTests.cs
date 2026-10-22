@@ -85,7 +85,7 @@ public class MpdLibraryTests
         await LibraryFor(server).PlayTrackAsync("Rock/AC DC/01.flac");
         await server.AllClosed();
 
-        Assert.Equal([["clear", "add \"Rock/AC DC/01.flac\"", "play 0"]], server.Connections);
+        Assert.Equal([["clear", "consume 1", "add \"Rock/AC DC/01.flac\"", "play 0"]], server.Connections);
     }
 
     [Fact]

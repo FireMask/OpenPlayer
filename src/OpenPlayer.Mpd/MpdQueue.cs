@@ -16,7 +16,7 @@ public sealed class MpdQueue(MpdClient client) : IQueue
     public Task PlayAsync(int position, CancellationToken ct = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(position);
-        return client.ExecuteAsync([$"play {position.ToString(CultureInfo.InvariantCulture)}"], ct);
+        return client.ExecuteAsync(["consume 1", $"play {position.ToString(CultureInfo.InvariantCulture)}"], ct);
     }
 
     public Task RemoveAsync(int id, CancellationToken ct = default)
@@ -51,4 +51,15 @@ public sealed class MpdQueue(MpdClient client) : IQueue
 
     public Task SaveAsync(string name, CancellationToken ct = default) =>
         client.ExecuteAsync([$"save {MpdClient.Quote(name)}"], ct);
+
+    // SPEC 14: cada canción terminada o saltada sale de la cola.
+    public Task EnableConsumeAsync(CancellationToken ct = default) => client.ExecuteAsync(["consume 1"], ct);
+
+    // plchangesposid 0: pares cpos/Id de toda la cola, más livianos que playlistinfo.
+    public async Task<IReadOnlyList<int>> IdsAsync(CancellationToken ct = default)
+    {
+        var response = (await client.ExecuteAsync(["plchangesposid 0"], ct))[0];
+        return [.. response.Pairs.Where(p => p.Key == "Id")
+            .Select(p => int.Parse(p.Value, NumberStyles.None, CultureInfo.InvariantCulture))];
+    }
 }

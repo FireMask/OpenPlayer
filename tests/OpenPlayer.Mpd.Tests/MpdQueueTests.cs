@@ -76,7 +76,7 @@ public class MpdQueueTests
         await QueueFor(server).PlayAsync(3);
         await server.AllClosed();
 
-        Assert.Equal([["play 3"]], server.Connections);
+        Assert.Equal([["consume 1", "play 3"]], server.Connections);
     }
 
     // Clave = comando MPD esperado.
@@ -99,6 +99,37 @@ public class MpdQueueTests
         await server.AllClosed();
 
         Assert.Equal([[expected]], server.Connections);
+    }
+
+    [Fact]
+    public async Task Enable_consume_sends_consume_1()
+    {
+        await using var server = new FakeMpdServer();
+
+        await QueueFor(server).EnableConsumeAsync();
+        await server.AllClosed();
+
+        Assert.Equal([["consume 1"]], server.Connections);
+    }
+
+    [Fact]
+    public async Task Ids_returns_queue_ids_in_order()
+    {
+        await using var server = new FakeMpdServer { Respond = _ => "cpos: 0\nId: 17\ncpos: 1\nId: 5\ncpos: 2\nId: 23\nOK\n" };
+
+        var ids = await QueueFor(server).IdsAsync();
+        await server.AllClosed();
+
+        Assert.Equal([["plchangesposid 0"]], server.Connections);
+        Assert.Equal([17, 5, 23], ids);
+    }
+
+    [Fact]
+    public async Task Ids_of_empty_queue_is_empty()
+    {
+        await using var server = new FakeMpdServer();
+
+        Assert.Empty(await QueueFor(server).IdsAsync());
     }
 
     [Fact]

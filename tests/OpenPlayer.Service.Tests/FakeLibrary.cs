@@ -59,6 +59,16 @@ internal sealed class FakeLibrary : ILibrary, IPlaylistStore, IQueue
 
     public Task SaveAsync(string name, CancellationToken ct = default) => Record($"QueueSave({name})", 0);
 
+    /// <summary>Ids que devuelve <see cref="IdsAsync"/>; las pruebas los cambian para simular agregados.</summary>
+    public List<int> Ids { get; set; } = [];
+
+    public Exception? IdsError { get; set; }
+
+    public Task EnableConsumeAsync(CancellationToken ct = default) => Record("QueueConsume", 0);
+
+    public Task<IReadOnlyList<int>> IdsAsync(CancellationToken ct = default) =>
+        IdsError is { } e ? Task.FromException<IReadOnlyList<int>>(e) : Task.FromResult<IReadOnlyList<int>>([.. Ids]);
+
     private Task<T> Record<T>(string call, T result)
     {
         Calls.Add(call);
