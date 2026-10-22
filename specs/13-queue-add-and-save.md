@@ -1,6 +1,6 @@
 # SPEC 13 — Agregar a la cola y guardar la cola como lista
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 10, SPEC 11, SPEC 12
 > **Date:** 2026-10-22
 > **Objective:** Cambiar el "+" de cada pista o carpeta de la Biblioteca por un menú (Reproducir siguiente, Agregar a la cola, Agregar a una lista ›) que agrega a la cola sin reemplazarla, y permitir guardar la cola actual como una lista de MPD desde el panel "Cola".
@@ -140,33 +140,33 @@ Cada paso deja `dotnet test` y `pytest` en verde.
 
 **Windows (automatizable):**
 
-- [ ] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
-- [ ] `IpcMessageParser` devuelve `QueueAddRequested("a.flac", true)`, `QueueAddRequested("a.flac", false)` sin `next` y `QueueSaveRequested("Viaje")`; `uri` vacía, `next` `"true"`/`1`/`null` y `name` inválido son inválidos con su `request`.
-- [ ] `MpdQueue` envía exactamente `add "a.flac"` (al final), `status` + `add "a.flac" 3` con `song: 2`, `status` + `add "a.flac"` sin `song`, y `save "Viaje"`; un `ACK` llega como `error` y la conexión sigue.
-- [ ] Tras `playlist.play` de "Viaje", `queue.add` deja `"playlist":"Viaje"`; `queue.save` de "Gym" lo deja en "Gym"; un `queue.save` que falla no lo cambia.
-- [ ] `POST /api/queue/tracks` con `{"uri":"a.flac","next":true}` → `204` y llega `add_to_queue("a.flac", True)`; sin `next` llega `False`; `POST /api/queue/save` con `{"name":"Viaje"}` → `204`; `uri`, `next` o `name` inválidos → `400`; Service `error` → `502`; Service caído → `503`; método incorrecto → `405`.
-- [ ] El web agent sigue usando solo stdlib.
+- [x] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
+- [x] `IpcMessageParser` devuelve `QueueAddRequested("a.flac", true)`, `QueueAddRequested("a.flac", false)` sin `next` y `QueueSaveRequested("Viaje")`; `uri` vacía, `next` `"true"`/`1`/`null` y `name` inválido son inválidos con su `request`.
+- [x] `MpdQueue` envía exactamente `add "a.flac"` (al final), `status` + `add "a.flac" 3` con `song: 2`, `status` + `add "a.flac"` sin `song`, y `save "Viaje"`; un `ACK` llega como `error` y la conexión sigue.
+- [x] Tras `playlist.play` de "Viaje", `queue.add` deja `"playlist":"Viaje"`; `queue.save` de "Gym" lo deja en "Gym"; un `queue.save` que falla no lo cambia.
+- [x] `POST /api/queue/tracks` con `{"uri":"a.flac","next":true}` → `204` y llega `add_to_queue("a.flac", True)`; sin `next` llega `False`; `POST /api/queue/save` con `{"name":"Viaje"}` → `204`; `uri`, `next` o `name` inválidos → `400`; Service `error` → `502`; Service caído → `503`; método incorrecto → `405`.
+- [x] El web agent sigue usando solo stdlib.
 
 **Raspberry Pi (`deploy.ps1` y navegador en PC y móvil):**
 
-- [ ] `mpd --version` en la Pi es ≥ 0.23.3.
-- [ ] Tocar una pista de la Biblioteca sigue reemplazando la cola y reproduciéndola; tocar una carpeta sigue abriéndola.
-- [ ] "+" en una pista, una carpeta y un resultado de búsqueda abre el menú con su nombre y las tres acciones; "Cancelar" lo cierra sin cambios.
-- [ ] Con la pista 3 de 10 sonando, "Reproducir siguiente" deja esa pista en la posición 4 del panel y suena al terminar la actual.
-- [ ] "Agregar a la cola" deja la pista al final del panel; con una carpeta, todas sus pistas al final, en orden.
-- [ ] "Reproducir siguiente" con una carpeta inserta todas sus pistas, en orden, después de la actual.
-- [ ] Con la cola vacía, "Reproducir siguiente" deja la pista como única de la cola, sin empezar a sonar.
-- [ ] "Agregar a una lista ›" muestra las listas y "‹ Atrás"; elegir una agrega la pista o carpeta y muestra "Agregado a “<lista>”"; "‹ Atrás" vuelve a las tres acciones.
-- [ ] Cada acción muestra su mensaje en la Biblioteca y el panel "Cola" refleja el cambio en 2 s o menos.
-- [ ] Tras agregar a la cola en una lista reproducida, el encabezado sigue diciendo "Lista: <nombre>".
-- [ ] "Guardar como lista" con un nombre nuevo muestra "Cola guardada como “<nombre>”", el encabezado pasa a "Lista: <nombre>" y la lista aparece en Listas con las mismas pistas y en el mismo orden que el panel.
-- [ ] "Guardar como lista" con un nombre que ya existe muestra el error y la lista existente no cambia; cancelar el `prompt` no hace nada.
-- [ ] "Guardar como lista" está oculto con la cola vacía.
+- [x] `mpd --version` en la Pi es ≥ 0.23.3.
+- [x] Tocar una pista de la Biblioteca sigue reemplazando la cola y reproduciéndola; tocar una carpeta sigue abriéndola.
+- [x] "+" en una pista, una carpeta y un resultado de búsqueda abre el menú con su nombre y las tres acciones; "Cancelar" lo cierra sin cambios.
+- [x] Con la pista 3 de 10 sonando, "Reproducir siguiente" deja esa pista en la posición 4 del panel y suena al terminar la actual.
+- [x] "Agregar a la cola" deja la pista al final del panel; con una carpeta, todas sus pistas al final, en orden.
+- [x] "Reproducir siguiente" con una carpeta inserta todas sus pistas, en orden, después de la actual.
+- [x] Con la cola vacía, "Reproducir siguiente" deja la pista como única de la cola, sin empezar a sonar.
+- [x] "Agregar a una lista ›" muestra las listas y "‹ Atrás"; elegir una agrega la pista o carpeta y muestra "Agregado a “<lista>”"; "‹ Atrás" vuelve a las tres acciones.
+- [x] Cada acción muestra su mensaje en la Biblioteca y el panel "Cola" refleja el cambio en 2 s o menos.
+- [x] Tras agregar a la cola en una lista reproducida, el encabezado sigue diciendo "Lista: <nombre>".
+- [x] "Guardar como lista" con un nombre nuevo muestra "Cola guardada como “<nombre>”", el encabezado pasa a "Lista: <nombre>" y la lista aparece en Listas con las mismas pistas y en el mismo orden que el panel.
+- [x] "Guardar como lista" con un nombre que ya existe muestra el error y la lista existente no cambia; cancelar el `prompt` no hace nada.
+- [x] "Guardar como lista" está oculto con la cola vacía.
 
 **Documentación:**
 
-- [ ] `architecture.md` §5, §6, §7 y §9 describen el menú, "Guardar como lista", las rutas, `IQueue`, los mensajes, el requisito de MPD ≥ 0.23.3 y el nombre tras `save`.
-- [ ] README menciona el menú "+" y guardar la cola como lista.
+- [x] `architecture.md` §5, §6, §7 y §9 describen el menú, "Guardar como lista", las rutas, `IQueue`, los mensajes, el requisito de MPD ≥ 0.23.3 y el nombre tras `save`.
+- [x] README menciona el menú "+" y guardar la cola como lista.
 
 ## Decisions
 
