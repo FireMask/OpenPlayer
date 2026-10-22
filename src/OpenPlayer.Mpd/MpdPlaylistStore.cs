@@ -44,8 +44,12 @@ public sealed class MpdPlaylistStore(MpdClient client) : IPlaylistStore
     public Task MoveAsync(string name, int from, int to, CancellationToken ct = default) =>
         Send($"playlistmove {Name(name)} {Number(from)} {Number(to)}", ct);
 
-    public Task PlayAsync(string name, int position, CancellationToken ct = default) =>
-        client.ExecuteAsync(["clear", $"load {Name(name)}", $"play {Number(position)}"], ct);
+    // consume (SPEC 14): las pistas anteriores a position se borran y la elegida queda primera.
+    public Task PlayAsync(string name, int position, CancellationToken ct = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(position);
+        return client.ExecuteAsync(MpdQueue.PlayFirst(["clear", "consume 1", $"load {Name(name)}"], position), ct);
+    }
 
     private Task Send(string command, CancellationToken ct) => client.ExecuteAsync([command], ct);
 

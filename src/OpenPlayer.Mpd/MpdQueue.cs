@@ -13,10 +13,20 @@ public sealed class MpdQueue(MpdClient client) : IQueue
         return MpdEntryParser.Page(MpdEntryParser.Parse(response), offset);
     }
 
+    // consume solo quita la canción que sonaba: las saltadas se borran antes (SPEC 14) y la elegida queda primera.
     public Task PlayAsync(int position, CancellationToken ct = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(position);
-        return client.ExecuteAsync([$"play {position.ToString(CultureInfo.InvariantCulture)}"], ct);
+        return client.ExecuteAsync(PlayFirst(["consume 1"], position), ct);
+    }
+
+    /// <summary><paramref name="before"/> + <c>delete 0:N</c> (si N &gt; 0) + <c>play 0</c>.</summary>
+    internal static List<string> PlayFirst(List<string> before, int position)
+    {
+        if (position > 0)
+            before.Add($"delete 0:{position.ToString(CultureInfo.InvariantCulture)}");
+        before.Add("play 0");
+        return before;
     }
 
     public Task RemoveAsync(int id, CancellationToken ct = default)
@@ -51,4 +61,15 @@ public sealed class MpdQueue(MpdClient client) : IQueue
 
     public Task SaveAsync(string name, CancellationToken ct = default) =>
         client.ExecuteAsync([$"save {MpdClient.Quote(name)}"], ct);
+
+    // SPEC 14: cada canción terminada o saltada sale de la cola.
+    public Task EnableConsumeAsync(CancellationToken ct = default) => client.ExecuteAsync(["consume 1"], ct);
+
+    // plchangesposid 0: pares cpos/Id de toda la cola, más livianos que playlistinfo.
+    public async Task<IReadOnlyList<int>> IdsAsync(CancellationToken ct = default)
+    {
+        var response = (await client.ExecuteAsync(["plchangesposid 0"], ct))[0];
+        return [.. response.Pairs.Where(p => p.Key == "Id")
+            .Select(p => int.Parse(p.Value, NumberStyles.None, CultureInfo.InvariantCulture))];
+    }
 }

@@ -313,121 +313,139 @@ public sealed class IpcServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Queue_get_replies_queue_page_without_playlist_at_start()
+    public async Task Queue_get_replies_queue_page_without_sources_at_start()
     {
         await StartAsync();
         await using var client = await Client.ConnectAsync(SocketPath);
 
         await client.SendAsync("""{"type":"queue.get","offset":100}""" + "\n");
 
-        Assert.Equal(QueuePageMessage.Serialize(_library.Page, null), await client.ReadLineAsync());
+        Assert.Equal(QueuePageMessage.Serialize(_library.Page, new Dictionary<int, string>()), await client.ReadLineAsync());
         Assert.Equal(["QueueGet(100)"], _library.Calls);
         Assert.Contains("queue.get ok (offset 100)", _logger.Messages);
     }
 
-    [Fact]
-    public async Task Loaded_playlist_follows_play_rename_and_delete()
+    // SPEC 14: etiqueta de origen por id de MPD, leída de queue.get.
+    private async Task<Dictionary<int, string?>> Sources(Client client)
     {
-        await StartAsync();
-        await using var client = await Client.ConnectAsync(SocketPath);
+        await client.SendAsync("""{"type":"queue.get"}""" + "\n");
+        using var doc = System.Text.Json.JsonDocument.Parse((await client.ReadLineAsync())!);
+        return doc.RootElement.GetProperty("entries").EnumerateArray()
+            .ToDictionary(e => e.GetProperty("id").GetInt32(), e => e.GetProperty("source").GetString());
+    }
 
-        async Task Send(string line)
-        {
-            await client.SendAsync(line + "\n");
-            Assert.StartsWith("""{"type":"ok",""", await client.ReadLineAsync());
-        }
-        async Task<string?> LoadedPlaylist()
-        {
-            await client.SendAsync("""{"type":"queue.get"}""" + "\n");
-            using var doc = System.Text.Json.JsonDocument.Parse((await client.ReadLineAsync())!);
-            return doc.RootElement.GetProperty("playlist").GetString();
-        }
+    private static async Task SendOk(Client client, string line)
+    {
+        await client.SendAsync(line + "\n");
+        Assert.StartsWith("""{"type":"ok",""", await client.ReadLineAsync());
+    }
 
-        await Send("""{"type":"playlist.play","name":"Viaje"}""");
-        Assert.Equal("Viaje", await LoadedPlaylist());
-
-        await Send("""{"type":"playlist.rename","name":"Otra","newName":"Otra 2"}""");
-        Assert.Equal("Viaje", await LoadedPlaylist());
-
-        await Send("""{"type":"playlist.rename","name":"Viaje","newName":"Gym"}""");
-        Assert.Equal("Gym", await LoadedPlaylist());
-
-        await Send("""{"type":"playlist.delete","name":"Otra 2"}""");
-        Assert.Equal("Gym", await LoadedPlaylist());
-
-        await Send("""{"type":"playlist.delete","name":"Gym"}""");
-        Assert.Null(await LoadedPlaylist());
-
-        await Send("""{"type":"playlist.play","name":"Viaje"}""");
-        await Send("""{"type":"library.play","uri":"Rock/a.mp3"}""");
-        Assert.Null(await LoadedPlaylist());
-
-        // SPEC 12: quitar y mover no cambian el nombre; limpiar lo borra.
-        await Send("""{"type":"playlist.play","name":"Viaje"}""");
-        await Send("""{"type":"queue.remove","id":17}""");
-        await Send("""{"type":"queue.move","id":18,"to":0}""");
-        Assert.Equal("Viaje", await LoadedPlaylist());
-        await Send("""{"type":"queue.clear"}""");
-        Assert.Null(await LoadedPlaylist());
-
-        // SPEC 13: agregar no cambia el nombre; guardar lo fija.
-        await Send("""{"type":"playlist.play","name":"Viaje"}""");
-        await Send("""{"type":"queue.add","uri":"a.flac","next":true}""");
-        await Send("""{"type":"queue.add","uri":"Rock"}""");
-        Assert.Equal("Viaje", await LoadedPlaylist());
-        await Send("""{"type":"queue.save","name":"Gym"}""");
-        Assert.Equal("Gym", await LoadedPlaylist());
+    // La página de la fake devuelve estas entradas en queue.get.
+    private void QueueOf(params int[] ids)
+    {
+        _library.Ids = [.. ids];
+        _library.Page = new LibraryPage(0, ids.Length, [.. ids.Select(id => new LibraryEntry($"{id}.flac", null, id))]);
     }
 
     [Fact]
-    public async Task Failed_queue_save_keeps_loaded_playlist()
+    public async Task Sources_follow_play_add_and_clear()
     {
         await StartAsync();
         await using var client = await Client.ConnectAsync(SocketPath);
 
-        await client.SendAsync("""{"type":"playlist.play","name":"Viaje"}""" + "\n");
-        await client.ReadLineAsync();
-        _library.Error = new MpdException("save \"Gym\"", "Playlist already exists");
-        await client.SendAsync("""{"type":"queue.save","name":"Gym"}""" + "\n");
-        Assert.Equal("""{"type":"error","request":"queue.save","message":"Playlist already exists"}""", await client.ReadLineAsync());
+        QueueOf(1, 2);
+        await SendOk(client, """{"type":"playlist.play","name":"Viaje"}""");
+        Assert.Equal(new Dictionary<int, string?> { [1] = "Viaje", [2] = "Viaje" }, await Sources(client));
+
+        await SendOk(client, """{"type":"queue.add","uri":"a.flac"}""");      // id 3
+        await SendOk(client, """{"type":"queue.add","uri":"b.flac","next":true}""");  // id 4
+        QueueOf([.. _library.Ids]);
+        Assert.Equal(new Dictionary<int, string?> { [1] = "Viaje", [2] = "Viaje", [3] = "Biblioteca", [4] = "Biblioteca" },
+            await Sources(client));
+
+        await SendOk(client, """{"type":"playlist.rename","name":"Viaje","newName":"Gym"}""");
+        await SendOk(client, """{"type":"queue.save","name":"Otra"}""");
+        await SendOk(client, """{"type":"playlist.delete","name":"Gym"}""");
+        Assert.Equal("Viaje", (await Sources(client))[1]);
+
+        await SendOk(client, """{"type":"queue.clear"}""");
+        Assert.All((await Sources(client)).Values, Assert.Null);
+
+        QueueOf(7);
+        await SendOk(client, """{"type":"library.play","uri":"Rock/a.mp3"}""");
+        Assert.Equal(new Dictionary<int, string?> { [7] = "Biblioteca" }, await Sources(client));
+    }
+
+    [Fact]
+    public async Task Add_drops_sources_of_songs_no_longer_in_queue()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        QueueOf(1, 2);
+        await SendOk(client, """{"type":"playlist.play","name":"Viaje"}""");
+        _library.Ids.Remove(1);  // consumida
+        await SendOk(client, """{"type":"queue.add","uri":"a.flac"}""");  // id 3
+        QueueOf(1, 2, 3);  // la página vieja incluye la 1 para ver que perdió la etiqueta
+
+        Assert.Equal(new Dictionary<int, string?> { [1] = null, [2] = "Viaje", [3] = "Biblioteca" }, await Sources(client));
+    }
+
+    [Fact]
+    public async Task Failed_add_keeps_sources()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        QueueOf(1);
+        await SendOk(client, """{"type":"playlist.play","name":"Viaje"}""");
+        _library.Error = new MpdException("add \"x\"", "No such directory");
+        await client.SendAsync("""{"type":"queue.add","uri":"x"}""" + "\n");
+        Assert.StartsWith("""{"type":"error","request":"queue.add",""", await client.ReadLineAsync());
 
         _library.Error = null;
-        await client.SendAsync("""{"type":"queue.get"}""" + "\n");
-        Assert.StartsWith("""{"type":"queue.page","playlist":"Viaje",""", await client.ReadLineAsync());
+        Assert.Equal(new Dictionary<int, string?> { [1] = "Viaje" }, await Sources(client));
     }
 
     [Fact]
-    public async Task Failed_queue_clear_keeps_loaded_playlist()
+    public async Task Ids_failure_after_add_still_replies_ok_without_label()
     {
         await StartAsync();
         await using var client = await Client.ConnectAsync(SocketPath);
 
-        await client.SendAsync("""{"type":"playlist.play","name":"Viaje"}""" + "\n");
-        await client.ReadLineAsync();
+        _library.IdsError = new MpdUnavailableException("MPD down", new IOException());
+        await SendOk(client, """{"type":"queue.add","uri":"a.flac"}""");
+        _library.IdsError = null;
+        QueueOf(1);
+
+        Assert.Equal(new Dictionary<int, string?> { [1] = null }, await Sources(client));
+        Assert.Contains(_logger.Messages, m => m.StartsWith("queue ids failed"));
+    }
+
+    [Fact]
+    public async Task Start_enables_consume()
+    {
+        await StartAsync();
+        // ExecuteAsync corre en segundo plano: esperar a que active consume.
+        for (var i = 0; i < 100 && !_logger.Messages.Contains("consume on"); i++)
+            await Task.Delay(10);
+
+        Assert.Equal(1, _library.ConsumeCalls);
+        Assert.Contains("consume on", _logger.Messages);
+    }
+
+    [Fact]
+    public async Task Start_with_mpd_down_logs_consume_warning_and_serves()
+    {
         _library.Error = new MpdUnavailableException("MPD down", new IOException());
-        await client.SendAsync("""{"type":"queue.clear"}""" + "\n");
-        Assert.StartsWith("""{"type":"error","request":"queue.clear",""", await client.ReadLineAsync());
-
-        _library.Error = null;
-        await client.SendAsync("""{"type":"queue.get"}""" + "\n");
-        Assert.StartsWith("""{"type":"queue.page","playlist":"Viaje",""", await client.ReadLineAsync());
-    }
-
-    [Fact]
-    public async Task Failed_playlist_play_keeps_loaded_playlist()
-    {
+        _player.SnapshotError = new MpdUnavailableException("MPD down", new IOException());
         await StartAsync();
         await using var client = await Client.ConnectAsync(SocketPath);
 
-        await client.SendAsync("""{"type":"playlist.play","name":"Viaje"}""" + "\n");
-        await client.ReadLineAsync();
-        _library.Error = new MpdException("load \"Nope\"", "No such playlist");
-        await client.SendAsync("""{"type":"playlist.play","name":"Nope"}""" + "\n");
-        Assert.StartsWith("""{"type":"error","request":"playlist.play",""", await client.ReadLineAsync());
+        await client.SendAsync(GetSnapshot + "\n");
 
-        _library.Error = null;
-        await client.SendAsync("""{"type":"queue.get"}""" + "\n");
-        Assert.StartsWith("""{"type":"queue.page","playlist":"Viaje",""", await client.ReadLineAsync());
+        Assert.StartsWith("""{"type":"error","request":"player.get_snapshot",""", await client.ReadLineAsync());
+        Assert.Contains(_logger.Messages, m => m.StartsWith("consume failed"));
     }
 
     [Theory]

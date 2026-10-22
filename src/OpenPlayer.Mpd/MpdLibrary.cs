@@ -21,5 +21,5 @@ public sealed class MpdLibrary(MpdClient client) : ILibrary
     }
 
     public Task PlayTrackAsync(string uri, CancellationToken ct = default) =>
-        client.ExecuteAsync(["clear", $"add {MpdClient.Quote(uri)}", "play 0"], ct);
+        client.ExecuteAsync(["clear", "consume 1", $"add {MpdClient.Quote(uri)}", "play 0"], ct);  // consume: SPEC 14
 }
