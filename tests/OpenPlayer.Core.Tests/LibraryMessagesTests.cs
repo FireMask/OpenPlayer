@@ -36,19 +36,21 @@ public class LibraryMessagesTests
     [Fact]
     public void Queue_page_serializes_exactly()
     {
-        var page = new LibraryPage(0, 2,
+        var page = new LibraryPage(0, 3,
         [
             new LibraryEntry("A1.flac", new Track("A1.flac", "Rolling In The Deep", "Adele", "21", TimeSpan.FromSeconds(225.4)), 17),
-            new LibraryEntry("x.mp3", new Track("x.mp3", null, null, null, null)),
+            new LibraryEntry("x.mp3", new Track("x.mp3", null, null, null, null), 18),
+            new LibraryEntry("y.mp3", new Track("y.mp3", null, null, null, null)),
         ]);
+        var sources = new Dictionary<int, string> { [17] = "Favoritas", [99] = "Biblioteca" };
 
         Assert.Equal(
-            """{"type":"queue.page","playlist":"Favoritas","offset":0,"total":2,"entries":[{"uri":"A1.flac","id":17,"title":"Rolling In The Deep","artist":"Adele","album":"21","durationSeconds":225},{"uri":"x.mp3","id":null,"title":null,"artist":null,"album":null,"durationSeconds":null}]}""",
-            QueuePageMessage.Serialize(page, "Favoritas"));
+            """{"type":"queue.page","offset":0,"total":3,"entries":[{"uri":"A1.flac","id":17,"source":"Favoritas","title":"Rolling In The Deep","artist":"Adele","album":"21","durationSeconds":225},{"uri":"x.mp3","id":18,"source":null,"title":null,"artist":null,"album":null,"durationSeconds":null},{"uri":"y.mp3","id":null,"source":null,"title":null,"artist":null,"album":null,"durationSeconds":null}]}""",
+            QueuePageMessage.Serialize(page, sources));
     }
 
     [Fact]
-    public void Queue_page_serializes_null_playlist() =>
-        Assert.Equal("""{"type":"queue.page","playlist":null,"offset":0,"total":0,"entries":[]}""",
-            QueuePageMessage.Serialize(new LibraryPage(0, 0, []), null));
+    public void Queue_page_serializes_empty() =>
+        Assert.Equal("""{"type":"queue.page","offset":0,"total":0,"entries":[]}""",
+            QueuePageMessage.Serialize(new LibraryPage(0, 0, []), new Dictionary<int, string>()));
 }

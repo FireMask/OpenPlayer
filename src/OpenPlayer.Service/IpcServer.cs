@@ -25,8 +25,9 @@ public sealed class IpcServer(
 
     private Socket? _listener;
 
-    // Nombre de la lista cargada en la cola (SPEC 11): MPD no lo guarda. Solo en memoria, protegido por _commandLock.
-    private string? _loadedPlaylist;
+    // Etiqueta de origen por id de MPD (SPEC 14): MPD no guarda metadatos propios por canción de la cola.
+    // Solo en memoria, protegido por _commandLock; se llena en el paso 5.
+    private readonly Dictionary<int, string> _sources = [];
 
     // Bind en StartAsync, no en ExecuteAsync (que en .NET 10 corre en segundo plano):
     // un error de bind detiene el arranque del host, y al volver el socket ya escucha.
@@ -209,7 +210,7 @@ public sealed class IpcServer(
                 // Se loguea (a diferencia de las otras consultas) para verificar que la web no sondea la cola.
                 var page = await queue.GetAsync(m.Offset, ct);
                 logger.LogInformation("{Request} ok (offset {Offset})", request, m.Offset);
-                return QueuePageMessage.Serialize(page, _loadedPlaylist);
+                return QueuePageMessage.Serialize(page, _sources);
             case QueuePlayRequested m:
                 await queue.PlayAsync(m.Position, ct);
                 break;
@@ -221,31 +222,24 @@ public sealed class IpcServer(
                 break;
             case QueueClearRequested:
                 await queue.ClearAsync(ct);
-                _loadedPlaylist = null;
                 break;
             case QueueAddRequested m:
                 await queue.AddAsync(m.Uri, m.Next, ct);
                 break;
             case QueueSaveRequested m:
                 await queue.SaveAsync(m.Name, ct);
-                _loadedPlaylist = m.Name;
                 break;
             case LibraryPlayRequested m:
                 await library.PlayTrackAsync(m.Uri, ct);
-                _loadedPlaylist = null;
                 break;
             case PlaylistCreateRequested m:
                 await playlists.CreateAsync(m.Name, ct);
                 break;
             case PlaylistRenameRequested m:
                 await playlists.RenameAsync(m.Name, m.NewName, ct);
-                if (m.Name == _loadedPlaylist)
-                    _loadedPlaylist = m.NewName;
                 break;
             case PlaylistDeleteRequested m:
                 await playlists.DeleteAsync(m.Name, ct);
-                if (m.Name == _loadedPlaylist)
-                    _loadedPlaylist = null;
                 break;
             case PlaylistAddRequested m:
                 await playlists.AddAsync(m.Name, m.Uri, ct);
@@ -258,7 +252,6 @@ public sealed class IpcServer(
                 break;
             case PlaylistPlayRequested m:
                 await playlists.PlayAsync(m.Name, m.Position, ct);
-                _loadedPlaylist = m.Name;
                 break;
             default:
                 throw new InvalidOperationException($"No handler for {request}");
