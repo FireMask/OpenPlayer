@@ -75,7 +75,7 @@ Inválido → `error` con `request`, como en SPEC 10.
 {"type":"queue.save","name":"Viaje"}
 ```
 
-**MPD** (`MpdQueue`, una conexión por llamada):
+**MPD** (`MpdQueue`; "Reproducir siguiente" usa dos conexiones, `status` y luego `add`, como `MpdPlaylistStore.CreateAsync`):
 
 | Llamada | Comandos |
 |---|---|
@@ -177,7 +177,7 @@ Cada paso deja `dotnet test` y `pytest` en verde.
 - **El "+" abre un menú en un `<dialog>`.** Una fila de móvil no tiene lugar para tres o cuatro botones; un solo "+" mantiene las filas como hoy.
 - **"Agregar a una lista ›" como submenú dentro del mismo diálogo, con "‹ Atrás".** En el móvil no hay lugar para un submenú flotante al costado; reemplaza al selector de SPEC 10.
 - **Carpetas y resultados de búsqueda con el mismo menú.** `add` de MPD expande carpetas recursivamente sin código propio.
-- **"Reproducir siguiente" por posición absoluta: `status` + `add "<uri>" <song+1>`.** Funciona igual para pistas y carpetas, en una conexión y bajo el lock global; no depende de las posiciones relativas (`+0`), menos documentadas por versión.
+- **"Reproducir siguiente" por posición absoluta: `status` + `add "<uri>" <song+1>`.** Funciona igual para pistas y carpetas, en dos conexiones (`MpdClient` envía cada lote completo antes de leer) y bajo el lock global; no depende de las posiciones relativas (`+0`), menos documentadas por versión.
 - **Sin pista actual, "Reproducir siguiente" agrega al final.** No hay "siguiente" sin actual; no empieza a sonar.
 - **Un solo mensaje `queue.add` con `next` opcional.** Misma validación y misma ruta HTTP para las dos acciones.
 - **Agregar a la cola no cambia el nombre de la lista cargada.** Mismo criterio que quitar y mover (SPEC 12): la cola sigue viniendo de esa lista.
@@ -200,7 +200,7 @@ Cada paso deja `dotnet test` y `pytest` en verde.
 | Riesgo | Mitigación |
 |---|---|
 | MPD de la Pi < 0.23.3: `add` no acepta posición | Paso 1 del plan lo verifica antes de escribir código; si falla, se revisa la spec (`addid` solo sirve para pistas, no carpetas). |
-| La pista actual cambia entre `status` y `add` (fin de canción) | Ambos comandos van en la misma conexión y bajo el lock global; la ventana es de milisegundos. Peor caso: la pista queda una posición más arriba. Aceptado. |
+| La pista actual cambia entre `status` y `add` (fin de canción) | Ambos van bajo el lock global del Service (ningún otro cliente se intercala); la ventana es de milisegundos. Peor caso: la pista queda una posición más arriba. Aceptado. |
 | "Reproducir siguiente" o "Agregar a la cola" con una carpeta enorme (miles de pistas) | MPD lo agrega en un comando; la cola crece y la página la pagina de a 100 (SPEC 11). Sin confirmación, como "+" a una lista en SPEC 10. |
 | Tocar "Reproducir siguiente" varias veces seguidas invierte el orden (cada una queda justo después de la actual) | Comportamiento esperado de "siguiente" en reproductores; se documenta en el README. |
 | Guardar con un nombre que coincide con otra lista por mayúsculas o tildes | MPD decide por el nombre de archivo exacto; `PlaylistName.EnsureValid` ya bloquea `/`, `\` y `.` inicial. |

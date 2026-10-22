@@ -19,4 +19,10 @@ public interface IQueue
 
     /// <summary>Vacía la cola; MPD detiene la reproducción.</summary>
     Task ClearAsync(CancellationToken ct = default);
+
+    /// <summary>Agrega una pista o carpeta (recursivo) al final, o después de la actual si <paramref name="next"/> (SPEC 13).</summary>
+    Task AddAsync(string uri, bool next, CancellationToken ct = default);
+
+    /// <summary>Guarda la cola como lista; si el nombre ya existe, MPD responde error y nada cambia.</summary>
+    Task SaveAsync(string name, CancellationToken ct = default);
 }

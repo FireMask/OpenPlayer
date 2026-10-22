@@ -102,6 +102,63 @@ public class MpdQueueTests
     }
 
     [Fact]
+    public async Task Add_appends_quoted_uri()
+    {
+        await using var server = new FakeMpdServer();
+
+        await QueueFor(server).AddAsync("Rock/\"live\".flac", next: false);
+        await server.AllClosed();
+
+        Assert.Equal([["add \"Rock/\\\"live\\\".flac\""]], server.Connections);
+    }
+
+    [Fact]
+    public async Task Add_next_inserts_after_current_song()
+    {
+        await using var server = new FakeMpdServer
+        {
+            Respond = c => c == "status" ? "state: play\nsong: 2\nsongid: 3\nOK\n" : "OK\n",
+        };
+
+        await QueueFor(server).AddAsync("a.flac", next: true);
+        await server.AllClosed();
+
+        Assert.Equal([["status"], ["add \"a.flac\" 3"]], server.Connections);
+    }
+
+    [Fact]
+    public async Task Add_next_without_current_song_appends()
+    {
+        await using var server = new FakeMpdServer { Respond = c => c == "status" ? "state: stop\nOK\n" : "OK\n" };
+
+        await QueueFor(server).AddAsync("Rock", next: true);
+        await server.AllClosed();
+
+        Assert.Equal([["status"], ["add \"Rock\""]], server.Connections);
+    }
+
+    [Fact]
+    public async Task Save_sends_quoted_name()
+    {
+        await using var server = new FakeMpdServer();
+
+        await QueueFor(server).SaveAsync("Ñandú \"x\"");
+        await server.AllClosed();
+
+        Assert.Equal([["save \"Ñandú \\\"x\\\"\""]], server.Connections);
+    }
+
+    [Fact]
+    public async Task Save_existing_name_throws_MpdException()
+    {
+        await using var server = new FakeMpdServer { Respond = _ => "ACK [56@0] {save} Playlist already exists\n" };
+
+        var e = await Assert.ThrowsAsync<MpdException>(() => QueueFor(server).SaveAsync("Viaje"));
+
+        Assert.Contains("Playlist already exists", e.Message);
+    }
+
+    [Fact]
     public async Task Negative_edits_throw_without_connecting()
     {
         await using var server = new FakeMpdServer();

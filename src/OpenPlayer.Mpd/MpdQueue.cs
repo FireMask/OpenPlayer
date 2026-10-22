@@ -34,4 +34,21 @@ public sealed class MpdQueue(MpdClient client) : IQueue
     }
 
     public Task ClearAsync(CancellationToken ct = default) => client.ExecuteAsync(["clear"], ct);
+
+    // next: status y add en dos conexiones (ExecuteAsync envía el lote entero antes de leer); el lock del Service
+    // evita que otro cliente se intercale. Sin pista actual no hay "siguiente": agrega al final.
+    public async Task AddAsync(string uri, bool next, CancellationToken ct = default)
+    {
+        var command = $"add {MpdClient.Quote(uri)}";
+        if (next)
+        {
+            var song = (await client.ExecuteAsync(["status"], ct))[0].Get("song");
+            if (int.TryParse(song, NumberStyles.None, CultureInfo.InvariantCulture, out var current))
+                command += " " + (current + 1).ToString(CultureInfo.InvariantCulture);
+        }
+        await client.ExecuteAsync([command], ct);
+    }
+
+    public Task SaveAsync(string name, CancellationToken ct = default) =>
+        client.ExecuteAsync([$"save {MpdClient.Quote(name)}"], ct);
 }
