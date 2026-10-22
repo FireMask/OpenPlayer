@@ -61,6 +61,7 @@ public class MpdLibraryTests
         Assert.Equal("Rock/b.mp3", b.Uri);
         Assert.Null(b.Title);
         Assert.Null(b.Duration);
+        Assert.All(page.Entries, e => Assert.Null(e.Id));
     }
 
     [Fact]

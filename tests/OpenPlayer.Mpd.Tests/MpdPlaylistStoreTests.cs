@@ -60,6 +60,7 @@ public class MpdPlaylistStoreTests
         Assert.Equal([["listplaylistinfo \"Viaje\""]], server.Connections);
         Assert.Equal((100, 120, 20), (page.Offset, page.Total, page.Entries.Count));
         Assert.Equal("t100.mp3", page.Entries[0].Uri);
+        Assert.All(page.Entries, e => Assert.Null(e.Id));
     }
 
     [Fact]

@@ -28,6 +28,20 @@ public class MpdQueueTests
         Assert.Equal([["playlistinfo"]], server.Connections);
         Assert.Equal((offset, 120, count), (page.Offset, page.Total, page.Entries.Count));
         Assert.Equal(first, page.Entries[0].Uri);
+        Assert.Equal(offset + 1, page.Entries[0].Id);
+    }
+
+    [Theory]
+    [InlineData("Id: x\n")]
+    [InlineData("Id: -1\n")]
+    [InlineData("")]
+    public async Task Get_invalid_or_missing_id_is_null(string idLine)
+    {
+        await using var server = new FakeMpdServer { Respond = _ => $"file: x.mp3\nPos: 0\n{idLine}OK\n" };
+
+        var page = await QueueFor(server).GetAsync(0);
+
+        Assert.Null(page.Entries[0].Id);
     }
 
     [Fact]
