@@ -97,7 +97,7 @@ class Handler(BaseHTTPRequestHandler):
         self._reply(HTTPStatus.NOT_FOUND)
 
     def _library_routes(self, path):
-        """Rutas de biblioteca, playlists (SPEC 10) y cola (SPEC 11 y 12): {método: () -> línea IPC}, o None si la ruta no existe.
+        """Rutas de biblioteca, playlists (SPEC 10) y cola (SPEC 11 a 13): {método: () -> línea IPC}, o None si la ruta no existe.
 
         Cada función valida la forma del pedido y lanza ValueError (→ 400); el Core valida el contenido."""
         ipc = self.server.ipc
@@ -117,6 +117,13 @@ class Handler(BaseHTTPRequestHandler):
                 body = self._json_body()
                 return ipc.move_in_queue(_int(body, "id"), _int(body, "to"))
             return {"POST": move_queue}
+        if path == "/api/queue/tracks":
+            def add_queue():
+                body = self._json_body()
+                return ipc.add_to_queue(_text(body, "uri"), _bool(body, "next"))
+            return {"POST": add_queue}
+        if path == "/api/queue/save":
+            return {"POST": lambda: ipc.save_queue(_text(self._json_body(), "name"))}
         if path.startswith("/api/queue/tracks/"):
             song_id = path[len("/api/queue/tracks/"):]
             return None if "/" in song_id else {"DELETE": lambda: ipc.remove_from_queue(_index(song_id))}
@@ -266,6 +273,14 @@ def _int(body, field, default=None):
         return default
     value = body.get(field)
     if type(value) is not int or value < 0:
+        raise ValueError(f"invalid {field}")
+    return value
+
+
+def _bool(body, field):
+    """Booleano JSON opcional (False si falta); 1 o "true" no cuentan."""
+    value = body.get(field, False)
+    if type(value) is not bool:
         raise ValueError(f"invalid {field}")
     return value
 

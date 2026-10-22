@@ -38,7 +38,7 @@ class FakeIpc:
     LIBRARY_METHODS = ("browse", "search", "play_track", "playlists", "playlist", "create_playlist",
                        "rename_playlist", "delete_playlist", "add_to_playlist", "remove_from_playlist",
                        "move_in_playlist", "play_playlist", "queue", "play_queue",
-                       "remove_from_queue", "move_in_queue", "clear_queue")
+                       "remove_from_queue", "move_in_queue", "clear_queue", "add_to_queue", "save_queue")
     library_reply = OK
     library_calls = None
 
@@ -292,6 +292,10 @@ MUTATION_ROUTES = [
     ("DELETE", "/api/queue/tracks/17", None, ("remove_from_queue", 17)),
     ("POST", "/api/queue/move", b'{"id":17,"to":2}', ("move_in_queue", 17, 2)),
     ("DELETE", "/api/queue", None, ("clear_queue",)),
+    ("POST", "/api/queue/tracks", b'{"uri":"a.flac","next":true}', ("add_to_queue", "a.flac", True)),
+    ("POST", "/api/queue/tracks", b'{"uri":"a.flac","next":false}', ("add_to_queue", "a.flac", False)),
+    ("POST", "/api/queue/tracks", b'{"uri":"Rock"}', ("add_to_queue", "Rock", False)),
+    ("POST", "/api/queue/save", '{"name":"Ñandú"}'.encode(), ("save_queue", "Ñandú")),
 ]
 
 
@@ -351,6 +355,16 @@ BAD_REQUESTS = [
     ("POST", "/api/queue/move", b'{"id":17,"to":2.5}'),
     ("POST", "/api/queue/move", b'{"id":true,"to":2}'),
     ("POST", "/api/queue/move", b'{"id":17,"to":false}'),
+    ("POST", "/api/queue/tracks", None),
+    ("POST", "/api/queue/tracks", b"{}"),
+    ("POST", "/api/queue/tracks", b'{"uri":""}'),
+    ("POST", "/api/queue/tracks", b'{"uri":"a.flac","next":"true"}'),
+    ("POST", "/api/queue/tracks", b'{"uri":"a.flac","next":1}'),
+    ("POST", "/api/queue/tracks", b'{"uri":"a.flac","next":null}'),
+    ("POST", "/api/queue/save", None),
+    ("POST", "/api/queue/save", b"{}"),
+    ("POST", "/api/queue/save", b'{"name":""}'),
+    ("POST", "/api/queue/save", b'{"name":5}'),
 ]
 
 
@@ -370,6 +384,8 @@ def test_library_invalid_request_is_400(web, method, path, body):
     ("DELETE", "/api/queue/tracks/99", None),
     ("POST", "/api/queue/move", b'{"id":99,"to":0}'),
     ("DELETE", "/api/queue", None),
+    ("POST", "/api/queue/tracks", b'{"uri":"a.flac"}'),
+    ("POST", "/api/queue/save", b'{"name":"Viaje"}'),
 ])
 def test_library_error_reply_is_502_with_line(web, method, path, body):
     server, ipc = web
@@ -389,6 +405,8 @@ def test_library_error_reply_is_502_with_line(web, method, path, body):
     ("DELETE", "/api/queue/tracks/17", None),
     ("POST", "/api/queue/move", b'{"id":17,"to":2}'),
     ("DELETE", "/api/queue", None),
+    ("POST", "/api/queue/tracks", b'{"uri":"a.flac"}'),
+    ("POST", "/api/queue/save", b'{"name":"Viaje"}'),
 ])
 def test_library_with_service_down_is_503(web, method, path, body):
     server, ipc = web
@@ -413,6 +431,8 @@ def test_library_with_service_down_is_503(web, method, path, body):
     ("PUT", "/api/queue"),
     ("GET", "/api/queue/move"),
     ("GET", "/api/queue/tracks/17"),
+    ("GET", "/api/queue/tracks"),
+    ("GET", "/api/queue/save"),
 ])
 def test_library_wrong_method_is_405(web, method, path):
     server, ipc = web

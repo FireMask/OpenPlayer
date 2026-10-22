@@ -50,6 +50,11 @@ public sealed record QueueMoveRequested(int Id, int To) : IpcMessage;
 
 public sealed record QueueClearRequested : IpcMessage;
 
+// Agregar a la cola y guardarla (SPEC 13); responden ok / error.
+public sealed record QueueAddRequested(string Uri, bool Next) : IpcMessage;
+
+public sealed record QueueSaveRequested(string Name) : IpcMessage;
+
 public static class IpcMessageParser
 {
     public const int MaxUriLength = 1024;
@@ -60,7 +65,7 @@ public static class IpcMessageParser
         "library.browse", "library.search", "library.play",
         "playlist.list", "playlist.get", "playlist.create", "playlist.rename", "playlist.delete",
         "playlist.add", "playlist.remove", "playlist.move", "playlist.play",
-        "queue.get", "queue.play", "queue.remove", "queue.move", "queue.clear",
+        "queue.get", "queue.play", "queue.remove", "queue.move", "queue.clear", "queue.add", "queue.save",
     ];
 
     /// <summary>Parsea una línea JSON. Nunca lanza: si es inválida devuelve false y un error legible para el log.</summary>
@@ -159,6 +164,12 @@ public static class IpcMessageParser
                 case "queue.clear":
                     message = new QueueClearRequested();
                     break;
+                case "queue.add":
+                    message = new QueueAddRequested(Text(root, "uri", 1, MaxUriLength), Flag(root, "next"));
+                    break;
+                case "queue.save":
+                    message = new QueueSaveRequested(Name(root, "name"));
+                    break;
                 default:
                     return Fail($"unknown type '{type.GetString()}'", out error);
             }
@@ -198,6 +209,19 @@ public static class IpcMessageParser
         if (v.ValueKind != JsonValueKind.Number || !v.TryGetInt32(out var n) || n < 0)
             throw new InvalidFieldException(field);
         return n;
+    }
+
+    /// <summary>Booleano JSON opcional; si falta, false. <c>"true"</c>, <c>1</c> o <c>null</c> son inválidos.</summary>
+    private static bool Flag(JsonElement root, string field)
+    {
+        if (!root.TryGetProperty(field, out var v))
+            return false;
+        return v.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => throw new InvalidFieldException(field),
+        };
     }
 
     private static bool Fail(string reason, out string? error)

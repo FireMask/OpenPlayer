@@ -65,6 +65,7 @@
 
   /* Cola (SPEC 11): a la derecha ≥ 900 px en todas las pestañas; debajo de los controles en Reproductor si no. */
   .queue .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .queue .tools { display: flex; gap: 6px; flex: none; }
   .queue h2 { font-size: 1rem; margin: 0; overflow-wrap: anywhere; }
   .queue .list { overflow-y: auto; }
   .list .q { display: flex; align-items: center; gap: 10px; }
@@ -159,7 +160,7 @@
   </div>
 
   <dialog id="picker">
-    <h2>Agregar a una lista</h2>
+    <h2 id="picker-title"></h2>
     <ul class="list" id="picker-list"></ul>
     <button class="small" id="picker-cancel">Cancelar</button>
   </dialog>
@@ -167,7 +168,10 @@
 <aside class="queue" aria-label="Cola">
   <div class="head">
     <h2 id="queue-head">Cola</h2>
-    <button class="small" id="queue-clear" hidden>Limpiar</button>
+    <span class="tools">
+      <button class="small" id="queue-save" hidden>Guardar como lista</button>
+      <button class="small" id="queue-clear" hidden>Limpiar</button>
+    </span>
   </div>
   <p class="msg" id="queue-msg" aria-live="polite"></p>
   <ul class="list" id="queue-list"></ul>
@@ -370,7 +374,7 @@
     const list = $("lib-list");
     if (!append) list.replaceChildren();
     for (const e of page.entries) {
-      const add = { text: "+", label: "Agregar a una lista", onClick: () => pickPlaylist(e.uri) };
+      const add = { text: "+", label: "Opciones", onClick: () => openMenu(e) };
       list.append(e.directory
         ? row("📁 " + baseName(e.uri), "", () => openFolder(e.uri), [add])
         : row(e.title || baseName(e.uri), trackMeta(e), () => playTrack(e), [add]));
@@ -398,12 +402,34 @@
     loadLibrary();
   });
 
-  // Selector de lista para "+": pista o carpeta (MPD expande la carpeta).
-  async function pickPlaylist(uri) {
+  // Menú "+" (SPEC 13): pista o carpeta (MPD expande la carpeta). "Agregar a una lista ›" cambia el contenido
+  // del mismo diálogo por las listas; no hay submenú flotante porque en el móvil no entra.
+  let menuEntry = null;  // { uri, label } mientras el menú está abierto
+
+  function openMenu(e) {
+    menuEntry = { uri: e.uri, label: e.directory ? baseName(e.uri) : e.title || baseName(e.uri) };
+    showMenuActions();
+    $("picker").showModal();
+  }
+
+  function showMenuActions() {
+    $("picker-title").textContent = menuEntry.label;
+    $("picker-list").replaceChildren(
+      row("Reproducir siguiente", "", () => addToQueue(true)),
+      row("Agregar a la cola", "", () => addToQueue(false)),
+      row("Agregar a una lista ›", "", showMenuLists));
+  }
+
+  async function showMenuLists() {
     let data;
-    try { data = await api("GET", "/api/playlists"); } catch (e) { return setMsg("lib-msg", e.message, true); }
+    try { data = await api("GET", "/api/playlists"); } catch (e) {
+      $("picker").close();
+      return setMsg("lib-msg", e.message, true);
+    }
+    const { uri } = menuEntry;
+    $("picker-title").textContent = "Agregar a una lista";
     const list = $("picker-list");
-    list.replaceChildren();
+    list.replaceChildren(row("‹ Atrás", "", showMenuActions));
     for (const name of data.playlists) {
       list.append(row(name, "", async () => {
         $("picker").close();
@@ -415,7 +441,14 @@
     }
     if (!data.playlists.length)
       list.append(el("li", { className: "empty", textContent: "No hay listas. Crea una en la pestaña Listas." }));
-    $("picker").showModal();
+  }
+
+  async function addToQueue(next) {
+    const { uri, label } = menuEntry;
+    $("picker").close();
+    try { await api("POST", "/api/queue/tracks", { uri, next }); } catch (e) { return setMsg("lib-msg", e.message, true); }
+    setMsg("lib-msg", (next ? "Sonará a continuación: " : "Agregado a la cola: ") + label);
+    refresh();  // la cola se recarga sola al cambiar queueVersion
   }
 
   $("picker-cancel").addEventListener("click", () => $("picker").close());
@@ -584,7 +617,7 @@
     qVersion = undefined;  // al volver la conexión se recarga (el Service pudo reiniciarse y olvidar el nombre)
     qCount = 0;
     $("queue-head").textContent = "Cola";
-    $("queue-clear").hidden = true;
+    $("queue-clear").hidden = $("queue-save").hidden = true;
     $("queue-list").replaceChildren();
     $("queue-more").hidden = true;
     queueMsg(OFFLINE, true);
@@ -608,12 +641,12 @@
     } finally {
       qLoading = false;
     }
-    queueMsg("");
+    if ($("queue-msg").classList.contains("error")) queueMsg("");  // borra errores viejos, no "Cola guardada…"
     qTotal = page.total;
     qCount = 0;
     $("queue-head").textContent = (page.playlist ? `Lista: ${page.playlist}` : "Cola")
       + ` · ${qTotal} ${qTotal === 1 ? "canción" : "canciones"}`;
-    $("queue-clear").hidden = qTotal === 0;
+    $("queue-clear").hidden = $("queue-save").hidden = qTotal === 0;
     $("queue-list").replaceChildren();
     appendQueue(entries);
     markCurrent();
@@ -653,6 +686,15 @@
 
   $("queue-clear").addEventListener("click", () => {
     if (confirm("¿Limpiar la cola? Se detiene la reproducción.")) editQueue("DELETE", "/api/queue");
+  });
+
+  // Guardar como lista (SPEC 13): MPD no sobrescribe; un nombre existente vuelve como error.
+  $("queue-save").addEventListener("click", async () => {
+    const name = prompt("Nombre de la nueva lista");
+    if (!name || !name.trim()) return;
+    try { await api("POST", "/api/queue/save", { name: name.trim() }); } catch (e) { return queueMsg(e.message, true); }
+    queueMsg(`Cola guardada como “${name.trim()}”`);
+    reloadQueue();  // el nombre de la lista cargada cambia sin que cambie queueVersion
   });
 
   $("queue-more").addEventListener("click", async () => {
