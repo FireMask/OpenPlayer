@@ -31,6 +31,7 @@
     - Auto-scroll a la pista actual salvo que el usuario esté desplazando el panel.
     - Tocar una fila → `queue.play`.
     - "Cola vacía" sin pistas.
+    - Pestaña Listas (corrige SPEC 10): al volver a la pestaña se recarga lo que muestra (la lista abierta, con las pistas que había cargadas, o el índice), para ver lo agregado desde Biblioteca.
 - Pruebas: Core (parser, snapshot, serializador), Mpd (`status`, `playlistinfo`, `play N`), Service (nombre recordado en cada caso), web agent (ipc + HTTP).
 - Docs: `architecture.md` §5, §6, §7; README; en SPEC 10 cambiar "SPEC 11" (OLED + botones) por "spec futura".
 
@@ -147,6 +148,7 @@ Un mensaje que falla no cambia el nombre.
    - Se actualiza en cada sondeo sin recargar la cola.
    - Auto-scroll a la pista actual, salvo durante 10 s después de que el usuario desplace el panel.
    - Tocar una fila → `POST /api/queue/play` y `refresh()`.
+   - Pestaña Listas: cada vez que se abre (no solo la primera), recargar la lista abierta (`loadPlaylist(true)`) o el índice (`showIndex()`).
 9. **Docs.**
    - `architecture.md` §5 (layout, rutas), §6 (`IQueue`), §7 (mensajes, campos del snapshot, nombre en memoria).
    - README (panel de cola; historial depende de `consume` apagado).
@@ -180,6 +182,7 @@ Cada paso deja `dotnet test` y `pytest` en verde.
 - [ ] Tocar la cuarta fila deja `mpc status` en la posición #4.
 - [ ] Con más de 100 pistas en la cola y la actual pasada la 100, la actual aparece cargada y visible sin tocar "Más".
 - [ ] Desplazar el panel lejos de la actual no lo hace saltar de vuelta durante 10 s.
+- [ ] Con una lista abierta en Listas, agregarle una pista desde Biblioteca y volver a Listas la muestra sin salir y entrar de la lista.
 - [ ] Renombrar la lista en reproducción actualiza el encabezado; reiniciar el Service lo deja en "Cola".
 - [ ] Con el Service detenido, el panel muestra "Sin conexión con el reproductor" y se recupera al reiniciarlo, sin recargar la página.
 - [ ] La cola no se vuelve a pedir mientras `queueVersion` no cambia (verificable en `journalctl -u openplayer`: sin `queue.get ok` en cada sondeo).

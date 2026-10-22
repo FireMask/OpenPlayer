@@ -315,8 +315,9 @@
   }
 
   // Pestañas: la de Reproductor no cambia; Biblioteca carga al abrirla por primera vez.
+  // Listas recarga cada vez (SPEC 11): pudo cambiar con "+" desde Biblioteca.
   const tabs = document.querySelectorAll(".tabs button");
-  const loaders = { library: () => loadLibrary(), lists: () => showIndex() };
+  const loaders = { library: () => loadLibrary(), lists: () => openList === null ? showIndex() : loadPlaylist(true) };
   const loaded = new Set(["player"]);
   tabs.forEach(t => t.addEventListener("click", () => {
     document.body.dataset.tab = t.dataset.tab;  // en pantallas angostas la cola solo se ve en Reproductor
@@ -324,7 +325,7 @@
       o.setAttribute("aria-selected", String(o === t));
       $("tab-" + o.dataset.tab).hidden = o !== t;
     });
-    if (!loaded.has(t.dataset.tab)) { loaded.add(t.dataset.tab); loaders[t.dataset.tab](); }
+    if (t.dataset.tab === "lists" || !loaded.has(t.dataset.tab)) { loaded.add(t.dataset.tab); loaders[t.dataset.tab](); }
   }));
 
   // Biblioteca: carpeta actual (libPath) o búsqueda (libQuery), paginado de 100 con "Más".
