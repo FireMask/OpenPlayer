@@ -1,6 +1,6 @@
 # SPEC 11 — Cola de reproducción en la web
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 03, SPEC 08, SPEC 09, SPEC 10
 > **Date:** 2026-10-21
 > **Objective:** Mostrar en la página del web agent la cola actual de MPD (panel a la derecha en pantallas anchas, debajo de los controles en el móvil) con el nombre de la lista cargada, filas con título, artista, álbum y duración en orden, la pista actual resaltada con un ícono animado que se detiene en pausa, y tocar una fila para saltar a esa pista.
@@ -161,37 +161,37 @@ Cada paso deja `dotnet test` y `pytest` en verde.
 
 **Windows (automatizable):**
 
-- [ ] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
-- [ ] `player.snapshot` incluye `queuePosition` y `queueVersion` con los valores de `status: song` y `status: playlist`, y `null` explícito si MPD no los da.
-- [ ] `IpcMessageParser` devuelve `QueueGetRequested(0)` sin `offset` y `QueuePlayRequested(3)` con `position` 3; `position` faltante, `-1`, `"3"` o `3.5` son inválidos con `request` `queue.play`.
-- [ ] `QueuePageMessage` produce exactamente el JSON del modelo de datos, con `playlist` `null` cuando no hay nombre.
-- [ ] `MpdQueue.GetAsync` sobre 120 pistas devuelve `total` 120 y 100 entradas; `offset` 100 devuelve 20. `PlayAsync(3)` envía `play 3`.
-- [ ] Tras `playlist.play` de "Viaje", `queue.get` trae `"playlist":"Viaje"`; tras `library.play`, `null`.
-- [ ] Renombrar "Viaje" (la cargada) a "Gym" hace que `queue.get` traiga "Gym"; renombrar otra lista no la cambia; borrar "Gym" la deja en `null`; un `playlist.play` que falla no la cambia.
-- [ ] Un `ACK` de MPD en `queue.get` o `queue.play` llega como `error` y la conexión sigue.
-- [ ] `GET /api/queue` → `200`; `POST /api/queue/play` con `{"position":3}` → `204` y llega `play_queue(3)`; `offset` o `position` inválidos → `400`; Service `error` → `502`; Service caído → `503`; método incorrecto → `405`.
-- [ ] El web agent sigue usando solo stdlib.
+- [x] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
+- [x] `player.snapshot` incluye `queuePosition` y `queueVersion` con los valores de `status: song` y `status: playlist`, y `null` explícito si MPD no los da.
+- [x] `IpcMessageParser` devuelve `QueueGetRequested(0)` sin `offset` y `QueuePlayRequested(3)` con `position` 3; `position` faltante, `-1`, `"3"` o `3.5` son inválidos con `request` `queue.play`.
+- [x] `QueuePageMessage` produce exactamente el JSON del modelo de datos, con `playlist` `null` cuando no hay nombre.
+- [x] `MpdQueue.GetAsync` sobre 120 pistas devuelve `total` 120 y 100 entradas; `offset` 100 devuelve 20. `PlayAsync(3)` envía `play 3`.
+- [x] Tras `playlist.play` de "Viaje", `queue.get` trae `"playlist":"Viaje"`; tras `library.play`, `null`.
+- [x] Renombrar "Viaje" (la cargada) a "Gym" hace que `queue.get` traiga "Gym"; renombrar otra lista no la cambia; borrar "Gym" la deja en `null`; un `playlist.play` que falla no la cambia.
+- [x] Un `ACK` de MPD en `queue.get` o `queue.play` llega como `error` y la conexión sigue.
+- [x] `GET /api/queue` → `200`; `POST /api/queue/play` con `{"position":3}` → `204` y llega `play_queue(3)`; `offset` o `position` inválidos → `400`; Service `error` → `502`; Service caído → `503`; método incorrecto → `405`.
+- [x] El web agent sigue usando solo stdlib.
 
 **Raspberry Pi (`deploy.ps1` y navegador en PC y móvil):**
 
-- [ ] En PC (ventana ≥ 900 px) el panel "Cola" aparece a la derecha en las tres pestañas; en el móvil aparece debajo de los controles en Reproductor.
-- [ ] Reproducir "Favoritas" muestra "Lista: Favoritas · N canciones" con las pistas en el orden de `mpc playlist`; reproducir una pista de la biblioteca muestra "Cola · 1 canción".
-- [ ] Cada fila muestra número, título, "artista · álbum" y m:ss; una pista sin etiquetas muestra el nombre de archivo y sin detalle.
-- [ ] La pista actual tiene un color distinto y las barras se mueven; en pausa las barras quedan quietas; detenido no hay barras.
-- [ ] Al pasar a la siguiente pista (botón o fin de canción), el resaltado se mueve en 2 s o menos y la pista anterior sigue en la lista.
-- [ ] Tocar la cuarta fila deja `mpc status` en la posición #4.
-- [ ] Con más de 100 pistas en la cola y la actual pasada la 100, la actual aparece cargada y visible sin tocar "Más".
-- [ ] Desplazar el panel lejos de la actual no lo hace saltar de vuelta durante 10 s.
-- [ ] Con una lista abierta en Listas, agregarle una pista desde Biblioteca y volver a Listas la muestra sin salir y entrar de la lista.
-- [ ] Renombrar la lista en reproducción actualiza el encabezado; reiniciar el Service lo deja en "Cola".
-- [ ] Con el Service detenido, el panel muestra "Sin conexión con el reproductor" y se recupera al reiniciarlo, sin recargar la página.
-- [ ] La cola no se vuelve a pedir mientras `queueVersion` no cambia (verificable en `journalctl -u openplayer`: sin `queue.get ok` en cada sondeo).
+- [x] En PC (ventana ≥ 900 px) el panel "Cola" aparece a la derecha en las tres pestañas; en el móvil aparece debajo de los controles en Reproductor.
+- [x] Reproducir "Favoritas" muestra "Lista: Favoritas · N canciones" con las pistas en el orden de `mpc playlist`; reproducir una pista de la biblioteca muestra "Cola · 1 canción".
+- [x] Cada fila muestra número, título, "artista · álbum" y m:ss; una pista sin etiquetas muestra el nombre de archivo y sin detalle.
+- [x] La pista actual tiene un color distinto y las barras se mueven; en pausa las barras quedan quietas; detenido no hay barras.
+- [x] Al pasar a la siguiente pista (botón o fin de canción), el resaltado se mueve en 2 s o menos y la pista anterior sigue en la lista.
+- [x] Tocar la cuarta fila deja `mpc status` en la posición #4.
+- [x] Con más de 100 pistas en la cola y la actual pasada la 100, la actual aparece cargada y visible sin tocar "Más".
+- [x] Desplazar el panel lejos de la actual no lo hace saltar de vuelta durante 10 s.
+- [x] Con una lista abierta en Listas, agregarle una pista desde Biblioteca y volver a Listas la muestra sin salir y entrar de la lista.
+- [x] Renombrar la lista en reproducción actualiza el encabezado; reiniciar el Service lo deja en "Cola".
+- [x] Con el Service detenido, el panel muestra "Sin conexión con el reproductor" y se recupera al reiniciarlo, sin recargar la página.
+- [x] La cola no se vuelve a pedir mientras `queueVersion` no cambia (verificable en `journalctl -u openplayer`: sin `queue.get ok` en cada sondeo).
 
 **Documentación:**
 
-- [ ] `architecture.md` §5, §6 y §7 describen panel, rutas, `IQueue`, mensajes, campos del snapshot y el nombre en memoria.
-- [ ] README menciona el panel de cola y que el historial depende de `consume` apagado.
-- [ ] SPEC 10 ya no reserva "SPEC 11".
+- [x] `architecture.md` §5, §6 y §7 describen panel, rutas, `IQueue`, mensajes, campos del snapshot y el nombre en memoria.
+- [x] README menciona el panel de cola y que el historial depende de `consume` apagado.
+- [x] SPEC 10 ya no reserva "SPEC 11".
 
 ## Decisions
 
