@@ -170,6 +170,7 @@ public interface IPlayer
     Task SeekAsync(TimeSpan position, CancellationToken ct = default);
     Task SetVolumeAsync(int volume, CancellationToken ct = default);
     Task<PlaybackSnapshot> GetSnapshotAsync(CancellationToken ct = default);
+    Task WaitForChangeAsync(CancellationToken ct = default);   // idle player (SPEC 15)
 }
 ```
 
@@ -219,10 +220,12 @@ public interface IQueue
     Task SaveAsync(string name, CancellationToken ct = default);            // save NAME
     Task EnableConsumeAsync(CancellationToken ct = default);                // consume 1 (SPEC 14)
     Task<IReadOnlyList<int>> IdsAsync(CancellationToken ct = default);      // plchangesposid 0: ids en orden
+    Task RestoreAsync(string uri, CancellationToken ct = default);          // add URI 0 + play 0 (SPEC 15)
 }
 ```
 
-- `PlaybackSnapshot` suma `QueuePosition` (`int?`, índice 0-based de la actual; MPD `status: song`) y `QueueVersion` (`long?`; MPD `status: playlist`, cambia con cada edición de la cola). Ausentes o no numéricos → `null`.
+- `PlaybackSnapshot` suma `QueuePosition` (`int?`, índice 0-based de la actual; MPD `status: song`) y `QueueVersion` (`long?`; MPD `status: playlist`, cambia con cada edición de la cola). Ausentes o no numéricos → `null`. SPEC 15 suma `SongId` (`int?`, MPD `status: songid`), con la misma regla.
+- `WaitForChangeAsync` (SPEC 15): `MpdClient.IdleAsync` abre una conexión propia y envía `idle player`; solo la conexión y el saludo tienen timeout, la espera no. Cancelar cierra la conexión.
 
 - Nombres de playlist: `PlaylistName.EnsureValid` (1–100 caracteres, sin `/`, `\`, `\n`, `\r` ni `.` inicial). Todo argumento de texto a MPD pasa por `MpdClient.Quote` (comillas dobles, `\` y `"` escapados).
 
@@ -267,6 +270,7 @@ Mensajes de entrada:
 - `queue.*` (SPEC 11): también responden siempre una línea. `queue.get`: `offset` entero JSON ≥ 0, opcional (0); responde `queue.page` y registra `queue.get ok (offset N)` (la única consulta que se registra: permite ver en `journalctl` que la web no sondea la cola). `queue.play`: `position` entero JSON ≥ 0, obligatorio; ejecuta `play N` y responde `ok`. SPEC 12: `queue.remove` (`id`), `queue.move` (`id`, `to`) y `queue.clear` editan por id de MPD (`deleteid`, `moveid`, `clear`); `id` y `to` enteros JSON ≥ 0, obligatorios; responden `ok`. El id no cambia al mover ni al quitar otras pistas: una cola vieja en la página da un `ACK` de id inexistente, nunca toca otra pista. SPEC 13: `queue.add` (`uri` como `library.play`; `next` booleano JSON opcional, `false`) agrega pista o carpeta (recursivo): al final con `add "<uri>"`; con `next`, `status` y luego `add "<uri>" <song+1>` en dos conexiones bajo el lock global (sin pista actual, al final). `add` con posición requiere MPD ≥ 0.23.3 (la Pi tiene 0.24.4). `queue.save` (`name` con `PlaylistName.EnsureValid`) ejecuta `save "<name>"`; si la lista existe, MPD responde `ACK` y nada se sobrescribe.
 - Modo `consume` (SPEC 14): cada canción terminada o saltada sale de la cola y la actual queda primera. `consume` solo quita la canción que sonaba, así que saltar a la posición N (`queue.play`, `playlist.play`) borra antes las anteriores (`delete 0:N`) y hace `play 0`: la elegida queda primera. Siempre activo: `consume 1` va con cada play (`library.play`, `playlist.play`, `queue.play`) y el Service lo envía al arrancar (MPD caído → warning `consume failed`, sigue). Reemplaza el nombre de "lista cargada" de SPEC 11–13.
 - Etiquetas de origen (SPEC 14): el Service recuerda en memoria (`_sources`, id de MPD → origen, bajo el lock global) de dónde vino cada canción, porque MPD no guarda metadatos propios por canción de la cola (`addtagid` solo sirve para remotas). `playlist.play` etiqueta toda la cola nueva con el nombre de la lista; `library.play`, "Biblioteca"; `queue.add` compara `IQueue.IdsAsync()` (`plchangesposid 0`) antes y después: los ids nuevos → "Biblioteca" y se descartan los que ya no están; `queue.clear` vacía el mapa. Renombrar o borrar una lista, `queue.save`, `queue.remove`, `queue.move` y `queue.play` no cambian etiquetas (son una foto del momento). Un mensaje que falla no cambia el mapa; si `IdsAsync` falla tras una acción exitosa, la respuesta es `ok` y las canciones quedan sin etiqueta. Se pierde al reiniciar el Service; lo agregado fuera de la web (`mpc add`) queda sin etiqueta.
+- Historial de ⏮ (SPEC 15): un observador en segundo plano del Service repite snapshot → `WaitForChangeAsync`. Si cambia `SongId`, la canción anterior entra al historial (`uri` + su etiqueta de origen) solo si estuvo en `play` o `pause`. Últimas 50, solo en memoria (se pierde al reiniciar), bajo el lock global; sobrevive a `queue.clear`, `playlist.play` y `library.play`. MPD caído → warning `player watch failed` y reintento a los 5 s. Dos cambios entre despertares de `idle` pueden perder la canción del medio.
 
 Respuestas:
 
@@ -305,7 +309,7 @@ Socket:
 ## 8. Mapeo de botones
 
 - `play_pause`: alterna reproducción/pausa.
-- `previous`: si la posición actual es mayor que `PreviousRestartThreshold` (3 s por defecto), reinicia la pista (`SeekAsync(0)`); si no, o si la posición es desconocida, va a la pista anterior. Con `consume` (SPEC 14) no queda pista anterior en la cola: medido en la Pi (MPD 0.24.4), `previous` reinicia la actual sin quitarla, así que ⏮ siempre reinicia la canción (web y botón físico).
+- `previous`: si la posición actual es mayor que `PreviousRestartThreshold` (3 s por defecto), reinicia la pista (`SeekAsync(0)`); si no, o si la posición es desconocida, va a la pista anterior. Con `consume` (SPEC 14) no queda pista anterior en la cola: medido en la Pi (MPD 0.24.4), `previous` reinicia la actual sin quitarla, así que sin historial ⏮ reinicia la canción. Con historial (SPEC 15), hasta el umbral (o sin posición) el Service saca la última escuchada y la reproduce arriba de la cola (`IQueue.RestoreAsync`: `add URI 0` + `play 0`; medido en la Pi: con `consume` la que sonaba queda segunda), con su etiqueta de origen. Un cambio causado por ⏮ no entra al historial (⏮⏮ retrocede dos canciones sin rebotar); la restaurada vuelve a entrar cuando termina. Si MPD rechaza el archivo (borrado), se descarta la entrada (warning `restore <uri> failed`) y ⏮ reinicia la actual. Mismo comportamiento en web y botón físico.
 - `next`: siguiente pista.
 - `volume_up` / `volume_down`: cambiar volumen en pasos de `VolumeStep` (5 por defecto), recortando a 0–100. Si el volumen es desconocido (MPD sin mixer), no hacer nada.
 - `menu`: reservado para navegación OLED futura; en el MVP no hace nada.
@@ -331,7 +335,8 @@ Estado (SPEC 10, desde la web):
 - Hecho (SPEC 12): editar la cola (quitar, reordenar, limpiar).
 - Hecho (SPEC 13): agregar a la cola sin reemplazarla (al final o después de la actual) y guardar la cola como lista.
 - Hecho (SPEC 14): cola independiente de su origen: `consume` (lo escuchado sale de la cola), etiqueta de origen por fila, ⏮ reinicia la actual.
-- Pendiente: historial real para ⏮ (el Service recuerda lo escuchado y lo devuelve a la cola), reproducir una lista sin borrar lo agregado (modelo tipo Spotify), arrastrar para reordenar en la cola y en Listas (asa ⠿ a la izquierda, Pointer Events sin librería, animación del lugar de destino antes de soltar), agregar a la cola desde Listas, actualización instantánea (`idle` → SSE), navegación artista → álbum, OLED y botones (spec futura).
+- Hecho (SPEC 15): historial real para ⏮ (observador `idle player`, últimas 50 en memoria, la anterior vuelve arriba de la cola).
+- Pendiente: reproducir una lista sin borrar lo agregado (modelo tipo Spotify), arrastrar para reordenar en la cola y en Listas (asa ⠿ a la izquierda, Pointer Events sin librería, animación del lugar de destino antes de soltar), agregar a la cola desde Listas, actualización instantánea (reutilizar el observador `idle` de SPEC 15 → IPC push → SSE), navegación artista → álbum, OLED y botones (spec futura).
 - Sin botón de reescaneo: `auto_update` de MPD (SPEC 07) indexa lo copiado por Samba.
 
 Una base SQLite propia queda pospuesta para preferencias, historial de reproducción, ratings o datos que MPD no cubra.

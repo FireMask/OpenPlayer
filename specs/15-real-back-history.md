@@ -56,7 +56,9 @@ Task RestoreAsync(string uri, CancellationToken ct = default);   // add "<uri>" 
 
 ```csharp
 private sealed record PlayedSong(string Uri, string? Source);
-private sealed record CurrentSong(int Id, string Uri, bool Played);  // Played: estuvo en play o pause
+private sealed record CurrentSong(int Id, string Uri, bool Played, string? Source);
+// Played: estuvo en play o pause. Source: etiqueta al observarla; playlist.play/library.play reetiquetan
+// la cola (borran _sources) antes de que el observador vea el cambio, así que la vieja se guarda aquí.
 
 private readonly LinkedList<PlayedSong> _history = [];   // último al final; tope 50 (descarta el más viejo)
 private CurrentSong? _current;

@@ -40,8 +40,28 @@ internal sealed class FakePlayer : IPlayer
         return SnapshotError is { } e ? Task.FromException<PlaybackSnapshot>(e) : Task.FromResult(Snapshot);
     }
 
-    // Sin cambios: espera hasta que se cancele. No se registra en Calls.
-    public Task WaitForChangeAsync(CancellationToken ct = default) => Task.Delay(Timeout.Infinite, ct);
+    private TaskCompletionSource _change = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Se completa cuando alguien queda esperando en <see cref="WaitForChangeAsync"/>.</summary>
+    public TaskCompletionSource Waiting { get; private set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    // Espera hasta ChangeAsync o la cancelación. No se registra en Calls.
+    public Task WaitForChangeAsync(CancellationToken ct = default)
+    {
+        var change = _change;
+        Waiting.TrySetResult();
+        return change.Task.WaitAsync(ct);
+    }
+
+    /// <summary>Simula un cambio de MPD y vuelve cuando el observador ya lo procesó y espera de nuevo.</summary>
+    public Task ChangeAsync()
+    {
+        var waiting = Waiting = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        var change = _change;
+        _change = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        change.SetResult();
+        return waiting.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
 
     private Task Record(string call)
     {

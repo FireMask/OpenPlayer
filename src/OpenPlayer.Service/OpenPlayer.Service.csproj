@@ -18,4 +18,8 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="OpenPlayer.Service.Tests" />
+  </ItemGroup>
+
 </Project>
