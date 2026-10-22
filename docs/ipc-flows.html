@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OpenPlayer Message Flows</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap">
+<style>
+  /* Layout: diagrama de secuencia a la izquierda, panel del paso a la derecha (apilado en móvil).
+     Colores por capa, los mismos de architecture-diagram.html. */
+  :root {
+    --bg: #f7f6f2; --card: #ffffff; --ink: #1d1d1f; --ink-2: #5b5b63; --line: #d9d7cf; --hl: #fff3d6;
+    --input: #2f6fdb;  --input-bg: #e8f0fd;
+    --agent: #c27a00;  --agent-bg: #fdf3e1;
+    --brain: #7a4bd1;  --brain-bg: #f1ebfc;
+    --engine: #1f8a5b; --engine-bg: #e4f5ec;
+    --live: #0f8a7e;   --live-bg: #e0f4f1;
+    --err: #c8372d;    --err-bg: #fbe6e3;
+    --accent: #e4572e;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141416; --card: #1e1e22; --ink: #ececf0; --ink-2: #a3a3ad; --line: #34343b; --hl: #2d2718;
+      --input: #7aa7f5;  --input-bg: #1b2740;
+      --agent: #f0b44c;  --agent-bg: #33281a;
+      --brain: #b597f2;  --brain-bg: #2a2140;
+      --engine: #5cc996; --engine-bg: #17302a;
+      --live: #4fd1c2;   --live-bg: #123330;
+      --err: #ff7b70;    --err-bg: #3a1c1a;
+      --accent: #ff8a5c;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141416; --card: #1e1e22; --ink: #ececf0; --ink-2: #a3a3ad; --line: #34343b; --hl: #2d2718;
+    --input: #7aa7f5;  --input-bg: #1b2740;
+    --agent: #f0b44c;  --agent-bg: #33281a;
+    --brain: #b597f2;  --brain-bg: #2a2140;
+    --engine: #5cc996; --engine-bg: #17302a;
+    --live: #4fd1c2;   --live-bg: #123330;
+    --err: #ff7b70;    --err-bg: #3a1c1a;
+    --accent: #ff8a5c;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 var(--sans); }
+  main { max-width: 1400px; margin: 0 auto; padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  h1 { font-size: 1.9rem; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-size: 1.3rem; margin: 48px 0 12px; text-wrap: balance; }
+  p.lead { color: var(--ink-2); margin: 0 0 18px; max-width: 70ch; }
+  code, pre, .mono { font-family: var(--mono); }
+  code { font-size: .85em; background: var(--line); padding: 1px 5px; border-radius: 4px; }
+  a { color: var(--accent); }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--input); outline-offset: 2px; }
+
+  body:not(.tech) .tech, body.tech .plain { display: none; }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--card); }
+  .toggle button { border: 0; background: none; color: var(--ink-2); padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+  .toggle button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+  .flows { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
+  .flows button { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 8px 12px; cursor: pointer; text-align: left; line-height: 1.25; }
+  .flows button small { display: block; color: var(--ink-2); font-size: 12px; }
+  .flows button[aria-selected="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+  @media (max-width: 980px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+
+  .diagram { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 8px; overflow-x: auto; min-width: 0; }
+  .diagram svg { display: block; width: 100%; height: auto; }
+  .summary { color: var(--ink-2); font-size: 15px; margin: 4px 6px 8px; max-width: 80ch; }
+
+  svg text { font-family: var(--sans); fill: var(--ink); }
+  svg .lane-name { font-weight: 700; font-size: 14px; }
+  svg .lane-sub { font-size: 11px; fill: var(--ink-2); font-family: var(--mono); }
+  svg .lifeline { stroke: var(--line); stroke-width: 2; stroke-dasharray: 4 5; }
+  svg .num { font: 600 11px var(--mono); fill: var(--ink-2); }
+  svg .lbl { font: 12px var(--mono); }
+  svg .row { fill: transparent; }
+  svg .step { cursor: pointer; transition: opacity .2s; }
+  svg .step.future { opacity: .22; }
+  svg .step.current .row { fill: var(--hl); }
+  svg .step.current .lbl { font-weight: 600; }
+  svg .step.current .num { fill: var(--ink); }
+  svg .step:focus-visible { outline: none; }
+  svg .step:focus-visible .row { stroke: var(--input); stroke-width: 2; }
+  svg .msg { stroke-width: 2; fill: none; }
+  svg .step.current .msg { stroke-width: 3; }
+  .k-req .msg { stroke: var(--ink-2); }
+  .k-reply .msg { stroke: var(--ink-2); stroke-dasharray: 7 5; }
+  .k-push .msg { stroke: var(--live); }
+  .k-ping .msg { stroke: var(--live); stroke-dasharray: 2 5; }
+  .k-err .msg { stroke: var(--err); }
+  .k-push .lbl, .k-ping .lbl { fill: var(--live); }
+  .k-err .lbl { fill: var(--err); }
+  svg .note rect { fill: var(--card); stroke: var(--ink-2); stroke-width: 1.5; stroke-dasharray: 3 3; }
+  svg .note text { font-size: 12px; fill: var(--ink); }
+  svg .dot { fill: var(--accent); }
+  .c-input { fill: var(--input-bg); stroke: var(--input); }
+  .c-agent { fill: var(--agent-bg); stroke: var(--agent); }
+  .c-brain { fill: var(--brain-bg); stroke: var(--brain); }
+  .c-engine { fill: var(--engine-bg); stroke: var(--engine); }
+  .c-live { fill: var(--live-bg); stroke: var(--live); }
+  svg .head rect { stroke-width: 2; }
+  .m-req path, .m-reply path { fill: var(--ink-2); }
+  .m-push path, .m-ping path { fill: var(--live); }
+  .m-err path { fill: var(--err); }
+
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; position: sticky; top: max(12px, env(safe-area-inset-top, 0px)); min-width: 0; display: grid; gap: 12px; }
+  @media (max-width: 980px) { .panel { position: static; } }
+  .meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--ink-2); }
+  .chip { display: inline-block; font: 600 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; border: 1px solid currentColor; }
+  .chip.req, .chip.reply, .chip.note { color: var(--ink-2); }
+  .chip.push, .chip.ping { color: var(--live); }
+  .chip.err { color: var(--err); }
+  .panel h3 { margin: 0; font-size: 1.15rem; line-height: 1.3; text-wrap: balance; }
+  .panel p { margin: 0; color: var(--ink); }
+  .route { font: 13px var(--mono); color: var(--ink-2); }
+  .payload { position: relative; }
+  .payload pre { margin: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px 12px 12px; font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; }
+  .payload .copy { position: absolute; top: 6px; right: 6px; border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 2px 8px; font-size: 12px; cursor: pointer; color: var(--ink-2); }
+  .controls { display: grid; grid-template-columns: auto auto 1fr auto; gap: 8px; }
+  .controls button { border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+  .controls button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+  .controls button:disabled { opacity: .45; cursor: default; }
+  .progress { display: flex; flex-wrap: wrap; gap: 4px; }
+  .progress button { width: 22px; height: 8px; border-radius: 4px; border: 0; background: var(--line); cursor: pointer; padding: 0; }
+  .progress button.done { background: var(--ink-2); }
+  .progress button.on { background: var(--accent); }
+  .hint { font-size: 12px; color: var(--ink-2); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--ink-2); margin: 10px 2px 0; }
+  .legend svg { vertical-align: middle; margin-right: 6px; }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink-2); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  td code { white-space: nowrap; }
+  .rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .rules div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; font-size: 14px; color: var(--ink-2); min-width: 0; }
+  .rules b { display: block; color: var(--ink); margin-bottom: 4px; }
+
+  @media (prefers-reduced-motion: reduce) { svg .step { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>OpenPlayer — flujos de mensajes</h1>
+  <p class="lead">Qué viaja entre la página, el web agent, el Service y MPD en cada situación. Elige un flujo y recórrelo paso a paso: cada flecha es un mensaje real del protocolo.</p>
+
+  <div class="bar">
+    <div class="toggle" role="group" aria-label="Nivel de explicación">
+      <button type="button" data-mode="plain" aria-pressed="true">Sencillo</button>
+      <button type="button" data-mode="tech" aria-pressed="false">Técnico</button>
+    </div>
+    <span class="hint">Teclado: ← → para moverte, espacio para reproducir.</span>
+  </div>
+
+  <ul class="flows" id="flows" role="tablist" aria-label="Flujos"></ul>
+
+  <div class="stage">
+    <div class="diagram">
+      <p class="summary" id="summary"></p>
+      <svg id="seq" role="img" aria-labelledby="summary"></svg>
+      <div class="legend" aria-hidden="true">
+        <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="var(--ink-2)" stroke-width="2"/></svg>pedido</span>
+        <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="7 5"/></svg>respuesta</span>
+        <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="var(--live)" stroke-width="2"/></svg>push (aviso sin pedido)</span>
+        <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="var(--live)" stroke-width="2" stroke-dasharray="2 5"/></svg>ping</span>
+        <span><svg width="34" height="10"><line x1="0" y1="5" x2="34" y2="5" stroke="var(--err)" stroke-width="2"/></svg>error / corte</span>
+        <span><svg width="22" height="14"><rect x="1" y="1" width="20" height="12" rx="3" fill="none" stroke="var(--ink-2)" stroke-dasharray="3 3"/></svg>algo que pasa dentro</span>
+      </div>
+    </div>
+
+    <aside class="panel" aria-live="polite">
+      <div class="meta"><span class="chip" id="chip"></span><span id="counter" class="mono"></span></div>
+      <h3 id="stitle"></h3>
+      <div class="route" id="route"></div>
+      <p class="plain" id="splain"></p>
+      <p class="tech" id="stech"></p>
+      <div class="payload" id="payload-wrap">
+        <pre id="payload"></pre>
+        <button type="button" class="copy" id="copy">Copiar</button>
+      </div>
+      <div class="controls">
+        <button type="button" id="prev" aria-label="Paso anterior">◀</button>
+        <button type="button" id="next" aria-label="Paso siguiente">▶</button>
+        <button type="button" id="auto" class="primary">Reproducir</button>
+        <button type="button" id="reset" aria-label="Volver al primer paso">⟲</button>
+      </div>
+      <div class="progress" id="progress" aria-label="Pasos"></div>
+    </aside>
+  </div>
+
+  <h2>Los mensajes del buzón</h2>
+  <p class="lead">Todo lo que entra al socket Unix del Service es una línea JSON. Hay tres formas de conversar. Contrato completo en <code>docs/architecture.md</code> §7.</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Forma</th><th>Mensajes</th><th>Qué vuelve</th></tr>
+    <tr><td><b>Sin respuesta</b><br><span class="plain">Deja la nota y se va.</span><span class="tech">Conexión por pedido; el log y MPD bastan.</span></td>
+      <td><code>button.pressed</code> · <code>player.seek</code></td><td>Nada. Si MPD falla, solo un warning en el log.</td></tr>
+    <tr><td><b>Pide y espera</b><br><span class="plain">Pregunta y espera una línea.</span><span class="tech">Una conexión por pedido; timeout 2 s (snapshot) o 5 s (resto).</span></td>
+      <td><code>player.get_snapshot</code> · <code>library.*</code> · <code>playlist.*</code> · <code>queue.*</code></td>
+      <td><code>player.snapshot</code>, <code>library.page</code>, <code>playlist.list</code>, <code>queue.page</code>, <code>ok</code> o <code>error</code>. Siempre exactamente una línea.</td></tr>
+    <tr><td><b>Suscripción</b><br><span class="plain">Pide que le avisen de todo.</span><span class="tech">Conexión dedicada; el Service deja de leerla.</span></td>
+      <td><code>player.subscribe</code></td><td>Un <code>player.snapshot</code> enseguida y otro por cada cambio de MPD; la línea <code>error</code> si MPD falla.</td></tr>
+  </table>
+  </div>
+
+  <h2>Reglas que no cambian</h2>
+  <div class="rules">
+    <div><b>Solo el Service habla con MPD</b>Los agentes nunca abren el puerto 6600. La excepción es <code>mpc</code> por SSH, que es administración.</div>
+    <div><b>Un comando a la vez</b>Todo lo que toca MPD pasa por un lock global (<code>_commandLock</code>). Los push salen fuera del lock para que un suscriptor lento no frene los botones.</div>
+    <div><b>MPD es la verdad</b>Cada push es el snapshot completo, no una diferencia. La página siempre puede redibujarse con la última línea.</div>
+    <div><b>Las líneas tienen límite</b>Hasta 4096 bytes de entrada por línea; más, y se cierra esa conexión. JSON inválido: warning y la conexión sigue.</div>
+    <div><b>Todo se recupera solo</b>systemd reinicia; el web agent se resuscribe cada 2 s; el observador reintenta MPD cada 5 s; el navegador reconecta el <code>EventSource</code>.</div>
+    <div><b>Sondeo solo de respaldo</b>Con el stream abierto la página no pregunta. Si se corta, vuelve a <code>GET /api/snapshot</code> cada 2 s hasta reconectar.</div>
+  </div>
+</main>
+
+<script>
+  const LANES = {
+    hw:    { name: 'Botones',     sub: 'hardware agent',  c: 'agent' },
+    page:  { name: 'Navegador',   sub: 'index.html',      c: 'input' },
+    pageA: { name: 'Navegador A', sub: 'teléfono',        c: 'input' },
+    pageB: { name: 'Navegador B', sub: 'PC',              c: 'input' },
+    mpc:   { name: 'Terminal',    sub: 'mpc por SSH',     c: 'input' },
+    web:   { name: 'Web agent',   sub: 'server.py',       c: 'agent' },
+    svc:   { name: 'Service',     sub: 'IpcServer',       c: 'brain' },
+    watch: { name: 'Observador',  sub: 'WatchAsync',      c: 'live' },
+    mpd:   { name: 'MPD',         sub: ':6600',           c: 'engine' },
+  };
+
+  const SNAP = '{"type":"player.snapshot","state":"playing","trackTitle":"Rumour Has It","trackArtist":"Adele","positionSeconds":0,"durationSeconds":223,"volume":40,"queuePosition":0,"queueVersion":118}';
+  const SNAP_VOL = '{"type":"player.snapshot","state":"playing","trackTitle":"Rumour Has It","trackArtist":"Adele","positionSeconds":74,"durationSeconds":223,"volume":40,"queuePosition":0,"queueVersion":118}';
+  const ERR_SUB = '{"type":"error","request":"player.get_snapshot","message":"subscription closed"}';
+  const ERR_MPD = '{"type":"error","request":"player.get_snapshot","message":"MPD did not respond within 3000 ms"}';
+  const URI = 'Adele/21/03 Turning Tables.flac';
+
+  // kind: req | reply | push | ping | err | note. Las notas usan `at` en lugar de from/to.
+  const FLOWS = [
+    {
+      id: 'web-next', title: '⏭ desde la web', small: 'de punta a punta',
+      summary: 'Tocas ⏭ en el teléfono. El pedido baja hasta MPD y el cambio vuelve solo, sin que la página pregunte.',
+      lanes: ['page', 'web', 'svc', 'watch', 'mpd'],
+      steps: [
+        { from: 'page', to: 'web', kind: 'req', label: 'POST /api/buttons/next', t: 'Tocas ⏭ en la página',
+          plain: 'El navegador manda un pedido HTTP al web agent.',
+          tech: 'fetch POST sin cuerpo. El web agent comprueba que el cliente esté en la red local (si no, 403) y que el nombre esté en BUTTON_NAMES (si no, 404).',
+          payload: 'POST /api/buttons/next HTTP/1.1' },
+        { from: 'web', to: 'svc', kind: 'req', label: 'button.pressed', t: 'El web agent deja la nota en el buzón',
+          plain: 'Abre una conexión con el Service solo para esto, escribe la nota y la cierra.',
+          tech: 'Una conexión al socket Unix por pedido. Sin sequence (solo la usa el hardware agent). El Service no responde a este tipo de mensaje.',
+          payload: '{"type":"button.pressed","button":"next"}' },
+        { from: 'web', to: 'page', kind: 'reply', label: '204 No Content', t: 'La página recibe «hecho»',
+          plain: 'El web agent contesta enseguida. No espera a que cambie la canción: eso llega después, por otro camino.',
+          tech: '204 si el socket aceptó la línea; 503 si el Service no está. La pantalla se actualiza con el push del paso 10.',
+          payload: 'HTTP/1.0 204 No Content' },
+        { from: 'svc', to: 'mpd', kind: 'req', label: 'next', t: 'El Service le dice a MPD «siguiente»',
+          plain: 'El Service traduce el botón al idioma de MPD.',
+          tech: 'IpcMessageParser → ButtonCommandHandler → IPlayer.NextAsync(), bajo _commandLock. Conexión TCP corta a 127.0.0.1:6600.',
+          payload: 'next' },
+        { from: 'mpd', to: 'svc', kind: 'reply', label: 'OK', t: 'MPD cambia de canción',
+          plain: 'La canción que saltaste sale de la cola y la nueva queda primera.',
+          tech: 'Con consume 1 (SPEC 14) la saltada se borra de la cola.',
+          payload: 'OK' },
+        { from: 'mpd', to: 'watch', kind: 'push', label: 'changed: player', t: 'MPD avisa al observador',
+          plain: 'El observador estaba esperando novedades. MPD le dice qué partes cambiaron.',
+          tech: 'WaitForChangeAsync tenía abierto un idle en su propia conexión, sin timeout. Responde con los subsistemas que cambiaron.',
+          payload: 'changed: player\nchanged: playlist\nOK' },
+        { from: 'watch', to: 'mpd', kind: 'req', label: 'status + currentsong', t: 'El observador pregunta cómo quedó todo',
+          plain: 'Saca una foto completa: canción, posición, volumen, cola.',
+          tech: 'GetSnapshotAsync bajo _commandLock. queueVersion es el campo playlist de status: cambia con cada edición de la cola.',
+          payload: 'status\ncurrentsong' },
+        { at: 'watch', kind: 'note', label: 'Observe(): historial', t: 'Guarda la anterior para ⏮',
+          plain: 'Si cambió la canción y la anterior llegó a sonar, la anota en el historial.',
+          tech: 'Compara SongId con _current. La anterior entra al historial (uri + etiqueta de origen) si estuvo en play o pause; últimas 50, en memoria. En el mismo lock copia la lista de suscriptores.',
+          payload: '' },
+        { from: 'watch', to: 'web', kind: 'push', label: 'player.snapshot', t: 'Manda la foto a los suscriptores',
+          plain: 'El observador avisa a todos los que pidieron enterarse, sin que nadie pregunte.',
+          tech: 'PushAsync fuera del lock, en paralelo, con timeout de 2 s por suscriptor. Uno que falla o tarda se descarta (warning «Subscriber dropped»).',
+          payload: SNAP },
+        { from: 'web', to: 'page', kind: 'push', label: 'data: {…}', t: 'El web agent la reenvía a la página',
+          plain: 'La misma línea viaja al navegador por el canal que la página dejó abierto.',
+          tech: 'El hilo Events guarda la línea como latest y la pone en la cola de cada página; el handler de GET /api/events la escribe como evento SSE.',
+          payload: 'data: ' + SNAP + '\n\n' },
+        { at: 'page', kind: 'note', label: 'show(s) + recargar cola', t: 'La pantalla cambia',
+          plain: 'Título, barra de progreso y resaltado se actualizan. Como la cola cambió, la página la vuelve a pedir.',
+          tech: 'EventSource.onmessage → show(). queueVersion distinto del anterior → GET /api/queue?offset=0 (queue.get → queue.page).',
+          payload: '' },
+        { from: 'watch', to: 'mpd', kind: 'req', label: 'idle player mixer …', t: 'El observador vuelve a esperar',
+          plain: 'Queda atento al próximo cambio, por lo que tarde.',
+          tech: 'Nueva conexión; desde SPEC 16 escucha cuatro subsistemas: canción y play/pausa, volumen, cola y opciones (consume).',
+          payload: 'idle player mixer playlist options' },
+      ],
+    },
+    {
+      id: 'subscribe', title: 'Suscripción', small: 'cómo se conecta una página',
+      summary: 'El web agent se suscribe una vez al arrancar. Cada página que abres se engancha a esa suscripción a través del web agent.',
+      lanes: ['page', 'web', 'svc', 'mpd'],
+      steps: [
+        { at: 'web', kind: 'note', label: 'arranca el web agent', t: 'El web agent arranca',
+          plain: 'Lo primero que hace es abrir una línea fija con el Service y dejarla abierta mientras corre.',
+          tech: 'main.py: server.events.start() → hilo «events» → ipc.subscribe(). Se suscribe siempre, haya o no páginas abiertas.',
+          payload: '' },
+        { from: 'web', to: 'svc', kind: 'req', label: 'player.subscribe', t: 'Pide «avísame de todo»',
+          plain: 'Es el único mensaje que manda por esa conexión.',
+          tech: 'Conexión dedicada: el Service no lee más pedidos de ella (las líneas siguientes se ignoran) y la quita de la lista al cerrarse.',
+          payload: '{"type":"player.subscribe"}' },
+        { from: 'svc', to: 'mpd', kind: 'req', label: 'status + currentsong', t: 'El Service saca la foto actual',
+          plain: 'Para que el web agent no tenga que esperar al próximo cambio.',
+          tech: 'Dentro de _commandLock: registra la conexión en _subscribers y toma el snapshot. Así el observador nunca le manda una foto más vieja que esta ni escribe a la vez en la misma conexión.',
+          payload: 'status\ncurrentsong' },
+        { from: 'mpd', to: 'svc', kind: 'reply', label: 'estado', t: 'MPD responde',
+          plain: 'Estado, canción, posición, volumen, cola.',
+          tech: 'Dos respuestas: status y currentsong, cada una terminada en OK.',
+          payload: 'volume: 40\nstate: play\nsong: 0\nplaylist: 118\nelapsed: 74.2\n…\nOK\nfile: Adele/21/02 Rumour Has It.flac\nTitle: Rumour Has It\n…\nOK' },
+        { from: 'svc', to: 'web', kind: 'reply', label: 'player.snapshot', t: 'Respuesta inmediata',
+          plain: 'El web agent ya sabe cómo está todo.',
+          tech: 'Escritura con timeout de 2 s. Si MPD está caído, va la línea error en su lugar y la conexión queda suscripta igual.',
+          payload: SNAP_VOL },
+        { at: 'web', kind: 'note', label: 'latest = línea', t: 'El web agent la guarda',
+          plain: 'Se queda con la última novedad para dársela a cada página nueva.',
+          tech: 'Events.latest. Todavía no hay páginas: clients está vacío.',
+          payload: '' },
+        { from: 'page', to: 'web', kind: 'req', label: 'GET /api/events', t: 'Abres la página',
+          plain: 'El navegador abre un canal para recibir novedades. Mientras tanto ya preguntó una vez por /api/snapshot.',
+          tech: 'new EventSource("/api/events"). Máximo 8 páginas: la 9.ª recibe 503 y se queda con el sondeo de 2 s.',
+          payload: 'GET /api/events HTTP/1.1\nAccept: text/event-stream' },
+        { from: 'web', to: 'page', kind: 'push', label: '200 + data: latest', t: 'Recibe primero la última novedad',
+          plain: 'No espera al próximo cambio: le llega enseguida la última foto conocida.',
+          tech: 'Content-Type: text/event-stream, Cache-Control: no-store. Events.connect() crea una cola de 16 que ya trae latest.',
+          payload: 'HTTP/1.0 200 OK\nContent-Type: text/event-stream; charset=utf-8\nCache-Control: no-store\n\ndata: ' + SNAP_VOL + '\n\n' },
+        { at: 'page', kind: 'note', label: 'onopen: sin sondeo', t: 'La página deja de preguntar',
+          plain: 'Mientras el canal esté abierto, no hace falta preguntar cada 2 segundos.',
+          tech: 'onopen → clearInterval(poll). La barra de progreso sigue avanzando sola entre eventos.',
+          payload: '' },
+        { from: 'web', to: 'page', kind: 'ping', label: ': ping', t: '15 segundos sin novedades',
+          plain: 'El web agent manda una señal de vida. La página la ignora.',
+          tech: 'q.get(timeout=15) vacío → «: ping». Es un comentario SSE: EventSource no dispara onmessage. Sirve para notar páginas cerradas.',
+          payload: ': ping\n\n' },
+        { at: 'page', kind: 'note', label: 'cierras la pestaña', t: 'Cierras la pestaña',
+          plain: 'El navegador corta la conexión sin avisar.',
+          tech: 'El socket TCP se cierra; el hilo del handler sigue esperando en la cola de esa página.',
+          payload: '' },
+        { at: 'web', kind: 'note', label: 'escritura falla → libera', t: 'El web agent libera el lugar',
+          plain: 'El próximo envío falla y esa página deja de contar para el máximo de 8.',
+          tech: 'OSError al escribir (evento o ping) → events.disconnect(q). Una página que no lee y llena su cola de 16 también se descarta.',
+          payload: '' },
+      ],
+    },
+    {
+      id: 'external', title: 'Cambio desde fuera', small: 'mpc y varias páginas',
+      summary: 'Alguien cambia el volumen con mpc en la Pi. El Service no recibió ningún mensaje, pero todas las páginas se enteran igual.',
+      lanes: ['mpc', 'mpd', 'watch', 'web', 'pageA', 'pageB'],
+      steps: [
+        { from: 'mpc', to: 'mpd', kind: 'req', label: 'volume 40', t: 'Cambian el volumen por SSH',
+          plain: 'mpc habla directo con MPD, sin pasar por el buzón.',
+          tech: 'Canal de administración. Lo mismo pasa con otro cliente MPD o con una canción que termina sola.',
+          payload: '$ mpc volume 40' },
+        { from: 'mpd', to: 'mpc', kind: 'reply', label: 'OK', t: 'MPD lo aplica',
+          plain: 'El volumen ya cambió.', tech: 'setvol 40 → OK.', payload: 'OK' },
+        { from: 'mpd', to: 'watch', kind: 'push', label: 'changed: mixer', t: 'MPD avisa al observador',
+          plain: 'Aunque nadie usó el buzón, el observador se entera porque escucha a MPD.',
+          tech: 'Antes de SPEC 16 el idle solo escuchaba player y esto pasaba inadvertido; ahora incluye mixer, playlist y options.',
+          payload: 'changed: mixer\nOK' },
+        { from: 'watch', to: 'mpd', kind: 'req', label: 'status + currentsong', t: 'Saca la foto',
+          plain: 'Pregunta cómo quedó todo.', tech: 'Bajo _commandLock.', payload: 'status\ncurrentsong' },
+        { at: 'watch', kind: 'note', label: 'misma canción: sin historial', t: 'El historial no cambia',
+          plain: 'Sigue sonando la misma canción, así que no hay nada que guardar para ⏮.',
+          tech: 'Observe(): mismo SongId → solo actualiza _current. El cambio solo produce un push.',
+          payload: '' },
+        { from: 'watch', to: 'web', kind: 'push', label: 'player.snapshot', t: 'Push al web agent',
+          plain: 'La foto nueva trae «volume: 40».', tech: 'Snapshot completo, no una diferencia.', payload: SNAP_VOL },
+        { from: 'web', to: 'pageA', kind: 'push', label: 'data: {…}', t: 'Llega al teléfono',
+          plain: 'Cada página abierta recibe la misma línea.',
+          tech: 'Events._publish: put_nowait en la cola de cada página, bajo un lock propio.',
+          payload: 'data: ' + SNAP_VOL + '\n\n' },
+        { from: 'web', to: 'pageB', kind: 'push', label: 'data: {…}', t: 'Llega a la PC',
+          plain: 'Hasta 8 páginas a la vez.',
+          tech: 'Una página que no lee y llena su cola (16 líneas) se descarta sin afectar a las demás.',
+          payload: 'data: ' + SNAP_VOL + '\n\n' },
+        { at: 'pageA', kind: 'note', label: '«Volumen 40%»', t: 'Ambas pantallas cambian',
+          plain: 'En menos de medio segundo las dos muestran «Reproduciendo · Volumen 40%».',
+          tech: 'show(s) en cada página. queueVersion no cambió: no se recarga la cola.',
+          payload: '' },
+      ],
+    },
+    {
+      id: 'queue-add', title: 'Reproducir siguiente', small: 'pedido con respuesta',
+      summary: 'En la Biblioteca eliges «+ → Reproducir siguiente». Es un pedido que siempre responde una línea, y además dispara un push.',
+      lanes: ['page', 'web', 'svc', 'watch', 'mpd'],
+      steps: [
+        { from: 'page', to: 'web', kind: 'req', label: 'POST /api/queue/tracks', t: 'Eliges «Reproducir siguiente»',
+          plain: 'La página manda qué canción y dónde ponerla.',
+          tech: 'Cuerpo JSON de hasta 4 KB. El web agent valida la forma (uri texto no vacío, next booleano); el contenido lo valida el Core.',
+          payload: 'POST /api/queue/tracks\n{"uri":"' + URI + '","next":true}' },
+        { from: 'web', to: 'svc', kind: 'req', label: 'queue.add', t: 'El web agent pregunta y espera',
+          plain: 'A diferencia de los botones, este mensaje siempre trae respuesta.',
+          tech: 'ipc.request(): conexión nueva, timeout de 5 s, respuesta de hasta 1 MB.',
+          payload: '{"type":"queue.add","uri":"' + URI + '","next":true}' },
+        { from: 'svc', to: 'mpd', kind: 'req', label: 'plchangesposid 0', t: 'Anota qué había en la cola',
+          plain: 'Para saber después cuáles canciones son nuevas.',
+          tech: 'Bajo _commandLock. Pares posición/id de toda la cola, más livianos que playlistinfo.',
+          payload: 'plchangesposid 0' },
+        { from: 'svc', to: 'mpd', kind: 'req', label: 'status · add "…" 1', t: 'La pone después de la actual',
+          plain: 'Busca qué está sonando y agrega la canción justo detrás.',
+          tech: 'next=true: status da song=0 → add con posición 1 (MPD ≥ 0.23.3). Sin canción actual, va al final.',
+          payload: 'status\nadd "' + URI + '" 1' },
+        { from: 'svc', to: 'mpd', kind: 'req', label: 'plchangesposid 0', t: 'Mira qué canciones son nuevas',
+          plain: 'Las que no estaban antes reciben la etiqueta «Biblioteca».',
+          tech: 'ids nuevos → _sources[id] = "Biblioteca"; se olvidan los que ya no están en la cola. Si esto falla, la respuesta sigue siendo ok, sin etiqueta.',
+          payload: 'plchangesposid 0' },
+        { from: 'svc', to: 'web', kind: 'reply', label: 'ok', t: 'El Service confirma',
+          plain: 'Una sola línea: «listo».', tech: 'OkMessage. Si MPD hubiera respondido ACK, vendría error con el mensaje de MPD.',
+          payload: '{"type":"ok","request":"queue.add"}' },
+        { from: 'web', to: 'page', kind: 'reply', label: '204 No Content', t: 'La página recibe «hecho»',
+          plain: 'Cierra el menú. La cola todavía no se redibuja: el aviso llega aparte.',
+          tech: 'ok → 204. error → 502 con la línea como cuerpo (la página muestra el mensaje). Service caído → 503.',
+          payload: 'HTTP/1.0 204 No Content' },
+        { from: 'mpd', to: 'watch', kind: 'push', label: 'changed: playlist', t: 'MPD avisa: cambió la cola',
+          plain: 'Agregar una canción también es un cambio que el observador escucha.',
+          tech: 'El subsistema playlist es la cola actual de MPD (no las listas guardadas, que serían stored_playlist).',
+          payload: 'changed: playlist\nOK' },
+        { from: 'watch', to: 'web', kind: 'push', label: 'player.snapshot', t: 'Push con queueVersion nuevo',
+          plain: 'La foto trae un número de versión de cola distinto.',
+          tech: 'queueVersion 118 → 119. Pasa por el web agent hasta la página como siempre.',
+          payload: SNAP.replace('"queueVersion":118', '"queueVersion":119') },
+        { at: 'page', kind: 'note', label: 'queueVersion cambió', t: 'La página recarga la cola',
+          plain: 'Ve el número nuevo y pide la cola otra vez: la canción aparece segunda, con «Biblioteca».',
+          tech: 'GET /api/queue?offset=0 → queue.get → queue.page con source por fila. Solo se pide cuando cambia queueVersion: nunca por sondeo.',
+          payload: '{"type":"queue.page","offset":0,"total":2,"entries":[{"uri":"Adele/21/02 Rumour Has It.flac","id":41,"source":"Favoritas",…},{"uri":"' + URI + '","id":57,"source":"Biblioteca",…}]}' },
+      ],
+    },
+    {
+      id: 'previous', title: '⏮ con historial', small: 'botón físico',
+      summary: 'Pulsas ⏮ en los primeros 3 segundos. La canción anterior ya salió de la cola (consume), pero el Service la recuerda y la devuelve arriba.',
+      lanes: ['hw', 'svc', 'watch', 'mpd', 'web'],
+      steps: [
+        { from: 'hw', to: 'svc', kind: 'req', label: 'button.pressed', t: 'Pulsas ⏮',
+          plain: 'El hardware agent manda la nota, igual que el botón de la web.',
+          tech: 'GPIO con debounce; sequence por proceso, solo para el log. Sin respuesta.',
+          payload: '{"type":"button.pressed","button":"previous","sequence":12}' },
+        { from: 'svc', to: 'mpd', kind: 'req', label: 'status + currentsong', t: '¿Cuánto lleva la canción?',
+          plain: 'Si lleva más de 3 segundos, ⏮ solo la reinicia.',
+          tech: 'PreviousAsync bajo _commandLock: hay historial y la posición es ≤ PreviousRestartThreshold (3 s) o desconocida.',
+          payload: 'status\ncurrentsong' },
+        { from: 'mpd', to: 'svc', kind: 'reply', label: 'elapsed: 1.4', t: 'Lleva 1,4 segundos',
+          plain: 'Menos de 3: toca volver a la anterior.', tech: 'Snapshot con Position = 00:00:01.4.', payload: 'elapsed: 1.4\n…\nOK' },
+        { at: 'svc', kind: 'note', label: 'saca la última del historial', t: 'Recupera la anterior',
+          plain: 'Toma la última canción escuchada, con la lista de la que venía.',
+          tech: '_history.RemoveLast() → PlayedSong(Uri, Source).',
+          payload: '{ uri: "Adele/21/01 Rolling In The Deep.flac", source: "Favoritas" }' },
+        { from: 'svc', to: 'mpd', kind: 'req', label: 'add "…" 0 · play 0', t: 'La pone arriba y la reproduce',
+          plain: 'La canción que sonaba queda segunda en la cola.',
+          tech: 'IQueue.RestoreAsync. Si el archivo ya no existe (ACK), se descarta la entrada y ⏮ reinicia la actual.',
+          payload: 'add "Adele/21/01 Rolling In The Deep.flac" 0\nplay 0' },
+        { from: 'svc', to: 'mpd', kind: 'req', label: 'plchangesposid 0', t: 'Le devuelve su etiqueta',
+          plain: 'En la cola vuelve a decir «Favoritas».',
+          tech: 'El primer id de la cola → _sources[id] = "Favoritas".',
+          payload: 'plchangesposid 0' },
+        { at: 'svc', kind: 'note', label: '_current = null', t: 'Evita el rebote',
+          plain: 'El Service olvida cuál sonaba, para que este cambio no entre al historial. Así ⏮⏮ retrocede dos canciones.',
+          tech: 'Sin actual, Observe() no agrega la que sonaba. La restaurada vuelve al historial cuando termine.',
+          payload: '' },
+        { from: 'mpd', to: 'watch', kind: 'push', label: 'changed: player', t: 'MPD avisa del cambio',
+          plain: 'El observador se entera como de cualquier otro cambio.', tech: 'También changed: playlist (se agregó una canción).',
+          payload: 'changed: player\nchanged: playlist\nOK' },
+        { from: 'watch', to: 'web', kind: 'push', label: 'player.snapshot', t: 'Las páginas lo ven al instante',
+          plain: 'Aunque el botón fue físico, el teléfono muestra la canción recuperada.',
+          tech: 'Mismo push que en cualquier cambio; el web agent lo reenvía por SSE.',
+          payload: SNAP.replace('Rumour Has It', 'Rolling In The Deep').replace('"queueVersion":118', '"queueVersion":121') },
+      ],
+    },
+    {
+      id: 'outage', title: 'Algo se cae', small: 'reinicio y recuperación',
+      summary: 'Reinicias el Service. Las páginas muestran «Sin conexión» y vuelven solas cuando el Service regresa.',
+      lanes: ['page', 'web', 'svc', 'watch', 'mpd'],
+      steps: [
+        { at: 'svc', kind: 'note', label: 'systemctl restart openplayer', t: 'El Service se reinicia',
+          plain: 'Por una actualización, un error o a mano.',
+          tech: 'Al detenerse deja de aceptar conexiones, cierra los clientes y borra el archivo del socket.',
+          payload: '$ sudo systemctl restart openplayer' },
+        { from: 'svc', to: 'web', kind: 'err', label: 'conexión cerrada', t: 'Se corta la suscripción',
+          plain: 'La línea fija del web agent se cae.',
+          tech: 'recv() devuelve 0 → IpcUnavailable("subscription closed").',
+          payload: '' },
+        { from: 'web', to: 'page', kind: 'push', label: 'data: error', t: 'El web agent avisa a las páginas',
+          plain: 'Les manda la misma línea de error que ya entienden.',
+          tech: 'Events._publish(error). El EventSource sigue abierto: el web agent no se cayó.',
+          payload: 'data: ' + ERR_SUB + '\n\n' },
+        { at: 'page', kind: 'note', label: '«Sin conexión…»', t: 'La página lo muestra',
+          plain: 'Aparece «Sin conexión con el reproductor» y la cola se marca sin conexión.',
+          tech: 'onmessage: type ≠ player.snapshot → showOffline().',
+          payload: '' },
+        { from: 'web', to: 'svc', kind: 'err', label: 'player.subscribe ✕', t: 'Reintenta cada 2 segundos',
+          plain: 'Mientras el Service no está, el intento falla y el web agent vuelve a avisar.',
+          tech: 'connect → FileNotFound / ConnectionRefused → IpcUnavailable → otra línea de error; time.sleep(2).',
+          payload: '' },
+        { at: 'svc', kind: 'note', label: 'Service listo', t: 'El Service vuelve',
+          plain: 'Arranca, abre el buzón y el observador empieza a escuchar a MPD.',
+          tech: 'Bind del socket (0660), consume 1 y WatchAsync en paralelo.',
+          payload: '' },
+        { from: 'web', to: 'svc', kind: 'req', label: 'player.subscribe', t: 'Esta vez la suscripción entra',
+          plain: 'El web agent se reengancha solo.', tech: 'Mismo flujo que al arrancar.', payload: '{"type":"player.subscribe"}' },
+        { from: 'svc', to: 'web', kind: 'reply', label: 'player.snapshot', t: 'Foto inmediata',
+          plain: 'El web agent vuelve a saber cómo está todo.', tech: 'Snapshot bajo el lock, enseguida.', payload: SNAP_VOL },
+        { from: 'web', to: 'page', kind: 'push', label: 'data: {…}', t: 'La página se recupera sola',
+          plain: 'Sin recargar nada: vuelven el título, la barra y la cola.',
+          tech: 'show(s); al recuperar la conexión la cola se vuelve a pedir.',
+          payload: 'data: ' + SNAP_VOL + '\n\n' },
+        { from: 'watch', to: 'web', kind: 'err', label: 'error (MPD)', t: '¿Y si se cae MPD?',
+          plain: 'El Service sigue en pie: el observador avisa una vez por cada fallo y reintenta cada 5 segundos.',
+          tech: 'WatchAsync captura MpdException / MpdUnavailableException → push de la línea error a los suscriptores → Task.Delay(5 s). Los suscriptores siguen conectados.',
+          payload: ERR_MPD },
+        { at: 'page', kind: 'note', label: 'si cae el web agent', t: '¿Y si se cae el web agent?',
+          plain: 'El canal de la página se corta; vuelve a preguntar cada 2 segundos hasta que el navegador reconecta.',
+          tech: 'EventSource.onerror → setInterval(refresh, 2000). El navegador reintenta solo; onopen vuelve a detener el sondeo.',
+          payload: '' },
+      ],
+    },
+  ];
+
+  // --- Render ---
+  const GAP = 172, MX = 92, TOP = 16, HEAD = 50, ROW = 50, Y0 = TOP + HEAD + 40;
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.getElementById('seq');
+  const KIND = { req: 'Pedido', reply: 'Respuesta', push: 'Push', ping: 'Ping', err: 'Error', note: 'Dentro' };
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  let flow = FLOWS[0], cur = 0, timer = null, dotAnim = null;
+
+  function el(name, attrs, parent, text) {
+    const e = document.createElementNS(NS, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  function laneX(id) { return MX + flow.lanes.indexOf(id) * GAP; }
+
+  function draw() {
+    svg.textContent = '';
+    const w = MX * 2 + GAP * (flow.lanes.length - 1);
+    const h = Y0 + flow.steps.length * ROW;
+    svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    svg.style.minWidth = Math.round(w * 0.78) + 'px';
+
+    const defs = el('defs', {}, svg);
+    ['req', 'reply', 'push', 'ping', 'err'].forEach(k => {
+      const m = el('marker', { id: 'm-' + k, class: 'm-' + k, viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' }, defs);
+      el('path', { d: 'M0 0 L10 5 L0 10 z' }, m);
+    });
+
+    flow.lanes.forEach(id => {
+      const x = laneX(id), lane = LANES[id];
+      el('line', { class: 'lifeline', x1: x, y1: TOP + HEAD, x2: x, y2: h - 6 }, svg);
+      const g = el('g', { class: 'head' }, svg);
+      el('rect', { class: 'c-' + lane.c, x: x - 74, y: TOP, width: 148, height: HEAD, rx: 10 }, g);
+      el('text', { class: 'lane-name', x, y: TOP + 21, 'text-anchor': 'middle' }, g, lane.name);
+      el('text', { class: 'lane-sub', x, y: TOP + 38, 'text-anchor': 'middle' }, g, lane.sub);
+    });
+
+    flow.steps.forEach((s, i) => {
+      const y = Y0 + i * ROW;
+      const g = el('g', { class: 'step k-' + s.kind, tabindex: 0, role: 'button', 'aria-label': `Paso ${i + 1}: ${s.t}` }, svg);
+      g.dataset.i = i;
+      el('rect', { class: 'row', x: 4, y: y - ROW / 2 + 3, width: w - 8, height: ROW - 6, rx: 8 }, g);
+      el('text', { class: 'num', x: 16, y: y + 4 }, g, String(i + 1).padStart(2, '0'));
+      if (s.kind === 'note') {
+        const x = laneX(s.at);
+        const bw = Math.min(Math.max(s.label.length * 6.8 + 24, 90), GAP * 1.7);
+        const n = el('g', { class: 'note' }, g);
+        el('rect', { x: x - bw / 2, y: y - 14, width: bw, height: 28, rx: 6 }, n);
+        el('text', { x, y: y + 4, 'text-anchor': 'middle' }, n, s.label);
+      } else {
+        const x1 = laneX(s.from), x2 = laneX(s.to), dir = Math.sign(x2 - x1);
+        el('line', { class: 'msg', x1: x1 + dir * 4, y1: y + 6, x2: x2 - dir * 6, y2: y + 6, 'marker-end': `url(#m-${s.kind})` }, g);
+        el('text', { class: 'lbl', x: (x1 + x2) / 2, y: y - 2, 'text-anchor': 'middle' }, g, s.label);
+      }
+      g.addEventListener('click', () => go(i));
+      g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(i); } });
+    });
+    el('circle', { class: 'dot', id: 'dot', r: 7, cx: -20, cy: -20 }, svg);
+
+    const prog = document.getElementById('progress');
+    prog.textContent = '';
+    flow.steps.forEach((s, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('aria-label', `Ir al paso ${i + 1}`);
+      b.addEventListener('click', () => go(i));
+      prog.appendChild(b);
+    });
+    document.getElementById('summary').textContent = flow.summary;
+  }
+
+  function animateDot(s) {
+    const dot = document.getElementById('dot');
+    if (dotAnim) cancelAnimationFrame(dotAnim);
+    if (s.kind === 'note' || reduced.matches) { dot.setAttribute('cx', -20); return; }
+    const y = Y0 + cur * ROW + 6, x1 = laneX(s.from), x2 = laneX(s.to), t0 = performance.now(), dur = 650;
+    const frame = now => {
+      const p = Math.min((now - t0) / dur, 1), e = 1 - Math.pow(1 - p, 3);
+      dot.setAttribute('cx', x1 + (x2 - x1) * e);
+      dot.setAttribute('cy', y);
+      if (p < 1) dotAnim = requestAnimationFrame(frame);
+    };
+    dotAnim = requestAnimationFrame(frame);
+  }
+
+  function go(i) {
+    cur = Math.max(0, Math.min(i, flow.steps.length - 1));
+    const s = flow.steps[cur];
+    svg.querySelectorAll('.step').forEach(g => {
+      const j = +g.dataset.i;
+      g.classList.toggle('current', j === cur);
+      g.classList.toggle('future', j > cur);
+    });
+    document.querySelectorAll('#progress button').forEach((b, j) => {
+      b.classList.toggle('on', j === cur);
+      b.classList.toggle('done', j < cur);
+    });
+    const chip = document.getElementById('chip');
+    chip.className = 'chip ' + s.kind;
+    chip.textContent = KIND[s.kind];
+    document.getElementById('counter').textContent = `Paso ${cur + 1} de ${flow.steps.length}`;
+    document.getElementById('stitle').textContent = s.t;
+    document.getElementById('route').textContent = s.kind === 'note'
+      ? LANES[s.at].name
+      : `${LANES[s.from].name} → ${LANES[s.to].name}`;
+    document.getElementById('splain').textContent = s.plain;
+    document.getElementById('stech').textContent = s.tech;
+    document.getElementById('payload-wrap').hidden = !s.payload;
+    document.getElementById('payload').textContent = s.payload;
+    document.getElementById('copy').textContent = 'Copiar';
+    document.getElementById('prev').disabled = cur === 0;
+    document.getElementById('next').disabled = cur === flow.steps.length - 1;
+    animateDot(s);
+  }
+
+  function stop() {
+    clearInterval(timer);
+    timer = null;
+    document.getElementById('auto').textContent = 'Reproducir';
+  }
+
+  function play() {
+    if (timer) return stop();
+    if (cur === flow.steps.length - 1) go(0);
+    document.getElementById('auto').textContent = 'Pausa';
+    timer = setInterval(() => {
+      if (cur >= flow.steps.length - 1) return stop();
+      go(cur + 1);
+    }, 2600);
+  }
+
+  function select(id) {
+    stop();
+    flow = FLOWS.find(f => f.id === id) || FLOWS[0];
+    document.querySelectorAll('#flows button').forEach(b => b.setAttribute('aria-selected', b.dataset.id === flow.id));
+    draw();
+    go(0);
+    try { history.replaceState(null, '', '#' + flow.id); } catch {}
+  }
+
+  const list = document.getElementById('flows');
+  FLOWS.forEach(f => {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'tab');
+    b.dataset.id = f.id;
+    b.innerHTML = '<span></span><small></small>';
+    b.firstChild.textContent = f.title;
+    b.lastChild.textContent = f.small;
+    b.addEventListener('click', () => select(f.id));
+    li.appendChild(b);
+    list.appendChild(li);
+  });
+
+  document.getElementById('prev').addEventListener('click', () => { stop(); go(cur - 1); });
+  document.getElementById('next').addEventListener('click', () => { stop(); go(cur + 1); });
+  document.getElementById('reset').addEventListener('click', () => { stop(); go(0); });
+  document.getElementById('auto').addEventListener('click', play);
+  document.getElementById('copy').addEventListener('click', async () => {
+    const btn = document.getElementById('copy'), pre = document.getElementById('payload');
+    try {
+      await navigator.clipboard.writeText(pre.textContent);
+      btn.textContent = 'Copiado';
+    } catch {
+      const r = document.createRange();
+      r.selectNodeContents(pre);
+      const sel = getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+      btn.textContent = 'Seleccionado';
+    }
+  });
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input, textarea')) return;
+    if (e.key === 'ArrowRight') { stop(); go(cur + 1); }
+    else if (e.key === 'ArrowLeft') { stop(); go(cur - 1); }
+    else if (e.key === ' ' && !e.target.closest('button, [role=button]')) { e.preventDefault(); play(); }
+  });
+
+  const modeBtns = document.querySelectorAll('.toggle button');
+  modeBtns.forEach(b => b.addEventListener('click', () => {
+    document.body.classList.toggle('tech', b.dataset.mode === 'tech');
+    modeBtns.forEach(x => x.setAttribute('aria-pressed', x === b));
+  }));
+
+  select(location.hash.slice(1));
+</script>
+</body>
+</html>

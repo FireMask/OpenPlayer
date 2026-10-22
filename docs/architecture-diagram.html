@@ -12,7 +12,7 @@
     --brain: #7a4bd1;  --brain-bg: #f1ebfc;
     --engine: #1f8a5b; --engine-bg: #e4f5ec;
     --sound: #c2386f;  --sound-bg: #fbe8ef;
-    --accent: #e4572e;
+    --accent: #e4572e; --live: #1f8a5b;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -22,7 +22,7 @@
       --brain: #b597f2;  --brain-bg: #2a2140;
       --engine: #5cc996; --engine-bg: #17302a;
       --sound: #f07aa6;  --sound-bg: #3a1d29;
-      --accent: #ff8a5c;
+      --accent: #ff8a5c; --live: #5cc996;
     }
   }
   :root[data-theme="dark"] {
@@ -32,7 +32,7 @@
     --brain: #b597f2;  --brain-bg: #2a2140;
     --engine: #5cc996; --engine-bg: #17302a;
     --sound: #f07aa6;  --sound-bg: #3a1d29;
-    --accent: #ff8a5c;
+    --accent: #ff8a5c; --live: #5cc996;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -42,6 +42,7 @@
   p.lead { color: var(--ink-2); margin: 0 0 20px; max-width: 720px; }
   code { font: 0.85em ui-monospace, Consolas, monospace; background: var(--line); padding: 1px 5px; border-radius: 4px; }
   pre { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow-x: auto; font: 13px ui-monospace, Consolas, monospace; }
+  a { color: var(--accent); }
 
   /* Plain / technical toggle */
   body:not(.tech) .tech, body.tech .plain { display: none; }
@@ -56,6 +57,7 @@
   svg .t { font-weight: 700; font-size: 15px; }
   svg .s { font-size: 12px; fill: var(--ink-2); }
   svg .lbl { font-size: 11px; fill: var(--ink-2); }
+  svg .lbl.live { fill: var(--live); font-weight: 600; }
   .n rect { stroke-width: 2; }
   .input rect { fill: var(--input-bg); stroke: var(--input); }
   .agent rect { fill: var(--agent-bg); stroke: var(--agent); }
@@ -63,31 +65,39 @@
   .engine rect { fill: var(--engine-bg); stroke: var(--engine); }
   .sound rect { fill: var(--sound-bg); stroke: var(--sound); }
   .future rect { stroke-dasharray: 6 4; opacity: .7; }
-  .container { fill: none; stroke: var(--brain); stroke-width: 2; stroke-dasharray: 2 0; }
+  .container { fill: none; stroke: var(--brain); stroke-width: 2; }
   .a { fill: none; stroke: var(--ink-2); stroke-width: 2; }
   .a.dash { stroke-dasharray: 6 5; }
+  .a.live { stroke: var(--live); }
   #arrow path { fill: var(--ink-2); }
+  #arrow-live path { fill: var(--live); }
   #dot { fill: var(--accent); }
+  #dot2 { fill: var(--live); }
 
   .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 10px; font-size: 14px; color: var(--ink-2); }
   .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
 
   .play { margin-top: 14px; background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 10px 16px; font: 600 15px system-ui, sans-serif; cursor: pointer; }
+  .play.live { background: var(--live); color: var(--bg); }
   .play:disabled { opacity: .6; cursor: default; }
+  .play:focus-visible, .toggle button:focus-visible { outline: 3px solid var(--input); outline-offset: 2px; }
 
   ol.steps { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 8px; counter-reset: s; }
   ol.steps li { counter-increment: s; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 10px 52px; position: relative; transition: border-color .2s, transform .2s; }
   ol.steps li::before { content: counter(s); position: absolute; left: 14px; top: 10px; width: 26px; height: 26px; border-radius: 50%; background: var(--line); display: grid; place-items: center; font-weight: 700; font-size: 14px; }
   ol.steps li.on { border-color: var(--accent); transform: translateX(4px); }
   ol.steps li.on::before { background: var(--accent); color: #fff; }
+  ol.steps.live li.on { border-color: var(--live); }
+  ol.steps.live li.on::before { background: var(--live); color: var(--bg); }
   ol.steps b { display: block; }
   ol.steps .tech, ol.steps .plain { color: var(--ink-2); font-size: 14px; }
 
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-left: 5px solid var(--c, var(--line)); border-radius: 12px; padding: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-left: 5px solid var(--c, var(--line)); border-radius: 12px; padding: 14px; min-width: 0; }
   .card h3 { margin: 0 0 6px; font-size: 1rem; }
   .card p { margin: 0; font-size: 14px; color: var(--ink-2); }
 
+  .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; font-size: 14px; }
   th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--ink-2); font-weight: 600; }
@@ -97,6 +107,8 @@
   .phases li { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 14px; }
   .phases li.done::before { content: "✓ "; color: var(--engine); font-weight: 700; }
   .phases li:not(.done)::before { content: "○ "; color: var(--ink-2); }
+
+  @media (prefers-reduced-motion: reduce) { ol.steps li { transition: none; } }
 </style>
 </head>
 <body>
@@ -110,13 +122,16 @@
   </div>
 
   <h2>The big picture</h2>
-  <p class="plain">Think of it like a restaurant: <b>you</b> (buttons, phone) place an order, a <b>waiter</b> (agent) writes it down and drops it in a <b>mailbox</b>, the <b>manager</b> (the brain) decides what to do, and the <b>chef</b> (MPD) actually cooks — plays the song — which goes out through the <b>speaker</b>.</p>
-  <p class="tech">Layered design: input agents (Python) translate events to JSON Lines over a local Unix socket; the C# Service validates and orchestrates; <code>OpenPlayer.Core</code> holds platform‑free rules; <code>OpenPlayer.Mpd</code> adapts to MPD, the single source of truth for playback state.</p>
+  <p class="plain">Think of it like a restaurant: <b>you</b> (buttons, phone) place an order, a <b>waiter</b> (agent) writes it down and drops it in a <b>mailbox</b>, the <b>manager</b> (the brain) decides what to do, and the <b>chef</b> (MPD) actually cooks — plays the song — which goes out through the <b>speaker</b>. The manager also has a <b>watcher</b> standing by the kitchen: the moment anything changes, it tells every waiter, so your phone shows it right away.</p>
+  <p class="tech">Layered design: input agents (Python) translate events to JSON Lines over a local Unix socket; the C# Service validates and orchestrates; <code>OpenPlayer.Core</code> holds platform‑free rules; <code>OpenPlayer.Mpd</code> adapts to MPD, the single source of truth for playback state. A watcher in the Service waits on MPD's <code>idle</code> and pushes each new snapshot to subscribed agents; the web agent relays it to browsers over SSE.</p>
 
   <div class="diagram">
-    <svg viewBox="0 0 1100 670" role="img" aria-label="OpenPlayer architecture: buttons and browser feed Python agents, which send messages through a Unix socket to the C# service, which controls MPD, which plays audio through ALSA to the USB DAC.">
+    <svg viewBox="0 0 1100 670" role="img" aria-label="OpenPlayer architecture: buttons and browser feed Python agents, which send messages through a Unix socket to the C# service, which controls MPD, which plays audio through ALSA to the USB DAC. A watcher in the service notices MPD changes and pushes them back through the socket to the web agent and the browser.">
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0 L10 5 L0 10 z"/>
+        </marker>
+        <marker id="arrow-live" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0 0 L10 5 L0 10 z"/>
         </marker>
       </defs>
@@ -124,16 +139,23 @@
       <!-- Arrows (drawn first so boxes sit on top) -->
       <path class="a" d="M170 85 H228" marker-end="url(#arrow)"/>
       <text class="lbl" x="199" y="76" text-anchor="middle">wires</text>
-      <path class="a" d="M170 245 H228" marker-end="url(#arrow)"/>
+      <path class="a" d="M170 245 H228" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
       <text class="lbl" x="199" y="236" text-anchor="middle">Wi‑Fi</text>
-      <path class="a" d="M390 85 C425 85 420 135 448 135" marker-end="url(#arrow)"/>
-      <path class="a" d="M390 245 C425 245 420 195 448 195" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-      <path class="a" d="M580 165 H658" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-      <text class="lbl" x="619" y="156" text-anchor="middle">notes</text>
-      <path class="a" d="M750 220 V298" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-      <text class="lbl" x="758" y="264">order</text>
+      <text class="lbl live tech" x="199" y="264" text-anchor="middle">SSE</text>
+      <text class="lbl live plain" x="199" y="264" text-anchor="middle">live</text>
+      <path class="a" d="M390 85 C425 85 420 125 448 125" marker-end="url(#arrow)"/>
+      <path class="a" d="M390 245 C425 245 420 205 448 205" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+      <path class="a" d="M580 135 H658" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+      <text class="lbl" x="619" y="126" text-anchor="middle">notes</text>
+      <path class="a live" d="M698 235 H582" marker-end="url(#arrow-live)"/>
+      <text class="lbl live plain" x="640" y="252" text-anchor="middle">news</text>
+      <text class="lbl live tech" x="640" y="252" text-anchor="middle">push</text>
+      <path class="a" d="M680 175 V298" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+      <text class="lbl" x="674" y="290" text-anchor="end">order</text>
+      <path class="a live" d="M770 298 V277" marker-end="url(#arrow-live)"/>
       <path class="a" d="M840 355 H908" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
       <text class="lbl" x="874" y="346" text-anchor="middle">:6600</text>
+      <path class="a" d="M995 95 V118" marker-end="url(#arrow)"/>
       <path class="a" d="M995 210 V298" marker-end="url(#arrow)"/>
       <path class="a" d="M995 410 V448" marker-end="url(#arrow)"/>
       <path class="a" d="M960 520 L932 568" marker-end="url(#arrow)"/>
@@ -152,10 +174,10 @@
       </g>
       <g class="n input"><rect x="20" y="200" width="150" height="90" rx="12"/>
         <text class="t" x="95" y="230" text-anchor="middle">📱 Phone / PC</text>
-        <text class="s plain" x="95" y="254" text-anchor="middle">Web page on your</text>
-        <text class="s plain" x="95" y="271" text-anchor="middle">home Wi‑Fi</text>
+        <text class="s plain" x="95" y="254" text-anchor="middle">Web page that</text>
+        <text class="s plain" x="95" y="271" text-anchor="middle">updates by itself</text>
         <text class="s tech" x="95" y="254" text-anchor="middle">Browser on the LAN</text>
-        <text class="s tech" x="95" y="271" text-anchor="middle">HTTP :8080, polls 2 s</text>
+        <text class="s tech" x="95" y="271" text-anchor="middle">HTTP :8080 + SSE</text>
       </g>
       <g class="n input"><rect x="20" y="380" width="150" height="90" rx="12"/>
         <text class="t" x="95" y="410" text-anchor="middle">💻 SSH</text>
@@ -175,10 +197,10 @@
       </g>
       <g class="n agent"><rect x="230" y="200" width="160" height="90" rx="12"/>
         <text class="t" x="310" y="230" text-anchor="middle">Web Agent</text>
-        <text class="s plain" x="310" y="254" text-anchor="middle">Turns web clicks</text>
-        <text class="s plain" x="310" y="271" text-anchor="middle">into notes</text>
-        <text class="s tech" x="310" y="254" text-anchor="middle">Python stdlib</text>
-        <text class="s tech" x="310" y="271" text-anchor="middle">LAN‑only, else 403</text>
+        <text class="s plain" x="310" y="254" text-anchor="middle">Turns taps into notes,</text>
+        <text class="s plain" x="310" y="271" text-anchor="middle">relays the news</text>
+        <text class="s tech" x="310" y="254" text-anchor="middle">Python stdlib · LAN only</text>
+        <text class="s tech" x="310" y="271" text-anchor="middle">SSE to ≤ 8 pages</text>
       </g>
 
       <!-- Socket -->
@@ -195,16 +217,23 @@
       </g>
 
       <!-- Service -->
-      <rect class="container" x="640" y="30" width="220" height="440" rx="16" fill="none"/>
+      <rect class="container" x="640" y="30" width="220" height="440" rx="16"/>
       <text class="t" x="750" y="58" text-anchor="middle">🧠 OpenPlayer.Service</text>
       <text class="s plain" x="750" y="78" text-anchor="middle">The brain (manager)</text>
       <text class="s tech" x="750" y="78" text-anchor="middle">C# / .NET orchestrator</text>
-      <g class="n brain"><rect x="660" y="110" width="180" height="110" rx="12"/>
-        <text class="t" x="750" y="142" text-anchor="middle">Core</text>
-        <text class="s plain" x="750" y="168" text-anchor="middle">Decides what each</text>
-        <text class="s plain" x="750" y="185" text-anchor="middle">button means</text>
-        <text class="s tech" x="750" y="168" text-anchor="middle">ButtonCommandHandler</text>
-        <text class="s tech" x="750" y="185" text-anchor="middle">IPlayer · no I/O</text>
+      <g class="n brain"><rect x="660" y="95" width="180" height="80" rx="12"/>
+        <text class="t" x="750" y="122" text-anchor="middle">Core</text>
+        <text class="s plain" x="750" y="145" text-anchor="middle">Decides what each</text>
+        <text class="s plain" x="750" y="162" text-anchor="middle">note means</text>
+        <text class="s tech" x="750" y="145" text-anchor="middle">ButtonCommandHandler</text>
+        <text class="s tech" x="750" y="162" text-anchor="middle">IPlayer · IQueue · ILibrary</text>
+      </g>
+      <g class="n brain"><rect x="700" y="195" width="140" height="80" rx="12"/>
+        <text class="t" x="770" y="222" text-anchor="middle">👀 Watcher</text>
+        <text class="s plain" x="770" y="245" text-anchor="middle">Notices every</text>
+        <text class="s plain" x="770" y="261" text-anchor="middle">change in MPD</text>
+        <text class="s tech" x="770" y="245" text-anchor="middle">idle player mixer</text>
+        <text class="s tech" x="770" y="261" text-anchor="middle">playlist options</text>
       </g>
       <g class="n brain"><rect x="660" y="300" width="180" height="110" rx="12"/>
         <text class="t" x="750" y="332" text-anchor="middle">MPD adapter</text>
@@ -217,12 +246,17 @@
       <text class="s tech" x="750" y="445" text-anchor="middle">systemd · logs → journald</text>
 
       <!-- Engine -->
+      <g class="n engine"><rect x="910" y="25" width="170" height="70" rx="12"/>
+        <text class="t" x="995" y="53" text-anchor="middle">📁 Shared folder</text>
+        <text class="s plain" x="995" y="76" text-anchor="middle">Copy songs from Windows</text>
+        <text class="s tech" x="995" y="76" text-anchor="middle">Samba · \\mpi3-player\music</text>
+      </g>
       <g class="n engine"><rect x="910" y="120" width="170" height="90" rx="12"/>
         <text class="t" x="995" y="150" text-anchor="middle">💾 Music files</text>
         <text class="s plain" x="995" y="174" text-anchor="middle">Your songs on the</text>
         <text class="s plain" x="995" y="191" text-anchor="middle">memory card</text>
         <text class="s tech" x="995" y="174" text-anchor="middle">microSD · MP3 / FLAC</text>
-        <text class="s tech" x="995" y="191" text-anchor="middle">MPD library + playlists</text>
+        <text class="s tech" x="995" y="191" text-anchor="middle">auto_update · .m3u lists</text>
       </g>
       <g class="n engine"><rect x="910" y="300" width="170" height="110" rx="12"/>
         <text class="t" x="995" y="332" text-anchor="middle">🎵 MPD</text>
@@ -249,10 +283,14 @@
         <text class="s tech" x="1042" y="624" text-anchor="middle">A2DP (future)</text>
       </g>
 
-      <!-- Travelling dot for the simulation -->
+      <!-- Travelling dots for the simulations -->
       <circle id="dot" r="9" opacity="0">
         <animateMotion id="move" begin="indefinite" dur="7s" fill="freeze"
-          path="M95 85 H310 C420 85 420 165 515 165 H750 V355 H995 V485 L927 610"/>
+          path="M95 85 H310 C420 85 420 135 515 135 H680 V355 H995 V485 L927 610"/>
+      </circle>
+      <circle id="dot2" r="9" opacity="0">
+        <animateMotion id="move2" begin="indefinite" dur="5s" fill="freeze"
+          path="M995 355 H770 V235 H600 L515 205 C430 205 425 245 310 245 H95"/>
       </circle>
     </svg>
   </div>
@@ -263,6 +301,7 @@
     <span style="--c: var(--brain)">Brain (C#)</span>
     <span style="--c: var(--engine)">Music engine</span>
     <span style="--c: var(--sound)">Sound out</span>
+    <span style="--c: var(--live)">Live updates (push)</span>
     <span style="--c: var(--ink-2)">Dashed = admin or future</span>
   </div>
 
@@ -286,59 +325,116 @@
       <span class="plain">It translates the order into the music player's own language.</span>
       <span class="tech">One TCP connection per operation to <code>127.0.0.1:6600</code>; sends <code>next</code>, expects <code>OK</code> or <code>ACK</code>.</span></li>
     <li><b>MPD plays the next song</b>
-      <span class="plain">The real player picks the next song from your memory card.</span>
-      <span class="tech">MPD owns queue, position and volume; decodes MP3/FLAC from its library database.</span></li>
+      <span class="plain">The real player picks the next song. The one you skipped leaves the queue.</span>
+      <span class="tech">MPD owns queue, position and volume. With <code>consume 1</code> the finished or skipped song is removed and the current one stays first.</span></li>
     <li><b>Music reaches your ears</b>
       <span class="plain">Sound goes through the little USB sound card to your headphones.</span>
       <span class="tech">ALSA output <code>hw:CARD=Device,DEV=0</code> → USB DAC → 3.5 mm jack.</span></li>
   </ol>
 
-  <h2>Asking “what's playing?”</h2>
-  <p class="plain">The web page asks the brain every 2 seconds “what's playing right now?”. The brain asks MPD and passes the answer back. The web page never talks to MPD directly — it always goes through the mailbox.</p>
+  <h2>Watch the page update itself</h2>
+  <p class="lead">Right after MPD changes — because of a button, a song ending, another phone or <code>mpc</code> on the Pi — every open web page shows it in well under half a second. Nobody has to ask.</p>
+  <button class="play live" id="play2" type="button">▶ Change the song</button>
+  <ol class="steps live" id="steps2">
+    <li><b>MPD changes something</b>
+      <span class="plain">A new song, pause, volume, or someone edited the queue.</span>
+      <span class="tech">The watcher's <code>idle player mixer playlist options</code> returns, e.g. <code>changed: player</code>.</span></li>
+    <li><b>The watcher takes a fresh picture</b>
+      <span class="plain">It asks MPD “what's playing now?” and, if the song changed, remembers the old one for ⏮.</span>
+      <span class="tech"><code>status</code> + <code>currentsong</code> under the global lock; <code>Observe()</code> adds the previous song to the history (last 50) if it played.</span></li>
+    <li><b>It drops the news in the mailbox</b>
+      <span class="plain">Every program that asked to be kept informed gets a copy.</span>
+      <span class="tech"><code>player.snapshot</code> pushed to each <code>player.subscribe</code> connection, outside the lock, in parallel, 2 s timeout; a stuck subscriber is dropped.</span></li>
+    <li><b>The Web Agent passes it on</b>
+      <span class="plain">It keeps the latest news and hands a copy to every open page.</span>
+      <span class="tech"><code>Events</code> thread stores <code>latest</code> and puts the line into one queue per page (≤ 8 pages, queue of 16).</span></li>
+    <li><b>Your phone redraws</b>
+      <span class="plain">Title, progress bar and queue change on screen. Nothing was polled.</span>
+      <span class="tech"><code>GET /api/events</code> sends <code>data: &lt;line&gt;</code>; <code>EventSource.onmessage</code> → <code>show()</code>; a new <code>queueVersion</code> reloads the queue.</span></li>
+  </ol>
+  <p class="tech">Every message, step by step, with sequence diagrams: <a href="ipc-flows.html">ipc-flows.html</a>.</p>
+  <p class="plain">Want to see every message step by step? Open <a href="ipc-flows.html">the message flows page</a>.</p>
+
+  <h2>How the page stays up to date</h2>
+  <p class="plain">When the web agent starts, it tells the brain “keep me informed” and keeps that line open. Each page you open gets the latest news first, then every change as it happens, plus a small “still here” signal every 15 seconds. If the connection drops (phone in your pocket, the brain restarting), the page falls back to asking every 2 seconds until the connection comes back on its own. The web page never talks to MPD directly — it always goes through the mailbox.</p>
   <div class="tech">
-    <p>The web agent sends <code>{"type":"player.get_snapshot"}</code> (2 s timeout); the Service replies only to that client:</p>
-    <pre>{"type":"player.snapshot","state":"playing","trackTitle":"Example","trackArtist":"Artist","positionSeconds":42,"durationSeconds":210,"volume":35}
-{"type":"error","request":"player.get_snapshot","message":"MPD did not respond within 3000 ms"}</pre>
-    <p>HTTP: <code>GET /api/snapshot</code> → 200 / 502 (Service error) / 503 (unreachable). <code>POST /api/buttons/&lt;name&gt;</code> → 204 / 404 / 503.</p>
+    <p>Subscription (SPEC 16): a dedicated connection, one message, then only pushes.</p>
+    <pre>→ {"type":"player.subscribe"}
+← {"type":"player.snapshot","state":"playing","trackTitle":"Example","trackArtist":"Artist","positionSeconds":42,"durationSeconds":210,"volume":35,"queuePosition":0,"queueVersion":42}
+← (one line per MPD change)
+← {"type":"error","request":"player.get_snapshot","message":"MPD did not respond within 3000 ms"}</pre>
+    <p>Browser side: <code>GET /api/events</code> → <code>200 text/event-stream</code>, latest line first, <code>data: &lt;line&gt;</code> per change, <code>: ping</code> every 15 s, 9th page → <code>503</code>. While the stream is open the page does not poll; on <code>onerror</code> it polls <code>GET /api/snapshot</code> every 2 s. If the Service goes down the web agent sends the error line (page: “Sin conexión con el reproductor”) and resubscribes every 2 s.</p>
+    <p>Other HTTP: <code>GET /api/snapshot</code> → 200 / 502 / 503. <code>POST /api/buttons/&lt;name&gt;</code> → 204 / 404 / 503. <code>POST /api/seek</code> → 204 / 400 / 503. Library, lists and queue routes → 200 / 204 / 400 / 502 / 503 (see <code>architecture.md</code> §5).</p>
   </div>
 
-  <h2>The six buttons</h2>
+  <h2>What the web page can do</h2>
+  <div class="grid">
+    <div class="card" style="--c: var(--input)"><h3>▶ Player</h3>
+      <p class="plain">The six buttons, the current song, and a progress bar you can drag to jump inside the song.</p>
+      <p class="tech">Buttons → <code>button.pressed</code>; progress advances locally between snapshots; release → <code>player.seek</code> (<code>seekcur</code>).</p></div>
+    <div class="card" style="--c: var(--engine)"><h3>📚 Library</h3>
+      <p class="plain">Browse folders, search, play a song, or use “+” to play it next, add it to the queue or to a list.</p>
+      <p class="tech"><code>library.browse</code> / <code>search</code> (pages of 100), <code>library.play</code>, <code>queue.add</code> (<code>next</code> → after the current one).</p></div>
+    <div class="card" style="--c: var(--agent)"><h3>🗂 Lists</h3>
+      <p class="plain">Your saved playlists: create, rename, delete, reorder, remove songs and play from any song.</p>
+      <p class="tech"><code>playlist.*</code> over MPD's stored <code>.m3u</code> files; <code>playlist.play</code> replaces the queue.</p></div>
+    <div class="card" style="--c: var(--brain)"><h3>🎶 Queue</h3>
+      <p class="plain">What plays next, with where each song came from. Jump, reorder, remove, clear or save it as a list. Played songs leave on their own.</p>
+      <p class="tech"><code>queue.*</code> by MPD song id; <code>consume 1</code>; source labels kept in Service memory; reloaded only when <code>queueVersion</code> changes.</p></div>
+    <div class="card" style="--c: var(--sound)"><h3>⏮ Real “previous”</h3>
+      <p class="plain">In the first 3 seconds, ⏮ brings back the song you heard before, even though it already left the queue.</p>
+      <p class="tech">History of the last 50 played (in memory); <code>add URI 0</code> + <code>play 0</code> with its source label; past 3 s it restarts the song.</p></div>
+  </div>
+
+  <h2>The buttons</h2>
+  <div class="table-wrap">
   <table>
     <tr><th>Button</th><th>What it does</th></tr>
     <tr><td><code>play_pause</code></td><td>Play or pause.</td></tr>
-    <tr><td><code>previous</code></td><td>More than 3 s into the song → restart it. Otherwise → previous song.</td></tr>
-    <tr><td><code>next</code></td><td>Next song.</td></tr>
+    <tr><td><code>previous</code></td><td>Up to 3 s into the song → the last song you heard comes back to the top of the queue. Later, or with no history → restart the current song.</td></tr>
+    <tr><td><code>next</code></td><td>Next song (the skipped one leaves the queue).</td></tr>
     <tr><td><code>volume_up</code> / <code>volume_down</code></td><td>Volume ±5, kept between 0 and 100.</td></tr>
     <tr><td><code>menu</code></td><td>Reserved for the future screen. Does nothing yet.</td></tr>
+    <tr><td><code>refresh_library</code></td><td>Web page only: ask MPD to rescan the music folder (<code>update</code>). Usually not needed: new files copied over the shared folder are picked up automatically.</td></tr>
   </table>
+  </div>
 
   <h2>Why it's built this way</h2>
   <div class="grid">
     <div class="card" style="--c: var(--engine)"><h3>One boss for the music</h3>
       <p class="plain">Only MPD knows what's playing. Nobody keeps a second copy that could disagree.</p>
-      <p class="tech">MPD is the single source of truth for track, queue, state, position and volume.</p></div>
-    <div class="card" style="--c: var(--agent)"><h3>Buttons never touch the player</h3>
-      <p class="plain">Buttons only send notes. Swap the buttons for a phone and nothing else changes.</p>
+      <p class="tech">MPD is the single source of truth for track, queue, state, position and volume. The Service only keeps what MPD can't: source labels and the ⏮ history.</p></div>
+    <div class="card" style="--c: var(--agent)"><h3>Inputs never touch the player</h3>
+      <p class="plain">Buttons and the web page only send notes. Swap the buttons for a phone and nothing else changes.</p>
       <p class="tech">Agents emit events only; no MPD access. Replaceable inputs share one IPC contract.</p></div>
+    <div class="card" style="--c: var(--live)"><h3>News is pushed, not polled</h3>
+      <p class="plain">Pages don't keep asking “anything new?”. The brain tells them the moment something changes.</p>
+      <p class="tech">One <code>idle</code> watcher in the Service → <code>player.subscribe</code> push → SSE. Polling every 2 s is only the fallback.</p></div>
     <div class="card" style="--c: var(--brain)"><h3>Rules live apart from hardware</h3>
       <p class="plain">The “thinking” part can be tested on a normal computer, no Pi needed.</p>
       <p class="tech"><code>OpenPlayer.Core</code> has no sockets, GPIO, processes or file I/O.</p></div>
     <div class="card" style="--c: var(--input)"><h3>Private by default</h3>
-      <p class="plain">The mailbox and player only accept requests from inside the device or your home network.</p>
-      <p class="tech">Socket 0660 + group; MPD on localhost; web agent rejects non‑private IPs with 403.</p></div>
+      <p class="plain">The mailbox, the player and the shared folder only accept requests from inside the device or your home network.</p>
+      <p class="tech">Socket 0660 + group; MPD on localhost; web agent rejects non‑private IPs with 403; Samba limited to private networks.</p></div>
     <div class="card" style="--c: var(--sound)"><h3>Gets back up on its own</h3>
       <p class="plain">If a part crashes, it restarts and reconnects without you doing anything.</p>
-      <p class="tech">systemd restarts; agent reconnects with 0.5–10 s backoff; MPD failure only fails that one call.</p></div>
+      <p class="tech">systemd restarts; agents reconnect (hardware 0.5–10 s backoff, web subscription every 2 s); MPD failure only fails that one call.</p></div>
   </div>
 
   <h2>Roadmap</h2>
   <ol class="phases">
-    <li class="done">Raspberry Pi OS, SSH, MPD and USB DAC working</li>
+    <li class="done">Raspberry Pi OS, SSH, MPD and USB DAC working (DAC chosen by name, not by number)</li>
     <li class="done">.NET solution, Core and <code>IPlayer</code></li>
     <li class="done">MPD adapter and status snapshot</li>
     <li class="done">Mailbox (Unix socket) + Python agent with 6 buttons</li>
-    <li>Music library and playlists</li>
     <li class="done">Auto‑start with systemd</li>
+    <li class="done">Shared music folder over Samba</li>
+    <li class="done">Web page: buttons, progress bar and seeking</li>
+    <li class="done">Music library and playlists (web)</li>
+    <li class="done">Queue: view, edit, add, save; songs leave once played</li>
+    <li class="done">Real ⏮ history</li>
+    <li class="done">Instant updates (push + SSE)</li>
+    <li>Lists tab refreshes itself, drag to reorder, Spotify‑style playing</li>
     <li>Bluetooth headphones (A2DP)</li>
     <li>Small OLED screen</li>
     <li>Battery power</li>
@@ -353,20 +449,25 @@
     modeBtns.forEach(x => x.setAttribute('aria-pressed', x === b));
   }));
 
-  const play = document.getElementById('play');
-  const dot = document.getElementById('dot');
-  const steps = document.querySelectorAll('#steps li');
-  play.addEventListener('click', () => {
-    play.disabled = true;
-    dot.setAttribute('opacity', '1');
-    document.getElementById('move').beginElement();
-    let i = 0;
-    const tick = () => {
-      steps.forEach((s, j) => s.classList.toggle('on', j === i));
-      if (++i <= steps.length) setTimeout(tick, 1000);
-      else { play.disabled = false; dot.setAttribute('opacity', '0'); }
-    };
-    tick();
+  // Each simulation moves its dot along the diagram while highlighting one step per second.
+  const sims = [['play', 'dot', 'move', 'steps'], ['play2', 'dot2', 'move2', 'steps2']];
+  const buttons = sims.map(([play]) => document.getElementById(play));
+  sims.forEach(([playId, dotId, moveId, stepsId]) => {
+    const play = document.getElementById(playId);
+    const dot = document.getElementById(dotId);
+    const steps = document.querySelectorAll('#' + stepsId + ' li');
+    play.addEventListener('click', () => {
+      buttons.forEach(b => b.disabled = true);
+      dot.setAttribute('opacity', '1');
+      document.getElementById(moveId).beginElement();
+      let i = 0;
+      const tick = () => {
+        steps.forEach((s, j) => s.classList.toggle('on', j === i));
+        if (++i <= steps.length) setTimeout(tick, 1000);
+        else { buttons.forEach(b => b.disabled = false); dot.setAttribute('opacity', '0'); }
+      };
+      tick();
+    });
   });
 </script>
 </body>
