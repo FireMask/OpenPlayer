@@ -10,7 +10,7 @@
 **In:**
 
 - Mpd:
-  - `consume 1` en cada comando que reproduce: `library.play` (`clear` + `consume 1` + `add` + `play 0`), `playlist.play` (`clear` + `consume 1` + `load` + `play N`) y `queue.play` (`consume 1` + `play N`).
+  - `consume 1` en cada comando que reproduce: `library.play` (`clear` + `consume 1` + `add` + `play 0`), `playlist.play` (`clear` + `consume 1` + `load` + `delete 0:N` + `play 0`) y `queue.play` (`consume 1` + `delete 0:N` + `play 0`); `delete 0:N` solo si N > 0, para que las canciones saltadas también salgan de la cola.
   - `IQueue.EnableConsumeAsync()` (`consume 1`) y `IQueue.IdsAsync()` (`plchangesposid 0`: ids de la cola en orden).
   - ⏮ (`previous`): si en la Pi `previous` con `consume` no reinicia la actual, pasa a `seekcur 0`; vale para el botón físico y el de la web (mismo `button.pressed`).
 - Service:
@@ -61,8 +61,8 @@ Task<IReadOnlyList<int>> IdsAsync(CancellationToken ct = default); // plchangesp
 | Llamada | Antes | Después |
 |---|---|---|
 | `MpdLibrary.PlayTrackAsync` | `clear`, `add`, `play 0` | `clear`, `consume 1`, `add`, `play 0` |
-| `MpdPlaylistStore.PlayAsync` | `clear`, `load`, `play N` | `clear`, `consume 1`, `load`, `play N` |
-| `MpdQueue.PlayAsync` | `play N` | `consume 1`, `play N` |
+| `MpdPlaylistStore.PlayAsync` | `clear`, `load`, `play N` | `clear`, `consume 1`, `load`, `delete 0:N` (si N > 0), `play 0` |
+| `MpdQueue.PlayAsync` | `play N` | `consume 1`, `delete 0:N` (si N > 0), `play 0` |
 | `MpdQueue.EnableConsumeAsync` | — | `consume 1` |
 | `MpdQueue.IdsAsync` | — | `plchangesposid 0` (pares `cpos`/`Id`) |
 | `MpdPlayer.PreviousAsync` | `previous` | `seekcur 0`, solo si la prueba del paso 1 muestra que `previous` no reinicia la actual con `consume` |
@@ -120,7 +120,7 @@ Cada paso deja `dotnet test` y `pytest` en verde.
 **Windows (automatizable):**
 
 - [ ] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
-- [ ] `MpdLibrary.PlayTrackAsync` envía `clear`, `consume 1`, `add`, `play 0`; `MpdPlaylistStore.PlayAsync` envía `clear`, `consume 1`, `load`, `play N`; `MpdQueue.PlayAsync(3)` envía `consume 1`, `play 3`.
+- [ ] `MpdLibrary.PlayTrackAsync` envía `clear`, `consume 1`, `add`, `play 0`; `MpdPlaylistStore.PlayAsync("Viaje", 4)` envía `clear`, `consume 1`, `load`, `delete 0:4`, `play 0` (sin `delete` con 0); `MpdQueue.PlayAsync(3)` envía `consume 1`, `delete 0:3`, `play 0`.
 - [ ] `MpdQueue.IdsAsync` sobre `plchangesposid 0` devuelve los ids en orden de la cola.
 - [ ] `queue.page` produce exactamente el JSON del modelo de datos: sin `playlist`, con `source` (o `null`) en cada entrada.
 - [ ] Tras `playlist.play` de "Viaje", todas las entradas de `queue.get` traen `"source":"Viaje"`; tras `library.play`, `"Biblioteca"`.
@@ -162,6 +162,7 @@ Cada paso deja `dotnet test` y `pytest` en verde.
 - **Etiquetas como foto del momento.** Renombrar o borrar la lista no las cambia: es una pista de origen, no un vínculo. Quita la lógica de sincronizar nombres de SPEC 11.
 - **"Guardar como lista" no cambia etiquetas.** El origen de cada canción sigue siendo el mismo.
 - **Reproducir una lista o tocar una pista sigue reemplazando la cola.** El modelo tipo Spotify (mantener lo agregado) es otra spec.
+- **Saltar a una posición borra las anteriores (`delete 0:N` + `play 0`).** Hallado en la Pi: `consume` solo quita la canción que sonaba; con `play N` las saltadas quedaban arriba de la actual. Pedido del usuario: la actual siempre primera.
 - **`queue.page` sin `playlist`.** El único consumidor es la página; el campo queda reemplazado por `source` por entrada.
 
 **Descartadas:**

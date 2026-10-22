@@ -69,14 +69,25 @@ public class MpdQueueTests
     }
 
     [Fact]
-    public async Task Play_sends_play_n()
+    public async Task Play_deletes_skipped_songs_and_plays_first()
     {
         await using var server = new FakeMpdServer();
 
         await QueueFor(server).PlayAsync(3);
         await server.AllClosed();
 
-        Assert.Equal([["consume 1", "play 3"]], server.Connections);
+        Assert.Equal([["consume 1", "delete 0:3", "play 0"]], server.Connections);
+    }
+
+    [Fact]
+    public async Task Play_first_does_not_delete()
+    {
+        await using var server = new FakeMpdServer();
+
+        await QueueFor(server).PlayAsync(0);
+        await server.AllClosed();
+
+        Assert.Equal([["consume 1", "play 0"]], server.Connections);
     }
 
     // Clave = comando MPD esperado.

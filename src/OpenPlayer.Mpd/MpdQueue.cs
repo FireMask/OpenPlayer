@@ -13,10 +13,20 @@ public sealed class MpdQueue(MpdClient client) : IQueue
         return MpdEntryParser.Page(MpdEntryParser.Parse(response), offset);
     }
 
+    // consume solo quita la canción que sonaba: las saltadas se borran antes (SPEC 14) y la elegida queda primera.
     public Task PlayAsync(int position, CancellationToken ct = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(position);
-        return client.ExecuteAsync(["consume 1", $"play {position.ToString(CultureInfo.InvariantCulture)}"], ct);
+        return client.ExecuteAsync(PlayFirst(["consume 1"], position), ct);
+    }
+
+    /// <summary><paramref name="before"/> + <c>delete 0:N</c> (si N &gt; 0) + <c>play 0</c>.</summary>
+    internal static List<string> PlayFirst(List<string> before, int position)
+    {
+        if (position > 0)
+            before.Add($"delete 0:{position.ToString(CultureInfo.InvariantCulture)}");
+        before.Add("play 0");
+        return before;
     }
 
     public Task RemoveAsync(int id, CancellationToken ct = default)
