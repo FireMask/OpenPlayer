@@ -164,6 +164,9 @@ LIBRARY_CALLS = [
     (lambda i: i.remove_from_queue(17), '{"type":"queue.remove","id":17}'),
     (lambda i: i.move_in_queue(17, 2), '{"type":"queue.move","id":17,"to":2}'),
     (lambda i: i.clear_queue(), '{"type":"queue.clear"}'),
+    (lambda i: i.add_to_queue("Rock/a.flac", True), '{"type":"queue.add","uri":"Rock/a.flac","next":true}'),
+    (lambda i: i.add_to_queue("Rock", False), '{"type":"queue.add","uri":"Rock","next":false}'),
+    (lambda i: i.save_queue("Viaje"), '{"type":"queue.save","name":"Viaje"}'),
 ]
 
 

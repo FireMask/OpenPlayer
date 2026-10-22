@@ -94,6 +94,12 @@ class Ipc:
     def clear_queue(self):
         return self.request({"type": "queue.clear"})
 
+    def add_to_queue(self, uri, next_):
+        return self.request({"type": "queue.add", "uri": uri, "next": next_})
+
+    def save_queue(self, name):
+        return self.request({"type": "queue.save", "name": name})
+
     def _open(self, timeout=None):
         try:
             sock = self._connect()
