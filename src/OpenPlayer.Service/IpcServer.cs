@@ -15,6 +15,7 @@ public sealed class IpcServer(
     IpcOptions options,
     IPlayer player,
     ButtonCommandHandler buttons,
+    PlayerSettings settings,
     ILibrary library,
     IPlaylistStore playlists,
     IQueue queue,
@@ -30,6 +31,21 @@ public sealed class IpcServer(
     private readonly Dictionary<int, string> _sources = [];
 
     private const string LibrarySource = "Biblioteca";
+
+    // Historial de ⏮ (SPEC 15): canciones escuchadas, la más reciente al final. Solo en memoria, bajo _commandLock.
+    private readonly LinkedList<PlayedSong> _history = [];
+    private CurrentSong? _current;
+    private const int HistoryLimit = 50;
+    private static readonly TimeSpan WatchRetry = TimeSpan.FromSeconds(5);
+
+    internal sealed record PlayedSong(string Uri, string? Source);
+
+    // Played: estuvo en play o pause mientras fue la actual. Source: su etiqueta, por si _sources ya no la tiene
+    // cuando el observador ve el cambio (playlist.play reetiqueta la cola dentro del mismo lock).
+    private sealed record CurrentSong(int Id, string Uri, bool Played, string? Source);
+
+    /// <summary>Copia del historial para las pruebas.</summary>
+    internal IReadOnlyList<PlayedSong> History => [.. _history];
 
     // Bind en StartAsync, no en ExecuteAsync (que en .NET 10 corre en segundo plano):
     // un error de bind detiene el arranque del host, y al volver el socket ya escucha.
@@ -51,7 +67,7 @@ public sealed class IpcServer(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // En paralelo con el accept: con MPD caído no retrasa a los clientes; el próximo play activa consume igual.
-        var clients = new List<Task> { EnableConsumeAsync(stoppingToken) };
+        var clients = new List<Task> { EnableConsumeAsync(stoppingToken), WatchAsync(stoppingToken) };
         using (_listener)
         {
             try
@@ -158,7 +174,9 @@ public sealed class IpcServer(
                     logger.LogInformation("Button {Button}", pressed.Button);
                 try
                 {
-                    await LockedAsync(() => buttons.HandleAsync(pressed.Button, ct), ct);
+                    await LockedAsync(() => pressed.Button == ButtonName.Previous
+                        ? PreviousAsync(ct)
+                        : buttons.HandleAsync(pressed.Button, ct), ct);
                 }
                 catch (Exception e) when (e is MpdException or MpdUnavailableException)
                 {
@@ -315,6 +333,73 @@ public sealed class IpcServer(
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
         }
+    }
+
+    // ⏮ con historial (SPEC 15): hasta el umbral (o sin posición) vuelve a la última escuchada, arriba de la cola.
+    // Si no hay historial, pasó el umbral o el archivo ya no existe: ButtonCommandHandler, que reinicia la actual.
+    private async Task PreviousAsync(CancellationToken ct)
+    {
+        if (_history.Last?.Value is { } last
+            && !((await player.GetSnapshotAsync(ct)).Position > settings.PreviousRestartThreshold))
+        {
+            _history.RemoveLast();
+            try
+            {
+                await queue.RestoreAsync(last.Uri, ct);
+                if (last.Source is { } source && await TryIdsAsync(ct) is [var id, ..])
+                    _sources[id] = source;
+                // Sin actual, el observador no manda al historial la que sonaba: así ⏮⏮ no rebota.
+                _current = null;
+                return;
+            }
+            catch (MpdException e)
+            {
+                logger.LogWarning("restore {Uri} failed: {Error}", last.Uri, e.Message);
+            }
+        }
+        await buttons.HandleAsync(ButtonName.Previous, ct);
+    }
+
+    // Observador (SPEC 15): snapshot, idle, snapshot... Un cambio entre el snapshot y el idle se ve al despertar.
+    private async Task WatchAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (true)
+            {
+                try
+                {
+                    await LockedAsync(async () => Observe(await player.GetSnapshotAsync(ct)), ct);
+                    await player.WaitForChangeAsync(ct);
+                }
+                catch (Exception e) when (e is MpdException or MpdUnavailableException)
+                {
+                    logger.LogWarning("player watch failed: {Error}", e.Message);
+                    await Task.Delay(WatchRetry, ct);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+    }
+
+    // Cambió la canción: la anterior entra al historial si llegó a sonar.
+    private void Observe(PlaybackSnapshot snapshot)
+    {
+        var id = snapshot.CurrentTrack is null ? null : snapshot.SongId;
+        if (_current is { } old && old.Id != id && old.Played)
+        {
+            _history.AddLast(new PlayedSong(old.Uri, _sources.GetValueOrDefault(old.Id) ?? old.Source));
+            if (_history.Count > HistoryLimit)
+                _history.RemoveFirst();
+        }
+        var same = _current?.Id == id ? _current : null;
+        _current = id is int songId
+            ? new CurrentSong(songId, snapshot.CurrentTrack!.Uri,
+                same?.Played == true || snapshot.State != PlaybackState.Stopped,
+                _sources.GetValueOrDefault(songId) ?? same?.Source)
+            : null;
     }
 
     private async Task LockedAsync(Func<Task> action, CancellationToken ct)

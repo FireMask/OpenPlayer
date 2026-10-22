@@ -31,12 +31,28 @@ public sealed class IpcServerTests : IAsyncLifetime
         _dir.Delete(recursive: true);
     }
 
-    private Task StartAsync()
+    private async Task StartAsync()
     {
         _server = new IpcServer(new IpcOptions(SocketPath, MaxBytes), _player,
-            new ButtonCommandHandler(_player, new PlayerSettings()), _library, _library, _library, _logger);
+            new ButtonCommandHandler(_player, new PlayerSettings()), new PlayerSettings(), _library, _library, _library, _logger);
         // ExecuteAsync corre síncrono hasta el primer AcceptAsync: al volver, el socket ya escucha.
-        return _server.StartAsync(CancellationToken.None);
+        await _server.StartAsync(CancellationToken.None);
+        // El observador lee un snapshot al arrancar: esperar a que quede en idle y olvidar esa llamada.
+        if (_player.SnapshotError is null)
+        {
+            await _player.Waiting.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            _player.Calls.Clear();
+        }
+    }
+
+    private static PlaybackSnapshot Song(string uri, int id, PlaybackState state = PlaybackState.Playing) =>
+        new(state, new Track(uri, null, null, null, null), TimeSpan.Zero, null, null, DateTimeOffset.UnixEpoch, SongId: id);
+
+    // Simula que MPD pasó a esa canción y espera a que el observador lo procese.
+    private Task PlayingAsync(string uri, int id, PlaybackState state = PlaybackState.Playing)
+    {
+        _player.Snapshot = Song(uri, id, state);
+        return _player.ChangeAsync();
     }
 
     [Fact]
@@ -446,6 +462,207 @@ public sealed class IpcServerTests : IAsyncLifetime
 
         Assert.StartsWith("""{"type":"error","request":"player.get_snapshot",""", await client.ReadLineAsync());
         Assert.Contains(_logger.Messages, m => m.StartsWith("consume failed"));
+        for (var i = 0; i < 100 && !_logger.Messages.Any(m => m.StartsWith("player watch failed")); i++)
+            await Task.Delay(10);
+        Assert.Contains(_logger.Messages, m => m.StartsWith("player watch failed"));
+    }
+
+    [Theory]
+    [InlineData(PlaybackState.Playing, true)]
+    [InlineData(PlaybackState.Paused, true)]
+    [InlineData(PlaybackState.Stopped, false)]
+    public async Task Song_change_adds_previous_song_only_if_it_played(PlaybackState state, bool added)
+    {
+        await StartAsync();
+
+        await PlayingAsync("a.flac", 1, state);
+        await PlayingAsync("b.flac", 2);
+
+        Assert.Equal(added ? [new IpcServer.PlayedSong("a.flac", null)] : [], _server.History);
+    }
+
+    [Fact]
+    public async Task Stopped_song_that_starts_playing_counts_as_played()
+    {
+        await StartAsync();
+
+        await PlayingAsync("a.flac", 1, PlaybackState.Stopped);
+        await PlayingAsync("a.flac", 1);
+        await PlayingAsync("b.flac", 2);
+
+        Assert.Equal([new IpcServer.PlayedSong("a.flac", null)], _server.History);
+    }
+
+    [Fact]
+    public async Task History_keeps_the_label_even_after_the_queue_is_relabeled()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+        QueueOf(1);
+        await SendOk(client, """{"type":"playlist.play","name":"Viaje"}""");
+        await PlayingAsync("a.flac", 1);
+
+        _library.Ids = [2];
+        await SendOk(client, """{"type":"library.play","uri":"b.flac"}""");
+        await PlayingAsync("b.flac", 2);
+
+        Assert.Equal([new IpcServer.PlayedSong("a.flac", "Viaje")], _server.History);
+    }
+
+    [Fact]
+    public async Task Same_song_or_seek_does_not_add_to_history()
+    {
+        await StartAsync();
+
+        await PlayingAsync("a.flac", 1);
+        await PlayingAsync("a.flac", 1, PlaybackState.Paused);
+
+        Assert.Empty(_server.History);
+    }
+
+    [Fact]
+    public async Task History_keeps_the_last_50()
+    {
+        await StartAsync();
+
+        for (var i = 0; i <= 51; i++)
+            await PlayingAsync($"t{i}.flac", i + 1);
+
+        Assert.Equal(50, _server.History.Count);
+        Assert.Equal("t1.flac", _server.History[0].Uri);
+        Assert.Equal("t50.flac", _server.History[^1].Uri);
+    }
+
+    private const string Previous = """{"type":"button.pressed","button":"previous"}""";
+
+    // Viaje: a (id 1) sonó y pasó a b (id 2); el historial queda [a/Viaje].
+    private async Task<Client> AfterOneSongAsync()
+    {
+        await StartAsync();
+        var client = await Client.ConnectAsync(SocketPath);
+        QueueOf(1, 2);
+        await SendOk(client, """{"type":"playlist.play","name":"Viaje"}""");
+        await PlayingAsync("a.flac", 1);
+        QueueOf(2);
+        await PlayingAsync("b.flac", 2);
+        _player.Calls.Clear();
+        return client;
+    }
+
+    // button.pressed no responde: un get_snapshot después marca que ya se procesó.
+    private static async Task PressAsync(Client client, string button)
+    {
+        await client.SendAsync(button + "\n" + GetSnapshot + "\n");
+        await client.ReadLineAsync();
+    }
+
+    [Fact]
+    public async Task Previous_with_history_restores_last_song_on_top_with_its_label()
+    {
+        await using var client = await AfterOneSongAsync();
+        _player.Snapshot = _player.Snapshot with { Position = TimeSpan.FromSeconds(2) };
+
+        await PressAsync(client, Previous);
+
+        Assert.Contains("QueueRestore(a.flac)", _library.Calls);
+        Assert.Empty(_server.History);
+        Assert.DoesNotContain("Previous", _player.Calls);
+        QueueOf([.. _library.Ids]);
+        Assert.Equal("Viaje", (await Sources(client))[_library.Ids[0]]);
+    }
+
+    [Fact]
+    public async Task Previous_with_unknown_position_restores()
+    {
+        await using var client = await AfterOneSongAsync();
+        _player.Snapshot = _player.Snapshot with { Position = null };
+
+        await PressAsync(client, Previous);
+
+        Assert.Contains("QueueRestore(a.flac)", _library.Calls);
+    }
+
+    [Fact]
+    public async Task Previous_past_threshold_restarts_and_keeps_history()
+    {
+        await using var client = await AfterOneSongAsync();
+        _player.Snapshot = _player.Snapshot with { Position = TimeSpan.FromSeconds(4) };
+
+        await PressAsync(client, Previous);
+
+        Assert.DoesNotContain(_library.Calls, c => c.StartsWith("QueueRestore"));
+        Assert.Contains("Seek(00:00:00)", _player.Calls);
+        Assert.Single(_server.History);
+    }
+
+    [Fact]
+    public async Task Previous_without_history_restarts_as_before()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+        _player.Snapshot = Song("a.flac", 1);
+
+        await PressAsync(client, Previous);
+
+        Assert.DoesNotContain(_library.Calls, c => c.StartsWith("QueueRestore"));
+        Assert.Contains("Previous", _player.Calls);
+    }
+
+    [Fact]
+    public async Task Previous_twice_goes_back_two_songs_without_bouncing()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+        await PlayingAsync("a.flac", 1);
+        await PlayingAsync("b.flac", 2);
+        await PlayingAsync("c.flac", 3);
+        _library.Ids = [3];
+
+        await PressAsync(client, Previous);
+        await PlayingAsync("b.flac", _library.Ids[0]);   // MPD avisa que ahora suena la restaurada
+        await PressAsync(client, Previous);
+        await PlayingAsync("a.flac", _library.Ids[0]);
+
+        Assert.Equal(["QueueRestore(b.flac)", "QueueRestore(a.flac)"],
+            _library.Calls.Where(c => c.StartsWith("QueueRestore")));
+        Assert.Empty(_server.History);
+    }
+
+    [Fact]
+    public async Task Restored_song_returns_to_history_when_it_ends()
+    {
+        await using var client = await AfterOneSongAsync();
+
+        await PressAsync(client, Previous);
+        await PlayingAsync("a.flac", _library.Ids[0]);
+        await PlayingAsync("b.flac", 2);
+
+        Assert.Equal([new IpcServer.PlayedSong("a.flac", "Viaje")], _server.History);
+    }
+
+    [Fact]
+    public async Task Previous_with_missing_file_drops_entry_and_restarts()
+    {
+        await using var client = await AfterOneSongAsync();
+        _library.Error = new MpdException("add \"a.flac\" 0", "No such directory");
+
+        await PressAsync(client, Previous);
+
+        Assert.Empty(_server.History);
+        Assert.Contains("Previous", _player.Calls);
+        Assert.Contains(_logger.Messages, m => m.StartsWith("restore a.flac failed"));
+    }
+
+    [Fact]
+    public async Task Queue_ending_adds_the_last_song()
+    {
+        await StartAsync();
+
+        await PlayingAsync("a.flac", 1);
+        _player.Snapshot = new PlaybackSnapshot(PlaybackState.Stopped, null, null, null, null, DateTimeOffset.UnixEpoch);
+        await _player.ChangeAsync();
+
+        Assert.Equal([new IpcServer.PlayedSong("a.flac", null)], _server.History);
     }
 
     [Theory]

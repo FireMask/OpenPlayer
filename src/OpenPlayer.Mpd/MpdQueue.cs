@@ -59,6 +59,10 @@ public sealed class MpdQueue(MpdClient client) : IQueue
         await client.ExecuteAsync([command], ct);
     }
 
+    // Medido en la Pi (SPEC 15): con consume, play 0 no borra la que sonaba; queda en la posición 1.
+    public Task RestoreAsync(string uri, CancellationToken ct = default) =>
+        client.ExecuteAsync([$"add {MpdClient.Quote(uri)} 0", "play 0"], ct);
+
     public Task SaveAsync(string name, CancellationToken ct = default) =>
         client.ExecuteAsync([$"save {MpdClient.Quote(name)}"], ct);
 
