@@ -49,6 +49,12 @@ internal sealed class FakeLibrary : ILibrary, IPlaylistStore, IQueue
 
     public Task PlayAsync(int position, CancellationToken ct = default) => Record($"QueuePlay({position})", 0);
 
+    public Task RemoveAsync(int id, CancellationToken ct = default) => Record($"QueueRemove({id})", 0);
+
+    public Task MoveAsync(int id, int to, CancellationToken ct = default) => Record($"QueueMove({id},{to})", 0);
+
+    public Task ClearAsync(CancellationToken ct = default) => Record("QueueClear", 0);
+
     private Task<T> Record<T>(string call, T result)
     {
         Calls.Add(call);

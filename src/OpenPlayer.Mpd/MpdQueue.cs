@@ -18,4 +18,10 @@ public sealed class MpdQueue(MpdClient client) : IQueue
         ArgumentOutOfRangeException.ThrowIfNegative(position);
         return client.ExecuteAsync([$"play {position.ToString(CultureInfo.InvariantCulture)}"], ct);
     }
+
+    public Task RemoveAsync(int id, CancellationToken ct = default) => throw new NotImplementedException();
+
+    public Task MoveAsync(int id, int to, CancellationToken ct = default) => throw new NotImplementedException();
+
+    public Task ClearAsync(CancellationToken ct = default) => throw new NotImplementedException();
 }
