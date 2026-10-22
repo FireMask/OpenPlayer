@@ -1,10 +1,11 @@
 import http.client
 import threading
+import time
 
 import pytest
 
 from ipc import IpcUnavailable
-from server import BUTTON_NAMES, WebServer, is_allowed
+from server import BUTTON_NAMES, MAX_EVENT_CLIENTS, WebServer, is_allowed
 
 SNAPSHOT = '{"type":"player.snapshot","state":"playing","trackTitle":"Á","volume":40}'
 ERROR = '{"type":"error","request":"player.get_snapshot","message":"MPD did not respond"}'
@@ -190,6 +191,7 @@ def test_snapshot_with_service_down_is_503(web):
     ("POST", "/api/snapshot"),
     ("POST", "/"),
     ("DELETE", "/api/snapshot"),
+    ("POST", "/api/events"),
 ])
 def test_wrong_method_is_405(web, method, path):
     server, ipc = web
@@ -456,3 +458,88 @@ def test_library_disallowed_client_is_403(web):
     for method, path in [("GET", "/api/library"), ("GET", "/api/playlists"), ("DELETE", "/api/playlists/Viaje")]:
         assert request(server, method, path)[0].status == 403
     assert library_calls(ipc) == []
+
+
+# --- /api/events (SPEC 16): Events se alimenta a mano con _publish, sin hilo de suscripción. ---
+
+def open_events(server):
+    conn = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=5)
+    conn.request("GET", "/api/events")
+    return conn, conn.getresponse()
+
+
+def read_event(response):
+    """Un evento SSE sin la línea en blanco final."""
+    lines = []
+    while (line := response.fp.readline().decode("utf-8")) not in ("\n", ""):
+        lines.append(line.rstrip("\n"))
+    return "\n".join(lines)
+
+
+def wait_until(condition, timeout=2.0):
+    deadline = time.monotonic() + timeout
+    while not condition() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return condition()
+
+
+def test_events_is_event_stream_starting_with_latest_line(web):
+    server, _ = web
+    server.events._publish(SNAPSHOT)
+
+    conn, response = open_events(server)
+
+    assert response.status == 200
+    assert response.getheader("Content-Type").startswith("text/event-stream")
+    assert response.getheader("Cache-Control") == "no-store"
+    assert read_event(response) == "data: " + SNAPSHOT
+    conn.close()
+
+
+def test_events_sends_each_published_line(web):
+    server, _ = web
+    conn, response = open_events(server)
+    assert wait_until(lambda: len(server.events.clients) == 1)
+
+    server.events._publish(SNAPSHOT)
+    server.events._publish(ERROR)
+
+    assert read_event(response) == "data: " + SNAPSHOT
+    assert read_event(response) == "data: " + ERROR
+    conn.close()
+
+
+def test_events_pings_when_idle(web):
+    server, _ = web
+    server.ping_seconds = 0.05
+    conn, response = open_events(server)
+
+    assert read_event(response) == ": ping"
+    conn.close()
+
+
+def test_ninth_events_page_is_503_and_closed_page_frees_its_place(web):
+    server, _ = web
+    server.ping_seconds = 0.05
+    pages = [open_events(server) for _ in range(MAX_EVENT_CLIENTS)]
+    assert all(response.status == 200 for _, response in pages)
+
+    assert request(server, "GET", "/api/events")[0].status == 503
+
+    conn, response = pages.pop()
+    response.close()
+    conn.close()
+    assert wait_until(lambda: len(server.events.clients) == MAX_EVENT_CLIENTS - 1)
+    conn, response = open_events(server)
+    assert response.status == 200
+    for conn, response in pages + [(conn, response)]:
+        response.close()
+        conn.close()
+
+
+def test_events_disallowed_client_is_403(web):
+    server, _ = web
+    server.is_allowed = lambda host: False
+
+    assert request(server, "GET", "/api/events")[0].status == 403
+    assert server.events.clients == set()

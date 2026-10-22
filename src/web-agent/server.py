@@ -100,9 +100,11 @@ class WebServer(ThreadingHTTPServer):
     address_family = socket.AF_INET6
     daemon_threads = True
 
-    def __init__(self, port, ipc, host="::"):
+    def __init__(self, port, ipc, host="::", events=None):
         self.ipc = ipc
+        self.events = events or Events(ipc)  # main.py la arranca; las pruebas publican a mano
         self.is_allowed = is_allowed  # reemplazable en pruebas
+        self.ping_seconds = PING_SECONDS  # reemplazable en pruebas
         super().__init__((host, port), Handler)
 
     def server_bind(self):
@@ -140,6 +142,10 @@ class Handler(BaseHTTPRequestHandler):
             if method != "GET":
                 return self._reply(HTTPStatus.METHOD_NOT_ALLOWED)
             return self._snapshot()
+        if path == "/api/events":
+            if method != "GET":
+                return self._reply(HTTPStatus.METHOD_NOT_ALLOWED)
+            return self._events()
         if path.startswith(BUTTONS_PREFIX) and path[len(BUTTONS_PREFIX):] in BUTTON_NAMES:
             if method != "POST":
                 return self._reply(HTTPStatus.METHOD_NOT_ALLOWED)
@@ -298,6 +304,30 @@ class Handler(BaseHTTPRequestHandler):
             kind = None
         status = HTTPStatus.OK if kind == "player.snapshot" else HTTPStatus.BAD_GATEWAY
         self._reply(status, line.encode("utf-8"), "application/json; charset=utf-8")
+
+    def _events(self):
+        """SSE (SPEC 16): la última línea conocida, luego una por cambio y ": ping" si no hay nada en ping_seconds."""
+        events = self.server.events
+        q = events.connect()
+        if q is None:
+            return self._reply(HTTPStatus.SERVICE_UNAVAILABLE)
+        try:
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            while q in events.clients:  # Events la quita si se llenó: la página no leía
+                try:
+                    chunk = f"data: {q.get(timeout=self.server.ping_seconds)}\n\n"
+                except queue.Empty:
+                    chunk = ": ping\n\n"  # también detecta páginas cerradas: la escritura falla
+                self.wfile.write(chunk.encode("utf-8"))
+                self.wfile.flush()
+        except OSError:
+            pass  # página cerrada
+        finally:
+            events.disconnect(q)
+            self.close_connection = True
 
     def _reply(self, status, body=b"", content_type="text/plain; charset=utf-8"):
         if not body and status != HTTPStatus.NO_CONTENT:
