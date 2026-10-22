@@ -25,6 +25,7 @@ public sealed class MpdPlayer(MpdClient client, TimeProvider time) : IPlayer
 
     public Task NextAsync(CancellationToken ct = default) => SendAsync("next", ct);
 
+    // Con consume (SPEC 14) la actual está primera: MPD 0.24 reinicia la canción sin quitarla (medido en la Pi).
     public Task PreviousAsync(CancellationToken ct = default) => SendAsync("previous", ct);
 
     public Task SeekAsync(TimeSpan position, CancellationToken ct = default)
