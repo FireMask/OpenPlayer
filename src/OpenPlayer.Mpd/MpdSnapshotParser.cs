@@ -27,16 +27,20 @@ public static class MpdSnapshotParser
             Seconds(status.Get("duration")),
             Volume(status.Get("volume")),
             now,
-            int.TryParse(status.Get("song"), NumberStyles.None, CultureInfo.InvariantCulture, out var song) ? song : null,
+            Index(status.Get("song")),
             long.TryParse(status.Get("playlist"), NumberStyles.None, CultureInfo.InvariantCulture, out var version)
                 ? version
-                : null);
+                : null,
+            Index(status.Get("songid")));
     }
 
     internal static TimeSpan? Seconds(string? value) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var s) && s >= 0
             ? TimeSpan.FromSeconds(s)
             : null;
+
+    private static int? Index(string? value) =>
+        int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var i) ? i : null;
 
     // MPD reporta -1 cuando no hay mixer.
     private static int? Volume(string? value) =>
