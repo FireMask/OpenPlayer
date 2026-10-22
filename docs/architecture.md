@@ -320,7 +320,7 @@ Estado (SPEC 10, desde la web):
 - Hecho: navegación por carpetas y búsqueda (`search any`), paginadas de a 100; playlists guardadas de MPD (`.m3u` en `playlist_directory`): crear, renombrar, borrar, agregar pista o carpeta, quitar, reordenar; reproducir una pista o una lista reemplazando la cola.
 - Hecho (SPEC 11): ver la cola con la pista actual resaltada y saltar a una pista.
 - Hecho (SPEC 12): editar la cola (quitar, reordenar, limpiar).
-- Pendiente: agregar a la cola sin reemplazarla, actualización instantánea (`idle` → SSE), navegación artista → álbum, OLED y botones (spec futura).
+- Pendiente: arrastrar para reordenar en la cola y en Listas (asa ⠿ a la izquierda, Pointer Events sin librería, animación del lugar de destino antes de soltar), agregar a la cola sin reemplazarla, actualización instantánea (`idle` → SSE), navegación artista → álbum, OLED y botones (spec futura).
 - Sin botón de reescaneo: `auto_update` de MPD (SPEC 07) indexa lo copiado por Samba.
 
 Una base SQLite propia queda pospuesta para preferencias, historial de reproducción, ratings o datos que MPD no cubra.

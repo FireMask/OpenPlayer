@@ -1,6 +1,6 @@
 # SPEC 12 — Editar la cola desde la web
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 03, SPEC 10, SPEC 11
 > **Date:** 2026-10-22
 > **Objective:** Permitir quitar, reordenar (↑/↓) y limpiar las pistas de la cola de MPD desde el panel "Cola" del web agent, identificando cada pista por su id de MPD.
@@ -137,30 +137,30 @@ Cada paso deja `dotnet test` y `pytest` en verde.
 
 **Windows (automatizable):**
 
-- [ ] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
-- [ ] `queue.page` incluye `id` en cada entrada con el valor de `Id:` de `playlistinfo`; las respuestas de `library.page` y `playlist.get` no cambian.
-- [ ] `IpcMessageParser` devuelve `QueueRemoveRequested(17)`, `QueueMoveRequested(17, 2)` y `QueueClearRequested`; `id` o `to` faltante, `-1`, `"3"` o `3.5` son inválidos con su `request`.
-- [ ] `MpdQueue` envía exactamente `deleteid 17`, `moveid 17 2` y `clear`; un `ACK` llega como `error` y la conexión sigue.
-- [ ] Tras `playlist.play` de "Viaje", `queue.remove` y `queue.move` dejan `"playlist":"Viaje"`; `queue.clear` lo deja en `null`; un `queue.clear` que falla no lo cambia.
-- [ ] `DELETE /api/queue/tracks/17` → `204` y llega `remove_from_queue(17)`; `POST /api/queue/move` con `{"id":17,"to":2}` → `204`; `DELETE /api/queue` → `204`; `id` o `to` inválidos → `400`; Service `error` → `502`; Service caído → `503`; método incorrecto → `405`.
-- [ ] El web agent sigue usando solo stdlib.
+- [x] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
+- [x] `queue.page` incluye `id` en cada entrada con el valor de `Id:` de `playlistinfo`; las respuestas de `library.page` y `playlist.get` no cambian.
+- [x] `IpcMessageParser` devuelve `QueueRemoveRequested(17)`, `QueueMoveRequested(17, 2)` y `QueueClearRequested`; `id` o `to` faltante, `-1`, `"3"` o `3.5` son inválidos con su `request`.
+- [x] `MpdQueue` envía exactamente `deleteid 17`, `moveid 17 2` y `clear`; un `ACK` llega como `error` y la conexión sigue.
+- [x] Tras `playlist.play` de "Viaje", `queue.remove` y `queue.move` dejan `"playlist":"Viaje"`; `queue.clear` lo deja en `null`; un `queue.clear` que falla no lo cambia.
+- [x] `DELETE /api/queue/tracks/17` → `204` y llega `remove_from_queue(17)`; `POST /api/queue/move` con `{"id":17,"to":2}` → `204`; `DELETE /api/queue` → `204`; `id` o `to` inválidos → `400`; Service `error` → `502`; Service caído → `503`; método incorrecto → `405`.
+- [x] El web agent sigue usando solo stdlib.
 
 **Raspberry Pi (`deploy.ps1` y navegador en PC y móvil):**
 
-- [ ] Cada fila del panel muestra ↑ / ↓ / ✕; ↑ está deshabilitado en la primera y ↓ en la última.
-- [ ] ↓ en la fila 2 la deja en la posición 3, igual que `mpc playlist`; ↑ la devuelve.
-- [ ] ✕ en una fila que no es la actual la quita y la reproducción sigue sin cortes.
-- [ ] ✕ en la pista actual mientras suena pasa a la siguiente.
-- [ ] Mover la pista actual mantiene el resaltado sobre ella en su nueva posición.
-- [ ] "Limpiar" pide confirmación; al aceptar, la reproducción se detiene, el panel muestra "Cola vacía", el encabezado dice "Cola" y "Limpiar" se oculta; al cancelar, nada cambia.
-- [ ] Tras quitar o mover en una lista reproducida, el encabezado sigue diciendo "Lista: <nombre>" y la lista guardada no cambia en Listas.
-- [ ] Con la cola cambiada desde `mpc` justo antes, ✕ quita la pista mostrada (por id) o muestra el error de MPD si ya no existe; nunca quita otra pista.
-- [ ] Tocar la fila sigue reproduciéndola; los botones ↑ / ↓ / ✕ no la reproducen.
+- [x] Cada fila del panel muestra ↑ / ↓ / ✕; ↑ está deshabilitado en la primera y ↓ en la última.
+- [x] ↓ en la fila 2 la deja en la posición 3, igual que `mpc playlist`; ↑ la devuelve.
+- [x] ✕ en una fila que no es la actual la quita y la reproducción sigue sin cortes.
+- [x] ✕ en la pista actual mientras suena pasa a la siguiente.
+- [x] Mover la pista actual mantiene el resaltado sobre ella en su nueva posición.
+- [x] "Limpiar" pide confirmación; al aceptar, la reproducción se detiene, el panel muestra "Cola vacía", el encabezado dice "Cola" y "Limpiar" se oculta; al cancelar, nada cambia.
+- [x] Tras quitar o mover en una lista reproducida, el encabezado sigue diciendo "Lista: <nombre>" y la lista guardada no cambia en Listas.
+- [x] Con la cola cambiada desde `mpc` justo antes, ✕ quita la pista mostrada (por id) o muestra el error de MPD si ya no existe; nunca quita otra pista.
+- [x] Tocar la fila sigue reproduciéndola; los botones ↑ / ↓ / ✕ no la reproducen.
 
 **Documentación:**
 
-- [ ] `architecture.md` §5, §6 y §7 describen las rutas, `IQueue`, `LibraryEntry.Id`, los mensajes y el efecto de `clear` sobre el nombre.
-- [ ] README menciona que la cola se edita desde el panel.
+- [x] `architecture.md` §5, §6 y §7 describen las rutas, `IQueue`, `LibraryEntry.Id`, los mensajes y el efecto de `clear` sobre el nombre.
+- [x] README menciona que la cola se edita desde el panel.
 
 ## Decisions
 
