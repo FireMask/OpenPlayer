@@ -28,6 +28,16 @@ public class IpcMessageParserTests
     }
 
     [Theory]
+    [InlineData("""{"type":"player.subscribe"}""")]
+    [InlineData("""{"type":"player.subscribe","x":1}""")]
+    public void Parses_subscribe(string line)
+    {
+        Assert.True(IpcMessageParser.TryParse(line, out var message, out _, out var request));
+        Assert.IsType<SubscribeRequested>(message);
+        Assert.Null(request);
+    }
+
+    [Theory]
     [InlineData(83)]
     [InlineData(0)]
     [InlineData(86400)]
@@ -51,6 +61,7 @@ public class IpcMessageParserTests
     [InlineData("\"button.pressed\"", "invalid JSON")]
     [InlineData("""{"button":"next"}""", "missing type")]
     [InlineData("""{"type":3}""", "missing type")]
+    [InlineData("""{"type":"player.Subscribe"}""", "unknown type 'player.Subscribe'")]
     [InlineData("""{"type":"player.reboot"}""", "unknown type 'player.reboot'")]
     [InlineData("""{"type":"button.pressed"}""", "invalid button ''")]
     [InlineData("""{"type":"button.pressed","button":"foo"}""", "invalid button 'foo'")]
