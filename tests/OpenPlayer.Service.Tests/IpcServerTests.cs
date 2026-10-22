@@ -665,6 +665,121 @@ public sealed class IpcServerTests : IAsyncLifetime
         Assert.Equal([new IpcServer.PlayedSong("a.flac", null)], _server.History);
     }
 
+    private const string Subscribe = """{"type":"player.subscribe"}""";
+
+    private async Task<Client> SubscribeAsync()
+    {
+        var client = await Client.ConnectAsync(SocketPath);
+        await client.SendAsync(Subscribe + "\n");
+        return client;
+    }
+
+    [Fact]
+    public async Task Subscribe_replies_current_snapshot_at_once()
+    {
+        _player.Snapshot = Song("a.flac", 1);
+        await StartAsync();
+        await using var client = await SubscribeAsync();
+
+        Assert.Equal(SnapshotMessage.Serialize(_player.Snapshot), await client.ReadLineAsync());
+        Assert.Equal(1, _server.SubscriberCount);
+        Assert.Contains("player.subscribe", _logger.Messages);
+    }
+
+    [Fact]
+    public async Task Change_pushes_snapshot_to_every_subscriber()
+    {
+        await StartAsync();
+        await using var a = await SubscribeAsync();
+        await using var b = await SubscribeAsync();
+        await a.ReadLineAsync();
+        await b.ReadLineAsync();
+
+        await PlayingAsync("b.flac", 2);
+
+        var pushed = SnapshotMessage.Serialize(Song("b.flac", 2));
+        Assert.Equal(pushed, await a.ReadLineAsync());
+        Assert.Equal(pushed, await b.ReadLineAsync());
+    }
+
+    [Fact]
+    public async Task Subscribed_connection_ignores_further_requests_and_others_still_reply()
+    {
+        await StartAsync();
+        await using var sub = await SubscribeAsync();
+        await sub.ReadLineAsync();
+        await using var other = await Client.ConnectAsync(SocketPath);
+
+        await sub.SendAsync(GetSnapshot + "\n");
+        await other.SendAsync(GetSnapshot + "\n");
+        Assert.StartsWith("""{"type":"player.snapshot",""", await other.ReadLineAsync());
+        await PlayingAsync("b.flac", 2);
+
+        // La siguiente línea es el push, no una respuesta al get_snapshot ignorado.
+        Assert.Equal(SnapshotMessage.Serialize(Song("b.flac", 2)), await sub.ReadLineAsync());
+    }
+
+    [Fact]
+    public async Task Mpd_failure_in_observer_pushes_error_line()
+    {
+        await StartAsync();
+        await using var client = await SubscribeAsync();
+        await client.ReadLineAsync();
+
+        _player.SnapshotError = new MpdUnavailableException("MPD down", new IOException());
+        _ = _player.ChangeAsync(); // el observador queda reintentando: no vuelve a esperar enseguida
+
+        Assert.Equal("""{"type":"error","request":"player.get_snapshot","message":"MPD down"}""", await client.ReadLineAsync());
+    }
+
+    [Fact]
+    public async Task Subscribe_with_mpd_down_replies_error_and_stays_subscribed()
+    {
+        _player.SnapshotError = new MpdUnavailableException("MPD down", new IOException());
+        await StartAsync();
+        await using var client = await SubscribeAsync();
+
+        Assert.StartsWith("""{"type":"error","request":"player.get_snapshot",""", await client.ReadLineAsync());
+        Assert.Equal(1, _server.SubscriberCount);
+    }
+
+    [Fact]
+    public async Task Closed_subscriber_is_removed_and_others_keep_receiving()
+    {
+        await StartAsync();
+        var gone = await SubscribeAsync();
+        await using var stays = await SubscribeAsync();
+        await gone.ReadLineAsync();
+        await stays.ReadLineAsync();
+
+        await gone.DisposeAsync();
+        for (var i = 0; i < 100 && _server.SubscriberCount > 1; i++)
+            await Task.Delay(10);
+        Assert.Equal(1, _server.SubscriberCount);
+
+        await PlayingAsync("b.flac", 2);
+        Assert.Equal(SnapshotMessage.Serialize(Song("b.flac", 2)), await stays.ReadLineAsync());
+    }
+
+    [Fact]
+    public async Task Subscriber_that_does_not_read_is_dropped_and_commands_keep_working()
+    {
+        await StartAsync();
+        await using var slow = await SubscribeAsync();
+        await slow.ReadLineAsync();
+
+        // Líneas grandes hasta llenar el buffer del socket: la escritura se bloquea y vence a los 2 s.
+        _player.Snapshot = Song("a.flac", 1) with { CurrentTrack = new Track("a.flac", new string('x', 100_000), null, null, null) };
+        for (var i = 0; i < 200 && _server.SubscriberCount > 0; i++)
+            await _player.ChangeAsync();
+
+        Assert.Equal(0, _server.SubscriberCount);
+        Assert.Contains(_logger.Messages, m => m.StartsWith("Subscriber dropped"));
+        await using var other = await Client.ConnectAsync(SocketPath);
+        await other.SendAsync(GetSnapshot + "\n");
+        Assert.StartsWith("""{"type":"player.snapshot",""", await other.ReadLineAsync());
+    }
+
     [Theory]
     [InlineData("""{"type":"queue.get"}""", "queue.get")]
     [InlineData("""{"type":"queue.play","position":99}""", "queue.play")]

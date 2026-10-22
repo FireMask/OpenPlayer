@@ -4,7 +4,10 @@ import ipaddress
 import json
 import logging
 import os
+import queue
 import socket
+import threading
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -18,6 +21,9 @@ BUTTONS_PREFIX = "/api/buttons/"
 MAX_BODY_BYTES = 1024
 MAX_SEEK_SECONDS = 86400
 MAX_LIBRARY_BODY_BYTES = 4096
+MAX_EVENT_CLIENTS = 8
+PING_SECONDS = 15
+RESUBSCRIBE_SECONDS = 2
 
 # Solo red local; fe80::/10 porque Windows resuelve .local primero a IPv6 link-local (SPEC 07).
 ALLOWED_NETWORKS = [ipaddress.ip_network(n) for n in (
@@ -25,6 +31,59 @@ ALLOWED_NETWORKS = [ipaddress.ip_network(n) for n in (
 
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html"), "rb") as f:
     INDEX_HTML = f.read()
+
+
+class Events:
+    """Última línea del Service y una cola por página abierta (queue.Queue(maxsize=16)); cola llena → la página se descarta.
+
+    Un hilo de fondo mantiene la suscripción IPC (SPEC 16) mientras corre el web agent."""
+
+    def __init__(self, ipc, resubscribe=RESUBSCRIBE_SECONDS):
+        self._ipc = ipc
+        self._resubscribe = resubscribe
+        self._lock = threading.Lock()
+        self.latest = None
+        self.clients = set()
+
+    def start(self):
+        threading.Thread(target=self._run, name="events", daemon=True).start()
+
+    def connect(self):
+        """Cola nueva con la última línea, o None si ya hay MAX_EVENT_CLIENTS páginas."""
+        with self._lock:
+            if len(self.clients) >= MAX_EVENT_CLIENTS:
+                return None
+            q = queue.Queue(maxsize=16)
+            if self.latest is not None:
+                q.put_nowait(self.latest)
+            self.clients.add(q)
+            return q
+
+    def disconnect(self, q):
+        with self._lock:
+            self.clients.discard(q)
+
+    def _run(self):
+        while True:
+            try:
+                for line in self._ipc.subscribe():
+                    self._publish(line)
+            except IpcUnavailable as e:
+                log.warning("subscription unavailable: %s", e)
+                # La misma línea de error que ya entiende la página (→ "Sin conexión con el reproductor").
+                self._publish(json.dumps({"type": "error", "request": "player.get_snapshot", "message": str(e)},
+                                         separators=(",", ":")))
+            time.sleep(self._resubscribe)
+
+    def _publish(self, line):
+        with self._lock:
+            self.latest = line
+            for q in list(self.clients):
+                try:
+                    q.put_nowait(line)
+                except queue.Full:
+                    log.warning("event client too slow; dropped")
+                    self.clients.discard(q)
 
 
 def is_allowed(host):
@@ -41,9 +100,11 @@ class WebServer(ThreadingHTTPServer):
     address_family = socket.AF_INET6
     daemon_threads = True
 
-    def __init__(self, port, ipc, host="::"):
+    def __init__(self, port, ipc, host="::", events=None):
         self.ipc = ipc
+        self.events = events or Events(ipc)  # main.py la arranca; las pruebas publican a mano
         self.is_allowed = is_allowed  # reemplazable en pruebas
+        self.ping_seconds = PING_SECONDS  # reemplazable en pruebas
         super().__init__((host, port), Handler)
 
     def server_bind(self):
@@ -81,6 +142,10 @@ class Handler(BaseHTTPRequestHandler):
             if method != "GET":
                 return self._reply(HTTPStatus.METHOD_NOT_ALLOWED)
             return self._snapshot()
+        if path == "/api/events":
+            if method != "GET":
+                return self._reply(HTTPStatus.METHOD_NOT_ALLOWED)
+            return self._events()
         if path.startswith(BUTTONS_PREFIX) and path[len(BUTTONS_PREFIX):] in BUTTON_NAMES:
             if method != "POST":
                 return self._reply(HTTPStatus.METHOD_NOT_ALLOWED)
@@ -239,6 +304,30 @@ class Handler(BaseHTTPRequestHandler):
             kind = None
         status = HTTPStatus.OK if kind == "player.snapshot" else HTTPStatus.BAD_GATEWAY
         self._reply(status, line.encode("utf-8"), "application/json; charset=utf-8")
+
+    def _events(self):
+        """SSE (SPEC 16): la última línea conocida, luego una por cambio y ": ping" si no hay nada en ping_seconds."""
+        events = self.server.events
+        q = events.connect()
+        if q is None:
+            return self._reply(HTTPStatus.SERVICE_UNAVAILABLE)
+        try:
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            while q in events.clients:  # Events la quita si se llenó: la página no leía
+                try:
+                    chunk = f"data: {q.get(timeout=self.server.ping_seconds)}\n\n"
+                except queue.Empty:
+                    chunk = ": ping\n\n"  # también detecta páginas cerradas: la escritura falla
+                self.wfile.write(chunk.encode("utf-8"))
+                self.wfile.flush()
+        except OSError:
+            pass  # página cerrada
+        finally:
+            events.disconnect(q)
+            self.close_connection = True
 
     def _reply(self, status, body=b"", content_type="text/plain; charset=utf-8"):
         if not body and status != HTTPStatus.NO_CONTENT:

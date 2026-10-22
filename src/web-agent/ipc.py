@@ -37,6 +37,27 @@ class Ipc:
             self._send(sock, {"type": "player.get_snapshot"})
             return self._read_line(sock, MAX_REPLY_BYTES)
 
+    def subscribe(self):
+        """Suscripción (SPEC 16): genera cada línea (player.snapshot o error) a medida que llega.
+
+        IpcUnavailable si no conecta o se corta. Sin timeout de lectura: entre cambios puede pasar cualquier tiempo."""
+        with self._open() as sock:
+            self._send(sock, {"type": "player.subscribe"})
+            sock.settimeout(None)
+            pending = b""
+            while True:
+                try:
+                    chunk = sock.recv(65536)
+                except OSError as e:
+                    raise IpcUnavailable(f"subscription failed: {e}") from e
+                if not chunk:
+                    raise IpcUnavailable("subscription closed")
+                *lines, pending = (pending + chunk).split(b"\n")
+                if len(pending) > MAX_REPLY_BYTES:
+                    raise IpcUnavailable("subscription line too long")
+                for line in lines:
+                    yield line.decode("utf-8")
+
     def request(self, message):
         """Envía un mensaje de biblioteca/playlists/cola y devuelve su línea de respuesta (ok, página, lista o error)."""
         with self._open(self._library_timeout) as sock:

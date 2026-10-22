@@ -11,6 +11,9 @@ public sealed record ButtonPressed(ButtonName Button, long? Sequence) : IpcMessa
 
 public sealed record SnapshotRequested : IpcMessage;
 
+// Suscripción (SPEC 16): la conexión queda dedicada; responde con player.snapshot ahora y en cada cambio, no con ok.
+public sealed record SubscribeRequested : IpcMessage;
+
 public sealed record SeekRequested(TimeSpan Position) : IpcMessage;
 
 // Biblioteca y playlists (SPEC 10): todos responden una línea (ok, página, lista o error).
@@ -105,6 +108,9 @@ public static class IpcMessageParser
                     break;
                 case "player.get_snapshot":
                     message = new SnapshotRequested();
+                    break;
+                case "player.subscribe":
+                    message = new SubscribeRequested();
                     break;
                 case "player.seek":
                     // Cota de 24 h para no desbordar TimeSpan con valores absurdos.

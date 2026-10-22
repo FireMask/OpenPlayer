@@ -265,8 +265,18 @@
     refresh();
   });
 
+  // Actualización instantánea (SPEC 16): cada evento es la misma línea que /api/snapshot.
+  // Sondeo de 2 s solo de respaldo: se detiene al conectar el stream y vuelve si se corta.
   refresh();
-  setInterval(refresh, 2000);
+  let poll = setInterval(refresh, 2000);
+  const events = new EventSource("/api/events");
+  events.onopen = () => { clearInterval(poll); poll = null; };
+  events.onmessage = e => {
+    let s;
+    try { s = JSON.parse(e.data); } catch { return showOffline(); }
+    if (s.type === "player.snapshot") show(s); else showOffline();
+  };
+  events.onerror = () => { if (!poll) poll = setInterval(refresh, 2000); };
   setInterval(renderProgress, 250);
 
   // --- Biblioteca y listas (SPEC 10). Todo texto de MPD se inserta con textContent. ---

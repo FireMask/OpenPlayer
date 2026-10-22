@@ -11,7 +11,7 @@ import threading
 
 from config import ConfigError, load_config
 from ipc import Ipc
-from server import WebServer
+from server import Events, WebServer
 
 log = logging.getLogger("web-agent")
 
@@ -28,8 +28,9 @@ def main(argv):
         log.error("invalid config: %s", e)
         return 1
 
+    ipc = Ipc(config.socket_path)
     try:
-        server = WebServer(config.port, Ipc(config.socket_path))
+        server = WebServer(config.port, ipc, events=Events(ipc))
     except OSError as e:  # puerto ocupado, sin IPv6…: exit 1 para que systemd lo vea
         log.error("cannot listen on port %d: %s", config.port, e)
         return 1
@@ -37,6 +38,7 @@ def main(argv):
     stopping = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stopping.set())
     signal.signal(signal.SIGINT, lambda *_: stopping.set())
+    server.events.start()  # suscripción al Service (SPEC 16) mientras corre el web agent
     threading.Thread(target=server.serve_forever, name="http", daemon=True).start()
     log.info("ready: http://[::]:%d", config.port)
 

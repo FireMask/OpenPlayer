@@ -38,6 +38,16 @@ public sealed class IpcServer(
     private const int HistoryLimit = 50;
     private static readonly TimeSpan WatchRetry = TimeSpan.FromSeconds(5);
 
+    // Conexiones suscriptas (SPEC 16). Protegida con lock(_subscribers), no con _commandLock:
+    // el envío ocurre fuera del lock global para que un suscriptor lento no frene los comandos.
+    private readonly List<NetworkStream> _subscribers = [];
+    private static readonly TimeSpan PushTimeout = TimeSpan.FromSeconds(2);
+
+    internal int SubscriberCount
+    {
+        get { lock (_subscribers) return _subscribers.Count; }
+    }
+
     internal sealed record PlayedSong(string Uri, string? Source);
 
     // Played: estuvo en play o pause mientras fue la actual. Source: su etiqueta, por si _sources ya no la tiene
@@ -108,7 +118,14 @@ public sealed class IpcServer(
                 {
                     var line = Encoding.UTF8.GetString(buffer, start, newline - start).TrimEnd('\r');
                     start = newline + 1;
-                    await HandleLineAsync(line, stream, ct);
+                    if (await HandleLineAsync(line, stream, ct))
+                    {
+                        // Suscripta (SPEC 16): ya no se leen pedidos; solo se espera el cierre.
+                        while (await stream.ReadAsync(buffer, ct) > 0)
+                        {
+                        }
+                        return;
+                    }
                 }
                 Array.Copy(buffer, start, buffer, 0, length - start);
                 length -= start;
@@ -123,26 +140,32 @@ public sealed class IpcServer(
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
         }
-        catch (IOException)
+        catch (Exception e) when (e is IOException or ObjectDisposedException)
         {
-            // El cliente cerró a mitad de una escritura.
+            // El cliente cerró a mitad de una escritura, o un push fallido cerró la suscripción.
         }
         catch (Exception e)
         {
             logger.LogError(e, "IPC client failed; closing connection");
         }
+        finally
+        {
+            lock (_subscribers)
+                _subscribers.Remove(stream);
+        }
     }
 
-    private async Task HandleLineAsync(string line, NetworkStream stream, CancellationToken ct)
+    /// <returns>true si la conexión quedó suscripta (SPEC 16).</returns>
+    private async Task<bool> HandleLineAsync(string line, NetworkStream stream, CancellationToken ct)
     {
         if (line.Length == 0)
-            return;
+            return false;
         if (!IpcMessageParser.TryParse(line, out var message, out var error, out var request))
         {
             logger.LogWarning("Invalid IPC message: {Error}", error);
             if (request is not null)
                 await WriteLineAsync(stream, ErrorMessage.Serialize(request, error!), ct);
-            return;
+            return false;
         }
 
         // Biblioteca, playlists y cola (SPEC 10, 11): siempre una línea de respuesta, ok/página/lista o error.
@@ -161,7 +184,7 @@ public sealed class IpcServer(
                 reply = ErrorMessage.Serialize(request, e.Message);
             }
             await WriteLineAsync(stream, reply, ct);
-            return;
+            return false;
         }
 
         switch (message)
@@ -198,22 +221,71 @@ public sealed class IpcServer(
                 break;
 
             case SnapshotRequested:
-                string reply;
-                try
-                {
-                    PlaybackSnapshot? snapshot = null;
-                    await LockedAsync(async () => snapshot = await player.GetSnapshotAsync(ct), ct);
-                    reply = SnapshotMessage.Serialize(snapshot!);
-                }
-                catch (Exception e) when (e is MpdException or MpdUnavailableException)
-                {
-                    logger.LogWarning("player.get_snapshot failed: {Error}", e.Message);
-                    reply = ErrorMessage.Serialize("player.get_snapshot", e.Message);
-                }
-                await WriteLineAsync(stream, reply, ct);
+                string? reply = null;
+                await LockedAsync(async () => reply = await SnapshotLineAsync(ct), ct);
+                await WriteLineAsync(stream, reply!, ct);
                 break;
+
+            case SubscribeRequested:
+                // Snapshot y registro bajo el lock: el observador copia los suscriptores dentro del lock,
+                // así nunca empuja un snapshot más viejo que este ni escribe a la vez en la misma conexión.
+                // Si la escritura falla, HandleClientAsync lo quita al cerrar.
+                await LockedAsync(async () =>
+                {
+                    lock (_subscribers)
+                        _subscribers.Add(stream);
+                    await WriteTimedAsync(stream, await SnapshotLineAsync(ct), ct);
+                }, ct);
+                logger.LogInformation("player.subscribe");
+                return true;
+        }
+        return false;
+    }
+
+    // player.snapshot, o la línea de error si MPD falla. Se llama dentro del lock.
+    private async Task<string> SnapshotLineAsync(CancellationToken ct)
+    {
+        try
+        {
+            return SnapshotMessage.Serialize(await player.GetSnapshotAsync(ct));
+        }
+        catch (Exception e) when (e is MpdException or MpdUnavailableException)
+        {
+            logger.LogWarning("player.get_snapshot failed: {Error}", e.Message);
+            return ErrorMessage.Serialize("player.get_snapshot", e.Message);
         }
     }
+
+    private static async Task WriteTimedAsync(NetworkStream stream, string line, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(PushTimeout);
+        await WriteLineAsync(stream, line, timeout.Token);
+    }
+
+    private List<NetworkStream> Subscribers()
+    {
+        lock (_subscribers)
+            return [.. _subscribers];
+    }
+
+    // En paralelo: un suscriptor lento no demora a los demás. Falla o timeout → se quita y se cierra.
+    private Task PushAsync(List<NetworkStream> targets, string line, CancellationToken ct) =>
+        Task.WhenAll(targets.Select(async stream =>
+        {
+            try
+            {
+                await WriteTimedAsync(stream, line, ct);
+            }
+            catch (Exception e) when (e is IOException or ObjectDisposedException
+                                          || (e is OperationCanceledException && !ct.IsCancellationRequested))
+            {
+                logger.LogWarning("Subscriber dropped: {Error}", e.Message);
+                lock (_subscribers)
+                    _subscribers.Remove(stream);
+                stream.Dispose();
+            }
+        }));
 
     private async Task<string> ReplyAsync(IpcMessage message, string request, CancellationToken ct)
     {
@@ -361,6 +433,7 @@ public sealed class IpcServer(
     }
 
     // Observador (SPEC 15): snapshot, idle, snapshot... Un cambio entre el snapshot y el idle se ve al despertar.
+    // Cada snapshot (o error de MPD) se empuja a los suscriptores (SPEC 16), fuera del lock.
     private async Task WatchAsync(CancellationToken ct)
     {
         try
@@ -369,12 +442,21 @@ public sealed class IpcServer(
             {
                 try
                 {
-                    await LockedAsync(async () => Observe(await player.GetSnapshotAsync(ct)), ct);
+                    PlaybackSnapshot? snapshot = null;
+                    List<NetworkStream> targets = [];
+                    await LockedAsync(async () =>
+                    {
+                        snapshot = await player.GetSnapshotAsync(ct);
+                        Observe(snapshot);
+                        targets = Subscribers();
+                    }, ct);
+                    await PushAsync(targets, SnapshotMessage.Serialize(snapshot!), ct);
                     await player.WaitForChangeAsync(ct);
                 }
                 catch (Exception e) when (e is MpdException or MpdUnavailableException)
                 {
                     logger.LogWarning("player watch failed: {Error}", e.Message);
+                    await PushAsync(Subscribers(), ErrorMessage.Serialize("player.get_snapshot", e.Message), ct);
                     await Task.Delay(WatchRetry, ct);
                 }
             }
