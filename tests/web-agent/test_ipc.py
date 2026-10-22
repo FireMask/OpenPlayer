@@ -226,3 +226,42 @@ def test_request_connect_failure_is_unavailable():
 
     with pytest.raises(IpcUnavailable):
         Ipc("/x", connect=refuse).playlists()
+
+
+def test_subscribe_sends_exact_line_and_yields_each_line(server):
+    server.reply = SNAPSHOT.encode() + b"\n" + b'{"type":"player.snapshot","state":"playing"}\n'
+
+    lines = Ipc("/x", connect=server.connect).subscribe()
+    assert next(lines) == SNAPSHOT
+    assert next(lines) == '{"type":"player.snapshot","state":"playing"}'
+    lines.close()  # cierra la conexión
+
+    assert wait_for(server.received) == [b'{"type":"player.subscribe"}\n']
+
+
+def test_subscribe_waits_longer_than_timeout_and_joins_split_lines():
+    def slow_halves(conn):
+        time.sleep(0.5)
+        conn.sendall(SNAPSHOT[:10].encode())
+        time.sleep(0.1)
+        conn.sendall(SNAPSHOT[10:].encode() + b"\n")
+
+    assert next(Ipc("/x", connect=one_shot_server(slow_halves), timeout=0.2).subscribe()) == SNAPSHOT
+
+
+def test_subscribe_closed_by_service_is_unavailable():
+    def one_line_then_close(conn):
+        conn.sendall(SNAPSHOT.encode() + b"\n")
+
+    lines = Ipc("/x", connect=one_shot_server(one_line_then_close)).subscribe()
+    assert next(lines) == SNAPSHOT
+    with pytest.raises(IpcUnavailable):
+        next(lines)
+
+
+def test_subscribe_connect_failure_is_unavailable():
+    def refuse():
+        raise ConnectionRefusedError("down")
+
+    with pytest.raises(IpcUnavailable):
+        next(Ipc("/x", connect=refuse).subscribe())

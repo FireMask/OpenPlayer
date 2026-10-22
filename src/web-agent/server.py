@@ -4,7 +4,10 @@ import ipaddress
 import json
 import logging
 import os
+import queue
 import socket
+import threading
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -18,6 +21,9 @@ BUTTONS_PREFIX = "/api/buttons/"
 MAX_BODY_BYTES = 1024
 MAX_SEEK_SECONDS = 86400
 MAX_LIBRARY_BODY_BYTES = 4096
+MAX_EVENT_CLIENTS = 8
+PING_SECONDS = 15
+RESUBSCRIBE_SECONDS = 2
 
 # Solo red local; fe80::/10 porque Windows resuelve .local primero a IPv6 link-local (SPEC 07).
 ALLOWED_NETWORKS = [ipaddress.ip_network(n) for n in (
@@ -25,6 +31,59 @@ ALLOWED_NETWORKS = [ipaddress.ip_network(n) for n in (
 
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html"), "rb") as f:
     INDEX_HTML = f.read()
+
+
+class Events:
+    """Última línea del Service y una cola por página abierta (queue.Queue(maxsize=16)); cola llena → la página se descarta.
+
+    Un hilo de fondo mantiene la suscripción IPC (SPEC 16) mientras corre el web agent."""
+
+    def __init__(self, ipc, resubscribe=RESUBSCRIBE_SECONDS):
+        self._ipc = ipc
+        self._resubscribe = resubscribe
+        self._lock = threading.Lock()
+        self.latest = None
+        self.clients = set()
+
+    def start(self):
+        threading.Thread(target=self._run, name="events", daemon=True).start()
+
+    def connect(self):
+        """Cola nueva con la última línea, o None si ya hay MAX_EVENT_CLIENTS páginas."""
+        with self._lock:
+            if len(self.clients) >= MAX_EVENT_CLIENTS:
+                return None
+            q = queue.Queue(maxsize=16)
+            if self.latest is not None:
+                q.put_nowait(self.latest)
+            self.clients.add(q)
+            return q
+
+    def disconnect(self, q):
+        with self._lock:
+            self.clients.discard(q)
+
+    def _run(self):
+        while True:
+            try:
+                for line in self._ipc.subscribe():
+                    self._publish(line)
+            except IpcUnavailable as e:
+                log.warning("subscription unavailable: %s", e)
+                # La misma línea de error que ya entiende la página (→ "Sin conexión con el reproductor").
+                self._publish(json.dumps({"type": "error", "request": "player.get_snapshot", "message": str(e)},
+                                         separators=(",", ":")))
+            time.sleep(self._resubscribe)
+
+    def _publish(self, line):
+        with self._lock:
+            self.latest = line
+            for q in list(self.clients):
+                try:
+                    q.put_nowait(line)
+                except queue.Full:
+                    log.warning("event client too slow; dropped")
+                    self.clients.discard(q)
 
 
 def is_allowed(host):
