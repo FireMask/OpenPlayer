@@ -1,6 +1,6 @@
 # SPEC 14 — Cola independiente de su origen
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 03, SPEC 10, SPEC 11, SPEC 12, SPEC 13
 > **Date:** 2026-10-22
 > **Objective:** Activar el modo `consume` de MPD para que cada canción terminada o saltada salga de la cola (la actual queda arriba), reemplazar el nombre de "lista cargada" por una etiqueta de origen por fila que recuerda el Service, y hacer que ⏮ reinicie la canción actual.
@@ -119,34 +119,34 @@ Cada paso deja `dotnet test` y `pytest` en verde.
 
 **Windows (automatizable):**
 
-- [ ] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
-- [ ] `MpdLibrary.PlayTrackAsync` envía `clear`, `consume 1`, `add`, `play 0`; `MpdPlaylistStore.PlayAsync("Viaje", 4)` envía `clear`, `consume 1`, `load`, `delete 0:4`, `play 0` (sin `delete` con 0); `MpdQueue.PlayAsync(3)` envía `consume 1`, `delete 0:3`, `play 0`.
-- [ ] `MpdQueue.IdsAsync` sobre `plchangesposid 0` devuelve los ids en orden de la cola.
-- [ ] `queue.page` produce exactamente el JSON del modelo de datos: sin `playlist`, con `source` (o `null`) en cada entrada.
-- [ ] Tras `playlist.play` de "Viaje", todas las entradas de `queue.get` traen `"source":"Viaje"`; tras `library.play`, `"Biblioteca"`.
-- [ ] Tras `playlist.play` de "Viaje" + `queue.add`, las pistas previas siguen con "Viaje" y la nueva trae "Biblioteca"; igual con `next`.
-- [ ] `queue.clear` deja las entradas siguientes sin etiqueta; `playlist.rename`, `playlist.delete` y `queue.save` no cambian ninguna.
-- [ ] Un `queue.add` que falla no cambia las etiquetas; si `IdsAsync` falla tras un agregado exitoso, la respuesta es `ok`.
-- [ ] El Service arranca con MPD caído (registra el warning de `consume`) y responde `player.get_snapshot` con `error`.
-- [ ] ⏮: `MpdPlayer.PreviousAsync` envía el comando decidido en el paso 1.
+- [x] `dotnet test`, `pytest tests/web-agent` y `pytest tests/hardware-agent` pasan.
+- [x] `MpdLibrary.PlayTrackAsync` envía `clear`, `consume 1`, `add`, `play 0`; `MpdPlaylistStore.PlayAsync("Viaje", 4)` envía `clear`, `consume 1`, `load`, `delete 0:4`, `play 0` (sin `delete` con 0); `MpdQueue.PlayAsync(3)` envía `consume 1`, `delete 0:3`, `play 0`.
+- [x] `MpdQueue.IdsAsync` sobre `plchangesposid 0` devuelve los ids en orden de la cola.
+- [x] `queue.page` produce exactamente el JSON del modelo de datos: sin `playlist`, con `source` (o `null`) en cada entrada.
+- [x] Tras `playlist.play` de "Viaje", todas las entradas de `queue.get` traen `"source":"Viaje"`; tras `library.play`, `"Biblioteca"`.
+- [x] Tras `playlist.play` de "Viaje" + `queue.add`, las pistas previas siguen con "Viaje" y la nueva trae "Biblioteca"; igual con `next`.
+- [x] `queue.clear` deja las entradas siguientes sin etiqueta; `playlist.rename`, `playlist.delete` y `queue.save` no cambian ninguna.
+- [x] Un `queue.add` que falla no cambia las etiquetas; si `IdsAsync` falla tras un agregado exitoso, la respuesta es `ok`.
+- [x] El Service arranca con MPD caído (registra el warning de `consume`) y responde `player.get_snapshot` con `error`.
+- [x] ⏮: `MpdPlayer.PreviousAsync` envía el comando decidido en el paso 1.
 
 **Raspberry Pi (`deploy.ps1` y navegador en PC y móvil):**
 
-- [ ] Tras reiniciar el Service, `mpc status` muestra `consume: on`.
-- [ ] Reproducir "Favoritas" (N canciones) muestra "Cola · N canciones" con la primera resaltada arriba; cada fila dice "Favoritas" en el detalle.
-- [ ] Al terminar una canción o pulsar ⏭ (web o botón físico), esa canción desaparece del panel y la siguiente queda arriba resaltada; el total baja en uno.
-- [ ] ⏮ (web y botón físico) reinicia la canción actual desde 0:00 y la cola no cambia.
-- [ ] "Agregar a la cola" de una pista de la Biblioteca la muestra al final con "Biblioteca"; las de "Favoritas" siguen con "Favoritas".
-- [ ] Tocar una fila del medio salta a esa canción y las anteriores salen de la cola.
-- [ ] Renombrar o borrar "Favoritas" no cambia las etiquetas de las filas.
-- [ ] Reiniciar el Service deja las filas sin etiqueta y la cola igual.
-- [ ] Al terminar la última canción, el panel muestra "Cola vacía".
-- [ ] "Guardar como lista" guarda la actual y las siguientes, sin las ya escuchadas.
+- [x] Tras reiniciar el Service, `mpc status` muestra `consume: on`.
+- [x] Reproducir "Favoritas" (N canciones) muestra "Cola · N canciones" con la primera resaltada arriba; cada fila dice "Favoritas" en el detalle.
+- [x] Al terminar una canción o pulsar ⏭ (web o botón físico), esa canción desaparece del panel y la siguiente queda arriba resaltada; el total baja en uno.
+- [x] ⏮ (web y botón físico) reinicia la canción actual desde 0:00 y la cola no cambia.
+- [x] "Agregar a la cola" de una pista de la Biblioteca la muestra al final con "Biblioteca"; las de "Favoritas" siguen con "Favoritas".
+- [x] Tocar una fila del medio salta a esa canción y las anteriores salen de la cola.
+- [x] Renombrar o borrar "Favoritas" no cambia las etiquetas de las filas.
+- [x] Reiniciar el Service deja las filas sin etiqueta y la cola igual.
+- [x] Al terminar la última canción, el panel muestra "Cola vacía".
+- [x] "Guardar como lista" guarda la actual y las siguientes, sin las ya escuchadas.
 
 **Documentación:**
 
-- [ ] `architecture.md` §5, §6, §7 y §9 describen `consume`, `IQueue.EnableConsumeAsync`/`IdsAsync`, `source` en `queue.page`, las etiquetas en memoria, ⏮ y el historial pendiente.
-- [ ] README dice que la cola consume lo escuchado y que ⏮ reinicia la canción; ya no menciona el historial con `consume` apagado.
+- [x] `architecture.md` §5, §6, §7 y §9 describen `consume`, `IQueue.EnableConsumeAsync`/`IdsAsync`, `source` en `queue.page`, las etiquetas en memoria, ⏮ y el historial pendiente.
+- [x] README dice que la cola consume lo escuchado y que ⏮ reinicia la canción; ya no menciona el historial con `consume` apagado.
 
 ## Decisions
 
