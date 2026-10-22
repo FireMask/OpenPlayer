@@ -242,6 +242,9 @@ public sealed class IpcServerTests : IAsyncLifetime
     [InlineData("""{"type":"queue.remove","id":17}""", "QueueRemove(17)", "queue.remove")]
     [InlineData("""{"type":"queue.move","id":17,"to":2}""", "QueueMove(17,2)", "queue.move")]
     [InlineData("""{"type":"queue.clear"}""", "QueueClear", "queue.clear")]
+    [InlineData("""{"type":"queue.add","uri":"a.flac","next":true}""", "QueueAdd(a.flac,True)", "queue.add")]
+    [InlineData("""{"type":"queue.add","uri":"Rock"}""", "QueueAdd(Rock,False)", "queue.add")]
+    [InlineData("""{"type":"queue.save","name":"Viaje"}""", "QueueSave(Viaje)", "queue.save")]
     public async Task Mutation_calls_store_and_replies_ok(string line, string expectedCall, string request)
     {
         await StartAsync();
@@ -366,6 +369,31 @@ public sealed class IpcServerTests : IAsyncLifetime
         Assert.Equal("Viaje", await LoadedPlaylist());
         await Send("""{"type":"queue.clear"}""");
         Assert.Null(await LoadedPlaylist());
+
+        // SPEC 13: agregar no cambia el nombre; guardar lo fija.
+        await Send("""{"type":"playlist.play","name":"Viaje"}""");
+        await Send("""{"type":"queue.add","uri":"a.flac","next":true}""");
+        await Send("""{"type":"queue.add","uri":"Rock"}""");
+        Assert.Equal("Viaje", await LoadedPlaylist());
+        await Send("""{"type":"queue.save","name":"Gym"}""");
+        Assert.Equal("Gym", await LoadedPlaylist());
+    }
+
+    [Fact]
+    public async Task Failed_queue_save_keeps_loaded_playlist()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync("""{"type":"playlist.play","name":"Viaje"}""" + "\n");
+        await client.ReadLineAsync();
+        _library.Error = new MpdException("save \"Gym\"", "Playlist already exists");
+        await client.SendAsync("""{"type":"queue.save","name":"Gym"}""" + "\n");
+        Assert.Equal("""{"type":"error","request":"queue.save","message":"Playlist already exists"}""", await client.ReadLineAsync());
+
+        _library.Error = null;
+        await client.SendAsync("""{"type":"queue.get"}""" + "\n");
+        Assert.StartsWith("""{"type":"queue.page","playlist":"Viaje",""", await client.ReadLineAsync());
     }
 
     [Fact]
@@ -408,6 +436,7 @@ public sealed class IpcServerTests : IAsyncLifetime
     [InlineData("""{"type":"queue.remove","id":99}""", "queue.remove")]
     [InlineData("""{"type":"queue.move","id":99,"to":0}""", "queue.move")]
     [InlineData("""{"type":"queue.clear"}""", "queue.clear")]
+    [InlineData("""{"type":"queue.add","uri":"nope.flac"}""", "queue.add")]
     public async Task Queue_failure_replies_error_and_keeps_connection(string line, string request)
     {
         _library.Error = new MpdException("play 99", "Bad song index");
