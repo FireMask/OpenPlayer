@@ -37,7 +37,8 @@ class FakeIpc:
     # Biblioteca y playlists: registra (método, argumentos) y responde library_reply.
     LIBRARY_METHODS = ("browse", "search", "play_track", "playlists", "playlist", "create_playlist",
                        "rename_playlist", "delete_playlist", "add_to_playlist", "remove_from_playlist",
-                       "move_in_playlist", "play_playlist", "queue", "play_queue")
+                       "move_in_playlist", "play_playlist", "queue", "play_queue",
+                       "remove_from_queue", "move_in_queue", "clear_queue")
     library_reply = OK
     library_calls = None
 
@@ -288,6 +289,9 @@ MUTATION_ROUTES = [
     ("POST", "/api/playlists/Viaje/play", None, ("play_playlist", "Viaje", 0)),
     ("POST", "/api/playlists/Viaje/play", b"{}", ("play_playlist", "Viaje", 0)),
     ("POST", "/api/queue/play", b'{"position":3}', ("play_queue", 3)),
+    ("DELETE", "/api/queue/tracks/17", None, ("remove_from_queue", 17)),
+    ("POST", "/api/queue/move", b'{"id":17,"to":2}', ("move_in_queue", 17, 2)),
+    ("DELETE", "/api/queue", None, ("clear_queue",)),
 ]
 
 
@@ -335,6 +339,18 @@ BAD_REQUESTS = [
     ("POST", "/api/queue/play", b'{"position":"3"}'),
     ("POST", "/api/queue/play", b'{"position":3.5}'),
     ("POST", "/api/queue/play", b'{"position":true}'),
+    ("DELETE", "/api/queue/tracks/x", None),
+    ("DELETE", "/api/queue/tracks/-1", None),
+    ("DELETE", "/api/queue/tracks/", None),
+    ("POST", "/api/queue/move", None),
+    ("POST", "/api/queue/move", b'{"to":2}'),
+    ("POST", "/api/queue/move", b'{"id":17}'),
+    ("POST", "/api/queue/move", b'{"id":-1,"to":2}'),
+    ("POST", "/api/queue/move", b'{"id":17,"to":-1}'),
+    ("POST", "/api/queue/move", b'{"id":"17","to":2}'),
+    ("POST", "/api/queue/move", b'{"id":17,"to":2.5}'),
+    ("POST", "/api/queue/move", b'{"id":true,"to":2}'),
+    ("POST", "/api/queue/move", b'{"id":17,"to":false}'),
 ]
 
 
@@ -351,6 +367,9 @@ def test_library_invalid_request_is_400(web, method, path, body):
     ("POST", "/api/playlists/Viaje/tracks", b'{"uri":"Rock"}'),
     ("GET", "/api/queue", None),
     ("POST", "/api/queue/play", b'{"position":99}'),
+    ("DELETE", "/api/queue/tracks/99", None),
+    ("POST", "/api/queue/move", b'{"id":99,"to":0}'),
+    ("DELETE", "/api/queue", None),
 ])
 def test_library_error_reply_is_502_with_line(web, method, path, body):
     server, ipc = web
@@ -367,6 +386,9 @@ def test_library_error_reply_is_502_with_line(web, method, path, body):
     ("POST", "/api/playlists", b'{"name":"Viaje"}'),
     ("GET", "/api/queue", None),
     ("POST", "/api/queue/play", b'{"position":3}'),
+    ("DELETE", "/api/queue/tracks/17", None),
+    ("POST", "/api/queue/move", b'{"id":17,"to":2}'),
+    ("DELETE", "/api/queue", None),
 ])
 def test_library_with_service_down_is_503(web, method, path, body):
     server, ipc = web
@@ -388,6 +410,9 @@ def test_library_with_service_down_is_503(web, method, path, body):
     ("GET", "/api/playlists/Viaje/play"),
     ("POST", "/api/queue"),
     ("GET", "/api/queue/play"),
+    ("PUT", "/api/queue"),
+    ("GET", "/api/queue/move"),
+    ("GET", "/api/queue/tracks/17"),
 ])
 def test_library_wrong_method_is_405(web, method, path):
     server, ipc = web
@@ -396,7 +421,8 @@ def test_library_wrong_method_is_405(web, method, path):
     assert library_calls(ipc) == []
 
 
-@pytest.mark.parametrize("path", ["/api/library/x", "/api/playlists/Viaje/x", "/api/playlists/Viaje/tracks/3/x"])
+@pytest.mark.parametrize("path", ["/api/library/x", "/api/playlists/Viaje/x", "/api/playlists/Viaje/tracks/3/x",
+                                  "/api/queue/x", "/api/queue/tracks/17/x"])
 def test_library_unknown_route_is_404(web, path):
     server, _ = web
 

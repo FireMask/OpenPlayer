@@ -85,6 +85,15 @@ class Ipc:
     def play_queue(self, position):
         return self.request({"type": "queue.play", "position": position})
 
+    def remove_from_queue(self, song_id):
+        return self.request({"type": "queue.remove", "id": song_id})
+
+    def move_in_queue(self, song_id, to_position):
+        return self.request({"type": "queue.move", "id": song_id, "to": to_position})
+
+    def clear_queue(self):
+        return self.request({"type": "queue.clear"})
+
     def _open(self, timeout=None):
         try:
             sock = self._connect()
