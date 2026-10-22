@@ -213,6 +213,16 @@ public sealed class IpcServer(
             case QueuePlayRequested m:
                 await queue.PlayAsync(m.Position, ct);
                 break;
+            case QueueRemoveRequested m:
+                await queue.RemoveAsync(m.Id, ct);
+                break;
+            case QueueMoveRequested m:
+                await queue.MoveAsync(m.Id, m.To, ct);
+                break;
+            case QueueClearRequested:
+                await queue.ClearAsync(ct);
+                _loadedPlaylist = null;
+                break;
             case LibraryPlayRequested m:
                 await library.PlayTrackAsync(m.Uri, ct);
                 _loadedPlaylist = null;

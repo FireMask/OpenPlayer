@@ -38,12 +38,12 @@ public class LibraryMessagesTests
     {
         var page = new LibraryPage(0, 2,
         [
-            new LibraryEntry("A1.flac", new Track("A1.flac", "Rolling In The Deep", "Adele", "21", TimeSpan.FromSeconds(225.4))),
+            new LibraryEntry("A1.flac", new Track("A1.flac", "Rolling In The Deep", "Adele", "21", TimeSpan.FromSeconds(225.4)), 17),
             new LibraryEntry("x.mp3", new Track("x.mp3", null, null, null, null)),
         ]);
 
         Assert.Equal(
-            """{"type":"queue.page","playlist":"Favoritas","offset":0,"total":2,"entries":[{"uri":"A1.flac","title":"Rolling In The Deep","artist":"Adele","album":"21","durationSeconds":225},{"uri":"x.mp3","title":null,"artist":null,"album":null,"durationSeconds":null}]}""",
+            """{"type":"queue.page","playlist":"Favoritas","offset":0,"total":2,"entries":[{"uri":"A1.flac","id":17,"title":"Rolling In The Deep","artist":"Adele","album":"21","durationSeconds":225},{"uri":"x.mp3","id":null,"title":null,"artist":null,"album":null,"durationSeconds":null}]}""",
             QueuePageMessage.Serialize(page, "Favoritas"));
     }
 

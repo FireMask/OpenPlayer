@@ -25,6 +25,9 @@ public class LibraryMessageParserTests
         { """{"type":"queue.get","offset":100}""", new QueueGetRequested(100) },
         { """{"type":"queue.get"}""", new QueueGetRequested(0) },
         { """{"type":"queue.play","position":3}""", new QueuePlayRequested(3) },
+        { """{"type":"queue.remove","id":17}""", new QueueRemoveRequested(17) },
+        { """{"type":"queue.move","id":17,"to":2}""", new QueueMoveRequested(17, 2) },
+        { """{"type":"queue.clear"}""", new QueueClearRequested() },
     };
 
     [Theory]
@@ -59,6 +62,15 @@ public class LibraryMessageParserTests
     [InlineData("""{"type":"queue.play","position":-1}""", "queue.play", "invalid position")]
     [InlineData("""{"type":"queue.play","position":"3"}""", "queue.play", "invalid position")]
     [InlineData("""{"type":"queue.play","position":3.5}""", "queue.play", "invalid position")]
+    [InlineData("""{"type":"queue.remove"}""", "queue.remove", "invalid id")]
+    [InlineData("""{"type":"queue.remove","id":-1}""", "queue.remove", "invalid id")]
+    [InlineData("""{"type":"queue.remove","id":"3"}""", "queue.remove", "invalid id")]
+    [InlineData("""{"type":"queue.remove","id":3.5}""", "queue.remove", "invalid id")]
+    [InlineData("""{"type":"queue.move","to":2}""", "queue.move", "invalid id")]
+    [InlineData("""{"type":"queue.move","id":17}""", "queue.move", "invalid to")]
+    [InlineData("""{"type":"queue.move","id":17,"to":-1}""", "queue.move", "invalid to")]
+    [InlineData("""{"type":"queue.move","id":17,"to":"3"}""", "queue.move", "invalid to")]
+    [InlineData("""{"type":"queue.move","id":17,"to":3.5}""", "queue.move", "invalid to")]
     public void Rejects_invalid_without_throwing_and_keeps_request(string line, string expectedRequest, string expectedError)
     {
         Assert.False(IpcMessageParser.TryParse(line, out var message, out var error, out var request));

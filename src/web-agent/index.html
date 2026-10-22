@@ -53,6 +53,7 @@
   .list .meta { display: block; color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
   .list .act { border: 0; background: none; color: var(--accent); font-size: 1.2rem; padding: 10px; cursor: pointer;
                min-width: 44px; touch-action: manipulation; }
+  .list .act:disabled { color: var(--muted); opacity: .4; cursor: default; }
   .empty { color: var(--muted); padding: 12px; }
   .msg { min-height: 1.4em; margin: 8px 0; color: var(--muted); }
   .msg.error { color: var(--warn); font-weight: 600; }
@@ -63,7 +64,8 @@
   dialog .list { background: var(--bg); max-height: 50vh; overflow-y: auto; margin-bottom: 12px; }
 
   /* Cola (SPEC 11): a la derecha ≥ 900 px en todas las pestañas; debajo de los controles en Reproductor si no. */
-  .queue h2 { font-size: 1rem; margin: 0 0 8px; overflow-wrap: anywhere; }
+  .queue .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .queue h2 { font-size: 1rem; margin: 0; overflow-wrap: anywhere; }
   .queue .list { overflow-y: auto; }
   .list .q { display: flex; align-items: center; gap: 10px; }
   .list .q .num { min-width: 2.5em; text-align: right; color: var(--muted); font-size: .8rem;
@@ -163,7 +165,10 @@
   </dialog>
 </main>
 <aside class="queue" aria-label="Cola">
-  <h2 id="queue-head">Cola</h2>
+  <div class="head">
+    <h2 id="queue-head">Cola</h2>
+    <button class="small" id="queue-clear" hidden>Limpiar</button>
+  </div>
   <p class="msg" id="queue-msg" aria-live="polite"></p>
   <ul class="list" id="queue-list"></ul>
   <button class="small more" id="queue-more" hidden>Más</button>
@@ -579,6 +584,7 @@
     qVersion = undefined;  // al volver la conexión se recarga (el Service pudo reiniciarse y olvidar el nombre)
     qCount = 0;
     $("queue-head").textContent = "Cola";
+    $("queue-clear").hidden = true;
     $("queue-list").replaceChildren();
     $("queue-more").hidden = true;
     queueMsg(OFFLINE, true);
@@ -607,6 +613,7 @@
     qCount = 0;
     $("queue-head").textContent = (page.playlist ? `Lista: ${page.playlist}` : "Cola")
       + ` · ${qTotal} ${qTotal === 1 ? "canción" : "canciones"}`;
+    $("queue-clear").hidden = qTotal === 0;
     $("queue-list").replaceChildren();
     appendQueue(entries);
     markCurrent();
@@ -624,12 +631,29 @@
     const meta = [e.artist, e.album].filter(Boolean).join(" · ");
     const body = el("span", { className: "body" }, el("span", { className: "name", textContent: e.title || baseName(e.uri) }));
     if (meta) body.append(el("span", { className: "meta", textContent: meta }));
+    // ↑/↓/✕ por id de MPD (SPEC 12): una cola vieja nunca toca otra pista.
+    const act = (text, label, onClick, disabled = false) =>
+      el("button", { className: "act", textContent: text, title: label, ariaLabel: label, onclick: onClick, disabled });
     return el("li", {}, el("button", { className: "main q", onclick: () => playQueue(pos) },
       el("span", { className: "num", textContent: pos + 1 }),
       el("span", { className: "eq", ariaHidden: "true" }, el("i"), el("i"), el("i")),
       body,
-      el("span", { className: "dur", textContent: e.durationSeconds == null ? "" : mmss(e.durationSeconds) })));
+      el("span", { className: "dur", textContent: e.durationSeconds == null ? "" : mmss(e.durationSeconds) })),
+      act("↑", "Subir", () => editQueue("POST", "/api/queue/move", { id: e.id, to: pos - 1 }), pos === 0),
+      act("↓", "Bajar", () => editQueue("POST", "/api/queue/move", { id: e.id, to: pos + 1 }), pos === qTotal - 1),
+      act("✕", "Quitar", () => editQueue("DELETE", `/api/queue/tracks/${e.id}`)));
   }
+
+  // Tras éxito recarga la cola (posiciones y deshabilitados cambian); si falla muestra el error.
+  async function editQueue(method, url, body) {
+    try { await api(method, url, body); } catch (e) { return queueMsg(e.message, true); }
+    queueMsg("");
+    reloadQueue();
+  }
+
+  $("queue-clear").addEventListener("click", () => {
+    if (confirm("¿Limpiar la cola? Se detiene la reproducción.")) editQueue("DELETE", "/api/queue");
+  });
 
   $("queue-more").addEventListener("click", async () => {
     let page;

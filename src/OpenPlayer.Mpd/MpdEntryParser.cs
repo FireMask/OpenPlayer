@@ -1,3 +1,4 @@
+using System.Globalization;
 using OpenPlayer.Core.Models;
 
 namespace OpenPlayer.Mpd;
@@ -17,7 +18,11 @@ internal static class MpdEntryParser
             if (file is not null)
                 entries.Add(new LibraryEntry(file, new Track(file, tags.GetValueOrDefault("Title"),
                     tags.GetValueOrDefault("Artist"), tags.GetValueOrDefault("Album"),
-                    MpdSnapshotParser.Seconds(tags.GetValueOrDefault("duration")))));
+                    MpdSnapshotParser.Seconds(tags.GetValueOrDefault("duration"))),
+                    // Id solo viene en playlistinfo (la cola); lsinfo y listplaylistinfo lo dejan null.
+                    int.TryParse(tags.GetValueOrDefault("Id"), NumberStyles.None, CultureInfo.InvariantCulture, out var id)
+                        ? id
+                        : null));
             file = null;
             tags = [];
         }

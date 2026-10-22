@@ -108,11 +108,11 @@ Implementado en SPEC 05 (Python 3, solo stdlib y `gpiozero` con `lgpio`, paquete
 Proceso Python (SPEC 08, solo stdlib): página con los 6 botones y el estado, para controlar el reproductor desde un navegador de la red local sin GPIO.
 
 - `config.py`: lee `ipc.unixSocketPath` y `web.port` (1024–65535) de `player.json`; ignora `hardware`. Config inválida → exit 1 nombrando el campo.
-- `ipc.py`: una conexión al socket por pedido HTTP; `button.pressed` sin `sequence`; `player.get_snapshot` con timeout de 2 s; `player.seek` (SPEC 09). Biblioteca, playlists (SPEC 10) y cola (SPEC 11) con `request()`: timeout de 5 s y respuesta de hasta 1 MB.
+- `ipc.py`: una conexión al socket por pedido HTTP; `button.pressed` sin `sequence`; `player.get_snapshot` con timeout de 2 s; `player.seek` (SPEC 09). Biblioteca, playlists (SPEC 10) y cola (SPEC 11 y 12) con `request()`: timeout de 5 s y respuesta de hasta 1 MB.
 - `server.py`: `ThreadingHTTPServer` en `::` (IPv4 e IPv6). Solo acepta clientes de `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `::1` y `fe80::/10` (IPv4 mapeadas se evalúan como IPv4); el resto recibe `403`. Sin autenticación ni HTTPS.
 - `index.html`: botones y línea de estado (sondeo cada 2 s); título y artista se insertan como texto, nunca como HTML. Barra de progreso (`<input type="range">` + `m:ss / m:ss`, SPEC 09): avanza localmente entre sondeos si `playing`, el sondeo no la mueve mientras se arrastra, al soltar envía `POST /api/seek`; oculta sin `durationSeconds`, deshabilitada en `stopped`.
 - Pestañas Reproductor / Biblioteca / Listas (SPEC 10). Biblioteca: carpetas con migas, búsqueda (≥ 2 caracteres), "Más" cada 100; tocar una pista reemplaza la cola y la reproduce; "+" agrega pista o carpeta a una lista (`<dialog>`). Listas: crear/renombrar con `prompt`, borrar con `confirm`; abrir una lista: ↑/↓/✕ y reproducir desde el inicio o desde una pista. Tras cada cambio, y cada vez que se vuelve a la pestaña Listas (SPEC 11: refleja lo agregado desde Biblioteca), la lista abierta o el índice se recarga para no usar posiciones viejas.
-- Panel "Cola" (SPEC 11): a la derecha en todas las pestañas con ventana ≥ 900 px; más angosta, debajo de los controles solo en Reproductor. Encabezado "Lista: <nombre>" o "Cola" + "· N canciones"; filas con número, título (o nombre de archivo), "artista · álbum" y m:ss. La cola se pide solo cuando el snapshot trae otro `queueVersion` (o tras renombrar/borrar una lista desde la página, o al recuperar la conexión): páginas desde 0 hasta incluir `queuePosition`, luego "Más". En cada sondeo se mueve el resaltado de la actual (color + 3 barras CSS: animadas en `playing`, congeladas en `paused`, ocultas en `stopped`, quietas con `prefers-reduced-motion`) y se centra si no está visible, salvo 10 s después de que el usuario desplace el panel. Tocar una fila → `POST /api/queue/play`.
+- Panel "Cola" (SPEC 11): a la derecha en todas las pestañas con ventana ≥ 900 px; más angosta, debajo de los controles solo en Reproductor. Encabezado "Lista: <nombre>" o "Cola" + "· N canciones"; filas con número, título (o nombre de archivo), "artista · álbum" y m:ss. La cola se pide solo cuando el snapshot trae otro `queueVersion` (o tras renombrar/borrar una lista desde la página, o al recuperar la conexión): páginas desde 0 hasta incluir `queuePosition`, luego "Más". En cada sondeo se mueve el resaltado de la actual (color + 3 barras CSS: animadas en `playing`, congeladas en `paused`, ocultas en `stopped`, quietas con `prefers-reduced-motion`) y se centra si no está visible, salvo 10 s después de que el usuario desplace el panel. Tocar una fila → `POST /api/queue/play`. Editar (SPEC 12): cada fila tiene ↑/↓/✕ (↑ deshabilitado en la primera, ↓ en la última de la cola) que mueven o quitan la pista por su `id` de MPD; "Limpiar" en el encabezado (oculto con la cola vacía) pide `confirm` y vacía la cola. Tras cada edición exitosa la cola se recarga.
 - `main.py`: logs `ready:` / `button <nombre>` / `seek <N>` / warnings; SIGTERM → exit 0. Unidad `deploy/openplayer-web.service` (usuario `openplayer`). Pruebas en `tests/web-agent`.
 
 Contrato HTTP:
@@ -123,7 +123,7 @@ Contrato HTTP:
 | `POST /api/buttons/<nombre>` (los 6 de §8) | `204` | `404` nombre desconocido; `503` Service inalcanzable |
 | `POST /api/seek` con cuerpo `{"positionSeconds": N}` | `204` | `400` cuerpo ausente, > 1 KB, JSON inválido, o `positionSeconds` no entero / fuera de 0–86400; `503` Service inalcanzable |
 | `GET /api/snapshot` | `200` `application/json`: la línea `player.snapshot` de §7 tal cual | `502` si el Service responde `error`; `503` inalcanzable o sin respuesta en 2 s |
-| Biblioteca, playlists y cola (SPEC 10 y 11, tabla abajo) | `200` JSON (página o lista) / `204` (`ok`) | `400` forma inválida; `502` el Service responde `error` (cuerpo = esa línea); `503` inalcanzable o sin respuesta en 5 s |
+| Biblioteca, playlists y cola (SPEC 10 a 12, tabla abajo) | `200` JSON (página o lista) / `204` (`ok`) | `400` forma inválida; `502` el Service responde `error` (cuerpo = esa línea); `503` inalcanzable o sin respuesta en 5 s |
 | Otra ruta / otro método | — | `404` / `405` |
 | Cliente fuera de los rangos | — | `403` en todas las rutas |
 
@@ -145,6 +145,9 @@ Rutas de biblioteca y playlists (SPEC 10). `<nombre>` y `<pos>` van URL-encoded 
 | `POST /api/playlists/<nombre>/play` `{"position"}` opcional (cuerpo opcional) | `playlist.play` | `204` |
 | `GET /api/queue?offset=` (SPEC 11) | `queue.get` | `200` `queue.page` |
 | `POST /api/queue/play` `{"position"}` (SPEC 11) | `queue.play` | `204` |
+| `DELETE /api/queue/tracks/{id}` (SPEC 12) | `queue.remove` | `204` |
+| `POST /api/queue/move` `{"id","to"}` (SPEC 12) | `queue.move` | `204` |
+| `DELETE /api/queue` (SPEC 12) | `queue.clear` | `204` |
 
 ### MPD y salida de audio
 
@@ -198,7 +201,7 @@ public interface IPlaylistStore
 }
 ```
 
-- `LibraryPage(Offset, Total, Entries)` con páginas de `LibraryPage.PageSize` = 100; `LibraryEntry(Uri, Track?)` con `Track` null para carpetas. En playlists, la posición de una pista es `Offset + índice`.
+- `LibraryPage(Offset, Total, Entries)` con páginas de `LibraryPage.PageSize` = 100; `LibraryEntry(Uri, Track?, Id?)` con `Track` null para carpetas; `Id` (SPEC 12) es el id de MPD de la pista en la cola (`playlistinfo`) y es null en biblioteca y playlists. En playlists, la posición de una pista es `Offset + índice`.
 - MPD 0.23 no pagina `lsinfo` ni `search`: el adaptador pide todo y corta. `BrowseAsync` pone carpetas primero (orden estable) e ignora las entradas `playlist:`.
 Implementado en SPEC 11 (adaptador `MpdQueue`): la cola de MPD es un contrato propio, distinto de la biblioteca y de las playlists guardadas.
 
@@ -207,6 +210,9 @@ public interface IQueue
 {
     Task<LibraryPage> GetAsync(int offset, CancellationToken ct = default);  // playlistinfo; posición = Offset + índice
     Task PlayAsync(int position, CancellationToken ct = default);           // play N
+    Task RemoveAsync(int id, CancellationToken ct = default);               // deleteid ID (SPEC 12)
+    Task MoveAsync(int id, int to, CancellationToken ct = default);         // moveid ID TO
+    Task ClearAsync(CancellationToken ct = default);                        // clear
 }
 ```
 
@@ -240,6 +246,9 @@ Mensajes de entrada:
 {"type":"playlist.play","name":"Viaje","position":0}
 {"type":"queue.get","offset":0}
 {"type":"queue.play","position":3}
+{"type":"queue.remove","id":17}
+{"type":"queue.move","id":17,"to":2}
+{"type":"queue.clear"}
 ```
 
 - `type` obligatorio. Campos extra se ignoran.
@@ -247,8 +256,8 @@ Mensajes de entrada:
 - `player.get_snapshot`: responde una línea solo al cliente que la pidió.
 - `player.seek` (SPEC 09): `positionSeconds` obligatorio, entero JSON 0–86400 (no `83.5`, `"83"` ni `true`). Ejecuta `IPlayer.SeekAsync` (`seekcur`) y registra `Seek to N s`. No hay respuesta; si MPD falla (detenido, posición fuera de la pista) solo registra warning `Seek failed: …`. No se recorta contra la duración.
 - `library.*` y `playlist.*` (SPEC 10): **siempre responden una línea**, aunque sean inválidos. Validación en el Core: `name`/`newName` con `PlaylistName.EnsureValid`; `uri` 1–1024 caracteres y `path` 0–1024 (`""` = raíz), sin caracteres de control; `query` 2–100; `offset`, `position`, `from`, `to` enteros JSON ≥ 0 (`offset` y la `position` de `playlist.play` son opcionales, 0). Se ejecutan bajo el mismo lock global. `library.play` y `playlist.play` reemplazan la cola (`clear` + `add`/`load` + `play N`).
-- `queue.*` (SPEC 11): también responden siempre una línea. `queue.get`: `offset` entero JSON ≥ 0, opcional (0); responde `queue.page` y registra `queue.get ok (offset N)` (la única consulta que se registra: permite ver en `journalctl` que la web no sondea la cola). `queue.play`: `position` entero JSON ≥ 0, obligatorio; ejecuta `play N` y responde `ok`.
-- Nombre de la lista cargada (SPEC 11): el Service lo recuerda en memoria (`_loadedPlaylist`, bajo el lock global) porque MPD no lo guarda. Lo fija un `playlist.play` exitoso, lo borra `library.play`, lo actualiza `playlist.rename` y lo borra `playlist.delete` si nombran esa lista. Un mensaje que falla no lo cambia. Se pierde al reiniciar el Service y puede quedar viejo si la cola cambia fuera de la web (`mpc`).
+- `queue.*` (SPEC 11): también responden siempre una línea. `queue.get`: `offset` entero JSON ≥ 0, opcional (0); responde `queue.page` y registra `queue.get ok (offset N)` (la única consulta que se registra: permite ver en `journalctl` que la web no sondea la cola). `queue.play`: `position` entero JSON ≥ 0, obligatorio; ejecuta `play N` y responde `ok`. SPEC 12: `queue.remove` (`id`), `queue.move` (`id`, `to`) y `queue.clear` editan por id de MPD (`deleteid`, `moveid`, `clear`); `id` y `to` enteros JSON ≥ 0, obligatorios; responden `ok`. El id no cambia al mover ni al quitar otras pistas: una cola vieja en la página da un `ACK` de id inexistente, nunca toca otra pista.
+- Nombre de la lista cargada (SPEC 11): el Service lo recuerda en memoria (`_loadedPlaylist`, bajo el lock global) porque MPD no lo guarda. Lo fija un `playlist.play` exitoso, lo borra `library.play`, lo actualiza `playlist.rename` y lo borra `playlist.delete` si nombran esa lista. `queue.clear` exitoso lo borra (SPEC 12); `queue.remove` y `queue.move` no lo cambian. Un mensaje que falla no lo cambia. Se pierde al reiniciar el Service y puede quedar viejo si la cola cambia fuera de la web (`mpc`).
 
 Respuestas:
 
@@ -260,13 +269,13 @@ Respuestas:
 - `player.snapshot` (generado por `SnapshotMessage`): `state` es `playing` | `paused` | `stopped`. Todos los campos excepto `type` y `state` pueden ser `null` (sin pista, sin metadatos, MPD sin mixer); los `null` se escriben explícitamente. Segundos truncados a entero.
 - `error` (generado por `ErrorMessage`): la consulta falló porque MPD no respondió o devolvió `ACK`, o (SPEC 10) el mensaje de biblioteca/playlists era inválido (`message`: `invalid <campo>`).
 - SPEC 10: `ok` (`OkMessage`) para mutaciones y `*.play`; `library.page` (`LibraryPageMessage`) para `library.browse`, `library.search` y `playlist.get`, con carpetas `{"uri","directory":true}` y pistas con `title`, `artist`, `album`, `durationSeconds` (`null` explícitos); `playlist.list` (`PlaylistListMessage`).
-- SPEC 11: `player.snapshot` suma `queuePosition` (0-based) y `queueVersion`, siempre presentes (`null` explícito si MPD no los da). `queue.page` (`QueuePageMessage`): `playlist` (nombre recordado o `null`), `offset`, `total` y `entries` con los campos de una pista de `library.page`, sin `directory`.
+- SPEC 11: `player.snapshot` suma `queuePosition` (0-based) y `queueVersion`, siempre presentes (`null` explícito si MPD no los da). `queue.page` (`QueuePageMessage`): `playlist` (nombre recordado o `null`), `offset`, `total` y `entries` con los campos de una pista de `library.page`, sin `directory`. SPEC 12: cada entrada suma `id` (id de MPD; `null` explícito si falta).
 
 ```json
 {"type":"ok","request":"playlist.add"}
 {"type":"library.page","offset":0,"total":2,"entries":[{"uri":"Rock/AC DC","directory":true},{"uri":"Rock/x.mp3","directory":false,"title":"X","artist":"A","album":null,"durationSeconds":210}]}
 {"type":"playlist.list","playlists":["Viaje","Gym"]}
-{"type":"queue.page","playlist":"Favoritas","offset":0,"total":2,"entries":[{"uri":"A1.flac","title":"Rolling In The Deep","artist":"Adele","album":"21","durationSeconds":225},{"uri":"x.mp3","title":null,"artist":null,"album":null,"durationSeconds":null}]}
+{"type":"queue.page","playlist":"Favoritas","offset":0,"total":2,"entries":[{"uri":"A1.flac","id":17,"title":"Rolling In The Deep","artist":"Adele","album":"21","durationSeconds":225},{"uri":"x.mp3","id":18,"title":null,"artist":null,"album":null,"durationSeconds":null}]}
 {"type":"error","request":"playlist.create","message":"Playlist 'Viaje' already exists"}
 ```
 
@@ -310,7 +319,8 @@ Estado (SPEC 10, desde la web):
 
 - Hecho: navegación por carpetas y búsqueda (`search any`), paginadas de a 100; playlists guardadas de MPD (`.m3u` en `playlist_directory`): crear, renombrar, borrar, agregar pista o carpeta, quitar, reordenar; reproducir una pista o una lista reemplazando la cola.
 - Hecho (SPEC 11): ver la cola con la pista actual resaltada y saltar a una pista.
-- Pendiente: editar la cola (quitar, reordenar, limpiar), actualización instantánea (`idle` → SSE), navegación artista → álbum, OLED y botones (spec futura).
+- Hecho (SPEC 12): editar la cola (quitar, reordenar, limpiar).
+- Pendiente: arrastrar para reordenar en la cola y en Listas (asa ⠿ a la izquierda, Pointer Events sin librería, animación del lugar de destino antes de soltar), agregar a la cola sin reemplazarla, actualización instantánea (`idle` → SSE), navegación artista → álbum, OLED y botones (spec futura).
 - Sin botón de reescaneo: `auto_update` de MPD (SPEC 07) indexa lo copiado por Samba.
 
 Una base SQLite propia queda pospuesta para preferencias, historial de reproducción, ratings o datos que MPD no cubra.
@@ -371,7 +381,7 @@ Integración en Pi:
 2. Crear solución .NET, Core e interfaz `IPlayer`. *(Hecho: SPEC 01.)*
 3. Implementar adaptador MPD y snapshot de estado. *(Hecho: SPEC 02.)*
 4. Implementar socket Unix y agente Python con dos botones. *(Hecho: socket SPEC 03, agente SPEC 05 con los 6 botones; validado con cable de puente, botones físicos pendientes.)*
-5. Añadir biblioteca y playlists. *(Web: SPEC 10 y 11; OLED + botones: spec futura.)*
+5. Añadir biblioteca y playlists. *(Web: SPEC 10 a 12; OLED + botones: spec futura.)*
 6. Instalar servicios systemd y validar arranque automático. *(Hecho: SPEC 04 `deploy/openplayer.service`, SPEC 05 `deploy/openplayer-hardware.service`.)*
 7. Configurar Bluetooth A2DP y selector de salida.
 8. Añadir OLED.

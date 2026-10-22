@@ -43,6 +43,13 @@ public sealed record QueueGetRequested(int Offset) : IpcMessage;
 
 public sealed record QueuePlayRequested(int Position) : IpcMessage;
 
+// Editar la cola (SPEC 12): por id de MPD; responden ok / error.
+public sealed record QueueRemoveRequested(int Id) : IpcMessage;
+
+public sealed record QueueMoveRequested(int Id, int To) : IpcMessage;
+
+public sealed record QueueClearRequested : IpcMessage;
+
 public static class IpcMessageParser
 {
     public const int MaxUriLength = 1024;
@@ -53,7 +60,7 @@ public static class IpcMessageParser
         "library.browse", "library.search", "library.play",
         "playlist.list", "playlist.get", "playlist.create", "playlist.rename", "playlist.delete",
         "playlist.add", "playlist.remove", "playlist.move", "playlist.play",
-        "queue.get", "queue.play",
+        "queue.get", "queue.play", "queue.remove", "queue.move", "queue.clear",
     ];
 
     /// <summary>Parsea una línea JSON. Nunca lanza: si es inválida devuelve false y un error legible para el log.</summary>
@@ -142,6 +149,15 @@ public static class IpcMessageParser
                     break;
                 case "queue.play":
                     message = new QueuePlayRequested(Index(root, "position", false));
+                    break;
+                case "queue.remove":
+                    message = new QueueRemoveRequested(Index(root, "id", false));
+                    break;
+                case "queue.move":
+                    message = new QueueMoveRequested(Index(root, "id", false), Index(root, "to", false));
+                    break;
+                case "queue.clear":
+                    message = new QueueClearRequested();
                     break;
                 default:
                     return Fail($"unknown type '{type.GetString()}'", out error);

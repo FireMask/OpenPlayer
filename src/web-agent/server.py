@@ -97,7 +97,7 @@ class Handler(BaseHTTPRequestHandler):
         self._reply(HTTPStatus.NOT_FOUND)
 
     def _library_routes(self, path):
-        """Rutas de biblioteca, playlists (SPEC 10) y cola (SPEC 11): {método: () -> línea IPC}, o None si la ruta no existe.
+        """Rutas de biblioteca, playlists (SPEC 10) y cola (SPEC 11 y 12): {método: () -> línea IPC}, o None si la ruta no existe.
 
         Cada función valida la forma del pedido y lanza ValueError (→ 400); el Core valida el contenido."""
         ipc = self.server.ipc
@@ -109,9 +109,17 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/library/play":
             return {"POST": lambda: ipc.play_track(_text(self._json_body(), "uri"))}
         if path == "/api/queue":
-            return {"GET": lambda: ipc.queue(_offset(query))}
+            return {"GET": lambda: ipc.queue(_offset(query)), "DELETE": ipc.clear_queue}
         if path == "/api/queue/play":
             return {"POST": lambda: ipc.play_queue(_int(self._json_body(), "position"))}
+        if path == "/api/queue/move":
+            def move_queue():
+                body = self._json_body()
+                return ipc.move_in_queue(_int(body, "id"), _int(body, "to"))
+            return {"POST": move_queue}
+        if path.startswith("/api/queue/tracks/"):
+            song_id = path[len("/api/queue/tracks/"):]
+            return None if "/" in song_id else {"DELETE": lambda: ipc.remove_from_queue(_index(song_id))}
         if path == "/api/playlists":
             return {"GET": ipc.playlists, "POST": lambda: ipc.create_playlist(_text(self._json_body(), "name"))}
         if not path.startswith("/api/playlists/"):

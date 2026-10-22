@@ -161,6 +161,9 @@ LIBRARY_CALLS = [
     (lambda i: i.play_playlist("Viaje", 4), '{"type":"playlist.play","name":"Viaje","position":4}'),
     (lambda i: i.queue(100), '{"type":"queue.get","offset":100}'),
     (lambda i: i.play_queue(3), '{"type":"queue.play","position":3}'),
+    (lambda i: i.remove_from_queue(17), '{"type":"queue.remove","id":17}'),
+    (lambda i: i.move_in_queue(17, 2), '{"type":"queue.move","id":17,"to":2}'),
+    (lambda i: i.clear_queue(), '{"type":"queue.clear"}'),
 ]
 
 

@@ -18,4 +18,20 @@ public sealed class MpdQueue(MpdClient client) : IQueue
         ArgumentOutOfRangeException.ThrowIfNegative(position);
         return client.ExecuteAsync([$"play {position.ToString(CultureInfo.InvariantCulture)}"], ct);
     }
+
+    public Task RemoveAsync(int id, CancellationToken ct = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(id);
+        return client.ExecuteAsync([$"deleteid {id.ToString(CultureInfo.InvariantCulture)}"], ct);
+    }
+
+    public Task MoveAsync(int id, int to, CancellationToken ct = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(id);
+        ArgumentOutOfRangeException.ThrowIfNegative(to);
+        return client.ExecuteAsync(
+            [$"moveid {id.ToString(CultureInfo.InvariantCulture)} {to.ToString(CultureInfo.InvariantCulture)}"], ct);
+    }
+
+    public Task ClearAsync(CancellationToken ct = default) => client.ExecuteAsync(["clear"], ct);
 }
