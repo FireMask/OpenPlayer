@@ -1,6 +1,6 @@
 # SPEC 15 — Historial real para ⏮
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 02, SPEC 03, SPEC 14
 > **Date:** 2026-10-22
 > **Objective:** Que el Service observe los cambios de canción de MPD (`idle player`), recuerde las últimas 50 canciones escuchadas y que ⏮ (a ≤ 3 s) devuelva la anterior arriba de la cola y la reproduzca.
@@ -105,31 +105,31 @@ No cambia el protocolo IPC ni `player.json` (el tope 50 y los 5 s de reintento s
 
 **Código y pruebas:**
 
-- [ ] `PlaybackSnapshot.SongId` se lee de `songid`; `songid` inválido o ausente → `null`.
-- [ ] `MpdClient.IdleAsync` envía `idle player` en su propia conexión, vuelve con `changed: player` + `OK` y se cancela sin quedar colgado.
-- [ ] `MpdQueue.RestoreAsync` envía exactamente `add "<uri>" 0` y `play 0` en una conexión.
-- [ ] Al cambiar `SongId`, la canción anterior entra al historial con su etiqueta solo si estuvo en `play` o `pause`.
-- [ ] El historial guarda como máximo 50 entradas y descarta la más vieja.
-- [ ] ⏮ a ≤ umbral con historial llama `RestoreAsync` con la última entrada y la quita; sin historial o sobre el umbral se comporta como antes.
-- [ ] La canción restaurada recibe su etiqueta de origen original.
-- [ ] ⏮⏮ restaura dos canciones distintas en orden inverso (sin rebote).
-- [ ] ACK en `RestoreAsync` descarta la entrada, registra un warning y ⏮ actúa como antes.
-- [ ] MPD caído al arrancar o durante `idle`: el Service sigue respondiendo IPC y el observador reintenta.
-- [ ] Todas las suites pasan (Core, Mpd, Service, web agent, hardware agent).
+- [x] `PlaybackSnapshot.SongId` se lee de `songid`; `songid` inválido o ausente → `null`.
+- [x] `MpdClient.IdleAsync` envía `idle player` en su propia conexión, vuelve con `changed: player` + `OK` y se cancela sin quedar colgado.
+- [x] `MpdQueue.RestoreAsync` envía exactamente `add "<uri>" 0` y `play 0` en una conexión.
+- [x] Al cambiar `SongId`, la canción anterior entra al historial con su etiqueta solo si estuvo en `play` o `pause`.
+- [x] El historial guarda como máximo 50 entradas y descarta la más vieja.
+- [x] ⏮ a ≤ umbral con historial llama `RestoreAsync` con la última entrada y la quita; sin historial o sobre el umbral se comporta como antes.
+- [x] La canción restaurada recibe su etiqueta de origen original.
+- [x] ⏮⏮ restaura dos canciones distintas en orden inverso (sin rebote).
+- [x] ACK en `RestoreAsync` descarta la entrada, registra un warning y ⏮ actúa como antes.
+- [x] MPD caído al arrancar o durante `idle`: el Service sigue respondiendo IPC y el observador reintenta.
+- [x] Todas las suites pasan (Core, Mpd, Service, web agent, hardware agent).
 
 **En la Pi:**
 
-- [ ] Paso 1 medido y anotado en Decisiones.
-- [ ] Reproducir una lista, dejar terminar una canción (o ⏭), ⏮ antes de 3 s: suena la anterior desde 0:00, arriba de la cola, con su etiqueta.
-- [ ] La canción que sonaba queda segunda en la cola.
-- [ ] ⏮ pasados 3 s reinicia la canción actual.
-- [ ] ⏮ con historial vacío (Service recién reiniciado) reinicia la canción actual.
-- [ ] El botón físico ⏮ hace lo mismo que el de la web.
+- [x] Paso 1 medido y anotado en Decisiones.
+- [x] Reproducir una lista, dejar terminar una canción (o ⏭), ⏮ antes de 3 s: suena la anterior desde 0:00, arriba de la cola, con su etiqueta.
+- [x] La canción que sonaba queda segunda en la cola.
+- [x] ⏮ pasados 3 s reinicia la canción actual.
+- [x] ⏮ con historial vacío (Service recién reiniciado) reinicia la canción actual.
+- [x] El botón físico ⏮ hace lo mismo que el de la web.
 
 **Docs:**
 
-- [ ] `architecture.md` §6, §7 y §9 describen `SongId`, `WaitForChangeAsync`, `RestoreAsync`, el observador y el historial.
-- [ ] README explica que ⏮ a ≤ 3 s vuelve a la anterior y que el historial se pierde al reiniciar.
+- [x] `architecture.md` §6, §7 y §9 describen `SongId`, `WaitForChangeAsync`, `RestoreAsync`, el observador y el historial.
+- [x] README explica que ⏮ a ≤ 3 s vuelve a la anterior y que el historial se pierde al reiniciar.
 
 ## Decisions
 
