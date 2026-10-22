@@ -22,6 +22,9 @@ public class LibraryMessageParserTests
         { """{"type":"playlist.move","name":"Viaje","from":3,"to":2}""", new PlaylistMoveRequested("Viaje", 3, 2) },
         { """{"type":"playlist.play","name":"Viaje","position":4}""", new PlaylistPlayRequested("Viaje", 4) },
         { """{"type":"playlist.play","name":"Viaje"}""", new PlaylistPlayRequested("Viaje", 0) },
+        { """{"type":"queue.get","offset":100}""", new QueueGetRequested(100) },
+        { """{"type":"queue.get"}""", new QueueGetRequested(0) },
+        { """{"type":"queue.play","position":3}""", new QueuePlayRequested(3) },
     };
 
     [Theory]
@@ -50,6 +53,12 @@ public class LibraryMessageParserTests
     [InlineData("""{"type":"playlist.add","name":"Viaje","uri":""}""", "playlist.add", "invalid uri")]
     [InlineData("""{"type":"playlist.remove","name":"Viaje"}""", "playlist.remove", "invalid position")]
     [InlineData("""{"type":"playlist.move","name":"Viaje","from":1}""", "playlist.move", "invalid to")]
+    [InlineData("""{"type":"queue.get","offset":-1}""", "queue.get", "invalid offset")]
+    [InlineData("""{"type":"queue.get","offset":"3"}""", "queue.get", "invalid offset")]
+    [InlineData("""{"type":"queue.play"}""", "queue.play", "invalid position")]
+    [InlineData("""{"type":"queue.play","position":-1}""", "queue.play", "invalid position")]
+    [InlineData("""{"type":"queue.play","position":"3"}""", "queue.play", "invalid position")]
+    [InlineData("""{"type":"queue.play","position":3.5}""", "queue.play", "invalid position")]
     public void Rejects_invalid_without_throwing_and_keeps_request(string line, string expectedRequest, string expectedError)
     {
         Assert.False(IpcMessageParser.TryParse(line, out var message, out var error, out var request));

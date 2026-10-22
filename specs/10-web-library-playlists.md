@@ -26,7 +26,7 @@
 
 **Out of scope (for future specs):**
 
-- OLED y navegación con botones (`menu`, volumen como flechas) — SPEC 11.
+- OLED y navegación con botones (`menu`, volumen como flechas) — spec futura.
 - Ver o editar la cola en vivo (más allá de reemplazarla al reproducir).
 - Navegación artista → álbum → pista (`list`).
 - Botón de reescaneo (`auto_update` de SPEC 07 lo cubre).
@@ -225,7 +225,7 @@ Cada paso deja `dotnet test` y `pytest` en verde. Los pasos 1–6 no agregan nad
 
 **Tomadas:**
 
-- **Separar web (SPEC 10) y OLED + botones (SPEC 11).** El OLED depende de la fase 8 (hardware sin montar) y toca otro agente; esta spec deja listos los mensajes IPC que SPEC 11 reutilizará.
+- **Separar web (SPEC 10) y OLED + botones (spec futura).** El OLED depende de la fase 8 (hardware sin montar) y toca otro agente; esta spec deja listos los mensajes IPC que esa spec reutilizará.
 - **Playlists guardadas de MPD (`.m3u` en `playlist_directory`).** La arquitectura delega en MPD; sin segunda copia que sincronizar, y `mpc` sigue viendo las mismas listas.
 - **La web pasa por el Service, nunca habla con MPD.** Consistente con SPEC 08: un solo lock, una sola validación, y el futuro OLED usa el mismo camino.
 - **Los mensajes nuevos responden (`ok` / `error`).** La edición necesita informar duplicados o listas inexistentes; `button.pressed` y `player.seek` siguen sin respuesta.
@@ -235,7 +235,7 @@ Cada paso deja `dotnet test` y `pytest` en verde. Los pasos 1–6 no agregan nad
 - **Crear con `playlistadd "<nombre>" ""` + `playlistclear`, verificando antes con `listplaylists`.** MPD no tiene "crear vacía"; `save` copiaría la cola actual. Hallado en la Pi (MPD 0.23): `playlistclear` de un nombre inexistente responde `No such playlist` en vez de crear el `.m3u`. Agregar la raíz crea el archivo y `playlistclear` lo vacía, en una conexión; la UI no cambia. Se descartó "agregar una pista cualquiera + `playlistdelete 0`": obtener una pista barata exige filtros de `find`/`search` dependientes de versión. Con una biblioteca vacía, crear falla con el mensaje de MPD.
 - **`~/Playlists` con dueño `mpd` (`chown mpd:andres`, `chmod 2775`).** Hallado en la Pi: MPD corre como `mpd` y no podía escribir en la carpeta de `andres` (`Permission denied`). Documentado en `assembly.md`; faltaba desde SPEC 07.
 - **Escape de argumentos en `MpdClient`.** Nombres y URIs son entrada de usuario; hasta ahora solo se enviaban números.
-- **Validación en Core y forma en el web agent.** El Core es la autoridad (también para SPEC 11); el web agent rechaza temprano con `400`.
+- **Validación en Core y forma en el web agent.** El Core es la autoridad (también para la spec de OLED + botones); el web agent rechaza temprano con `400`.
 - **Agregar pista o carpeta.** `playlistadd` con una carpeta la expande recursivamente sin código propio.
 - **↑/↓ para reordenar.** Funciona en táctil y teclado; el arrastrar y soltar HTML5 nativo no funciona en móvil.
 - **`prompt`/`confirm` nativos.** Sin diálogos propios; confirmación solo al borrar.
@@ -270,7 +270,7 @@ Cada paso deja `dotnet test` y `pytest` en verde. Los pasos 1–6 no agregan nad
 
 ## What is **not** in this spec
 
-- OLED y navegación con botones — SPEC 11.
+- OLED y navegación con botones — spec futura.
 - Ver o editar la cola en vivo.
 - Navegación artista → álbum → pista.
 - Botón de reescaneo.

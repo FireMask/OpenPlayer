@@ -37,7 +37,7 @@ class FakeIpc:
     # Biblioteca y playlists: registra (método, argumentos) y responde library_reply.
     LIBRARY_METHODS = ("browse", "search", "play_track", "playlists", "playlist", "create_playlist",
                        "rename_playlist", "delete_playlist", "add_to_playlist", "remove_from_playlist",
-                       "move_in_playlist", "play_playlist")
+                       "move_in_playlist", "play_playlist", "queue", "play_queue")
     library_reply = OK
     library_calls = None
 
@@ -259,6 +259,8 @@ QUERY_ROUTES = [
     ("/api/playlists/Viaje", ("playlist", "Viaje", 0)),
     ("/api/playlists/Viaje?offset=100", ("playlist", "Viaje", 100)),
     ("/api/playlists/Mi%20lista%20100%25", ("playlist", "Mi lista 100%", 0)),
+    ("/api/queue", ("queue", 0)),
+    ("/api/queue?offset=100", ("queue", 100)),
 ]
 
 
@@ -285,6 +287,7 @@ MUTATION_ROUTES = [
     ("POST", "/api/playlists/Viaje/play", b'{"position":4}', ("play_playlist", "Viaje", 4)),
     ("POST", "/api/playlists/Viaje/play", None, ("play_playlist", "Viaje", 0)),
     ("POST", "/api/playlists/Viaje/play", b"{}", ("play_playlist", "Viaje", 0)),
+    ("POST", "/api/queue/play", b'{"position":3}', ("play_queue", 3)),
 ]
 
 
@@ -324,6 +327,14 @@ BAD_REQUESTS = [
     ("POST", "/api/playlists/Viaje/play", b'{"position":1.5}'),
     ("DELETE", "/api/playlists/", None),
     ("POST", "/api/playlists//rename", b'{"newName":"Gym"}'),
+    ("GET", "/api/queue?offset=-1", None),
+    ("GET", "/api/queue?offset=x", None),
+    ("POST", "/api/queue/play", None),
+    ("POST", "/api/queue/play", b"{}"),
+    ("POST", "/api/queue/play", b'{"position":-1}'),
+    ("POST", "/api/queue/play", b'{"position":"3"}'),
+    ("POST", "/api/queue/play", b'{"position":3.5}'),
+    ("POST", "/api/queue/play", b'{"position":true}'),
 ]
 
 
@@ -338,6 +349,8 @@ def test_library_invalid_request_is_400(web, method, path, body):
 @pytest.mark.parametrize("method, path, body", [
     ("GET", "/api/library", None),
     ("POST", "/api/playlists/Viaje/tracks", b'{"uri":"Rock"}'),
+    ("GET", "/api/queue", None),
+    ("POST", "/api/queue/play", b'{"position":99}'),
 ])
 def test_library_error_reply_is_502_with_line(web, method, path, body):
     server, ipc = web
@@ -352,6 +365,8 @@ def test_library_error_reply_is_502_with_line(web, method, path, body):
 @pytest.mark.parametrize("method, path, body", [
     ("GET", "/api/playlists", None),
     ("POST", "/api/playlists", b'{"name":"Viaje"}'),
+    ("GET", "/api/queue", None),
+    ("POST", "/api/queue/play", b'{"position":3}'),
 ])
 def test_library_with_service_down_is_503(web, method, path, body):
     server, ipc = web
@@ -371,6 +386,8 @@ def test_library_with_service_down_is_503(web, method, path, body):
     ("POST", "/api/playlists/Viaje/tracks/3"),
     ("DELETE", "/api/playlists/Viaje/move"),
     ("GET", "/api/playlists/Viaje/play"),
+    ("POST", "/api/queue"),
+    ("GET", "/api/queue/play"),
 ])
 def test_library_wrong_method_is_405(web, method, path):
     server, ipc = web

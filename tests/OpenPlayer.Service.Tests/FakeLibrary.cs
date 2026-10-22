@@ -3,8 +3,8 @@ using OpenPlayer.Core.Models;
 
 namespace OpenPlayer.Service.Tests;
 
-/// <summary>Biblioteca y playlists falsas: registran cada llamada en <see cref="Calls"/> o lanzan <see cref="Error"/>.</summary>
-internal sealed class FakeLibrary : ILibrary, IPlaylistStore
+/// <summary>Biblioteca, playlists y cola falsas: registran cada llamada en <see cref="Calls"/> o lanzan <see cref="Error"/>.</summary>
+internal sealed class FakeLibrary : ILibrary, IPlaylistStore, IQueue
 {
     public List<string> Calls { get; } = [];
 
@@ -43,6 +43,11 @@ internal sealed class FakeLibrary : ILibrary, IPlaylistStore
 
     public Task PlayAsync(string name, int position, CancellationToken ct = default) =>
         Record($"Play({name},{position})", 0);
+
+    public Task<LibraryPage> GetAsync(int offset, CancellationToken ct = default) =>
+        Record($"QueueGet({offset})", Page);
+
+    public Task PlayAsync(int position, CancellationToken ct = default) => Record($"QueuePlay({position})", 0);
 
     private Task<T> Record<T>(string call, T result)
     {

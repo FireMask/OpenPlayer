@@ -57,6 +57,7 @@ builder.Services.AddSingleton<MpdClient>();
 builder.Services.AddSingleton<IPlayer, MpdPlayer>();
 builder.Services.AddSingleton<ILibrary, MpdLibrary>();
 builder.Services.AddSingleton<IPlaylistStore, MpdPlaylistStore>();
+builder.Services.AddSingleton<IQueue, MpdQueue>();
 builder.Services.AddSingleton<ButtonCommandHandler>();
 builder.Services.AddHostedService<IpcServer>();
 

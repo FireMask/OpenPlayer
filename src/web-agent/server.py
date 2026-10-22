@@ -1,4 +1,4 @@
-"""Servidor HTTP del web agent: página con los botones y API que reenvía al socket IPC (SPEC 08, 09 y 10)."""
+"""Servidor HTTP del web agent: página con los botones y API que reenvía al socket IPC (SPEC 08 a 11)."""
 
 import ipaddress
 import json
@@ -97,7 +97,7 @@ class Handler(BaseHTTPRequestHandler):
         self._reply(HTTPStatus.NOT_FOUND)
 
     def _library_routes(self, path):
-        """Rutas de biblioteca y playlists (SPEC 10): {método: () -> línea IPC}, o None si la ruta no existe.
+        """Rutas de biblioteca, playlists (SPEC 10) y cola (SPEC 11): {método: () -> línea IPC}, o None si la ruta no existe.
 
         Cada función valida la forma del pedido y lanza ValueError (→ 400); el Core valida el contenido."""
         ipc = self.server.ipc
@@ -108,6 +108,10 @@ class Handler(BaseHTTPRequestHandler):
             return {"GET": lambda: ipc.search(_nonempty(_param(query, "q"), "q"), _offset(query))}
         if path == "/api/library/play":
             return {"POST": lambda: ipc.play_track(_text(self._json_body(), "uri"))}
+        if path == "/api/queue":
+            return {"GET": lambda: ipc.queue(_offset(query))}
+        if path == "/api/queue/play":
+            return {"POST": lambda: ipc.play_queue(_int(self._json_body(), "position"))}
         if path == "/api/playlists":
             return {"GET": ipc.playlists, "POST": lambda: ipc.create_playlist(_text(self._json_body(), "name"))}
         if not path.startswith("/api/playlists/"):

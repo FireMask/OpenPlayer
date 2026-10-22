@@ -32,4 +32,23 @@ public class LibraryMessagesTests
     public void Library_page_serializes_empty() =>
         Assert.Equal("""{"type":"library.page","offset":100,"total":100,"entries":[]}""",
             LibraryPageMessage.Serialize(new LibraryPage(100, 100, [])));
+
+    [Fact]
+    public void Queue_page_serializes_exactly()
+    {
+        var page = new LibraryPage(0, 2,
+        [
+            new LibraryEntry("A1.flac", new Track("A1.flac", "Rolling In The Deep", "Adele", "21", TimeSpan.FromSeconds(225.4))),
+            new LibraryEntry("x.mp3", new Track("x.mp3", null, null, null, null)),
+        ]);
+
+        Assert.Equal(
+            """{"type":"queue.page","playlist":"Favoritas","offset":0,"total":2,"entries":[{"uri":"A1.flac","title":"Rolling In The Deep","artist":"Adele","album":"21","durationSeconds":225},{"uri":"x.mp3","title":null,"artist":null,"album":null,"durationSeconds":null}]}""",
+            QueuePageMessage.Serialize(page, "Favoritas"));
+    }
+
+    [Fact]
+    public void Queue_page_serializes_null_playlist() =>
+        Assert.Equal("""{"type":"queue.page","playlist":null,"offset":0,"total":0,"entries":[]}""",
+            QueuePageMessage.Serialize(new LibraryPage(0, 0, []), null));
 }

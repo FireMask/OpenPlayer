@@ -53,6 +53,30 @@ public class MpdSnapshotParserTests
         Assert.Null(s.Duration);
         Assert.Null(s.Volume);
         Assert.Null(s.CurrentTrack);
+        Assert.Null(s.QueuePosition);
+        Assert.Null(s.QueueVersion);
+    }
+
+    [Fact]
+    public void Parses_queue_position_and_version()
+    {
+        var s = MpdSnapshotParser.Parse(Resp("state: play", "song: 3", "playlist: 42"), Resp(), Now);
+
+        Assert.Equal(3, s.QueuePosition);
+        Assert.Equal(42L, s.QueueVersion);
+    }
+
+    [Theory]
+    [InlineData("x")]
+    [InlineData("-1")]
+    [InlineData("1.5")]
+    [InlineData("")]
+    public void Non_numeric_queue_fields_are_null(string value)
+    {
+        var s = MpdSnapshotParser.Parse(Resp("state: play", $"song: {value}", $"playlist: {value}"), Resp(), Now);
+
+        Assert.Null(s.QueuePosition);
+        Assert.Null(s.QueueVersion);
     }
 
     [Fact]

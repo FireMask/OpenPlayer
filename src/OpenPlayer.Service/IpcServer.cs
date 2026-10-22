@@ -10,19 +10,23 @@ using OpenPlayer.Mpd;
 
 namespace OpenPlayer.Service;
 
-/// <summary>Socket Unix con JSON Lines (architecture.md §7): botones, snapshot, seek, biblioteca y playlists.</summary>
+/// <summary>Socket Unix con JSON Lines (architecture.md §7): botones, snapshot, seek, biblioteca, playlists y cola.</summary>
 public sealed class IpcServer(
     IpcOptions options,
     IPlayer player,
     ButtonCommandHandler buttons,
     ILibrary library,
     IPlaylistStore playlists,
+    IQueue queue,
     ILogger<IpcServer> logger) : BackgroundService
 {
     // ponytail: lock global para todos los comandos; evita que dos volume_up lean el mismo volumen.
     private readonly SemaphoreSlim _commandLock = new(1, 1);
 
     private Socket? _listener;
+
+    // Nombre de la lista cargada en la cola (SPEC 11): MPD no lo guarda. Solo en memoria, protegido por _commandLock.
+    private string? _loadedPlaylist;
 
     // Bind en StartAsync, no en ExecuteAsync (que en .NET 10 corre en segundo plano):
     // un error de bind detiene el arranque del host, y al volver el socket ya escucha.
@@ -121,7 +125,7 @@ public sealed class IpcServer(
             return;
         }
 
-        // Biblioteca y playlists (SPEC 10): siempre una línea de respuesta, ok/página/lista o error.
+        // Biblioteca, playlists y cola (SPEC 10, 11): siempre una línea de respuesta, ok/página/lista o error.
         if (request is not null)
         {
             string reply;
@@ -201,17 +205,30 @@ public sealed class IpcServer(
                 return PlaylistListMessage.Serialize(await playlists.ListAsync(ct));
             case PlaylistGetRequested m:
                 return LibraryPageMessage.Serialize(await playlists.GetAsync(m.Name, m.Offset, ct));
+            case QueueGetRequested m:
+                // Se loguea (a diferencia de las otras consultas) para verificar que la web no sondea la cola.
+                var page = await queue.GetAsync(m.Offset, ct);
+                logger.LogInformation("{Request} ok (offset {Offset})", request, m.Offset);
+                return QueuePageMessage.Serialize(page, _loadedPlaylist);
+            case QueuePlayRequested m:
+                await queue.PlayAsync(m.Position, ct);
+                break;
             case LibraryPlayRequested m:
                 await library.PlayTrackAsync(m.Uri, ct);
+                _loadedPlaylist = null;
                 break;
             case PlaylistCreateRequested m:
                 await playlists.CreateAsync(m.Name, ct);
                 break;
             case PlaylistRenameRequested m:
                 await playlists.RenameAsync(m.Name, m.NewName, ct);
+                if (m.Name == _loadedPlaylist)
+                    _loadedPlaylist = m.NewName;
                 break;
             case PlaylistDeleteRequested m:
                 await playlists.DeleteAsync(m.Name, ct);
+                if (m.Name == _loadedPlaylist)
+                    _loadedPlaylist = null;
                 break;
             case PlaylistAddRequested m:
                 await playlists.AddAsync(m.Name, m.Uri, ct);
@@ -224,6 +241,7 @@ public sealed class IpcServer(
                 break;
             case PlaylistPlayRequested m:
                 await playlists.PlayAsync(m.Name, m.Position, ct);
+                _loadedPlaylist = m.Name;
                 break;
             default:
                 throw new InvalidOperationException($"No handler for {request}");

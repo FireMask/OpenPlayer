@@ -27,7 +27,9 @@ public static class SnapshotMessage
             snapshot.CurrentTrack?.Artist,
             WholeSeconds(snapshot.Position),
             WholeSeconds(snapshot.Duration),
-            snapshot.Volume),
+            snapshot.Volume,
+            snapshot.QueuePosition,
+            snapshot.QueueVersion),
         Options);
 
     private static long? WholeSeconds(TimeSpan? value) => value is { } v ? (long)v.TotalSeconds : null;
@@ -39,5 +41,7 @@ public static class SnapshotMessage
         string? TrackArtist,
         long? PositionSeconds,
         long? DurationSeconds,
-        int? Volume);
+        int? Volume,
+        int? QueuePosition,
+        long? QueueVersion);
 }

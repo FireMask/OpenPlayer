@@ -26,7 +26,11 @@ public static class MpdSnapshotParser
             Seconds(status.Get("elapsed")),
             Seconds(status.Get("duration")),
             Volume(status.Get("volume")),
-            now);
+            now,
+            int.TryParse(status.Get("song"), NumberStyles.None, CultureInfo.InvariantCulture, out var song) ? song : null,
+            long.TryParse(status.Get("playlist"), NumberStyles.None, CultureInfo.InvariantCulture, out var version)
+                ? version
+                : null);
     }
 
     internal static TimeSpan? Seconds(string? value) =>
