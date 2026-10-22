@@ -81,14 +81,14 @@ public class MpdPlayerTests
     }
 
     [Fact]
-    public async Task WaitForChange_sends_idle_player()
+    public async Task WaitForChange_sends_idle_with_subsystems()
     {
         await using var server = new FakeMpdServer { Respond = _ => "changed: player\nOK\n" };
 
         await PlayerFor(server).WaitForChangeAsync();
         await server.AllClosed();
 
-        Assert.Equal([["idle player"]], server.Connections);
+        Assert.Equal([["idle player mixer playlist options"]], server.Connections);
     }
 
     [Fact]

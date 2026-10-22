@@ -23,10 +23,10 @@ public sealed class MpdClient(MpdOptions options)
     }
 
     /// <summary>
-    /// <c>idle player</c> en una conexión propia: vuelve cuando cambia el reproductor (canción, estado, seek).
+    /// <c>idle player mixer playlist options</c> en una conexión propia: vuelve cuando cambia el reproductor, el volumen, la cola o las opciones.
     /// Solo la conexión y el saludo tienen timeout; la espera dura lo que haga falta. Cancelar cierra la conexión.
     /// </summary>
-    public Task IdleAsync(CancellationToken ct) => SessionAsync(["idle player"], idle: true, ct);
+    public Task IdleAsync(CancellationToken ct) => SessionAsync(["idle player mixer playlist options"], idle: true, ct);
 
     private async Task<IReadOnlyList<MpdResponse>> SessionAsync(IReadOnlyList<string> commands, bool idle, CancellationToken ct)
     {
