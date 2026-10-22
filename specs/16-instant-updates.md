@@ -1,6 +1,6 @@
 # SPEC 16 — Actualización instantánea
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 03, SPEC 08, SPEC 11, SPEC 15
 > **Date:** 2026-10-22
 > **Objective:** Que el Service empuje un `player.snapshot` a los suscriptores IPC (`player.subscribe`) cada vez que MPD avisa un cambio (`idle player mixer playlist options`), y que el web agent lo reenvíe por SSE (`GET /api/events`) para que la página se actualice al instante sin sondear cada 2 s.
@@ -105,31 +105,31 @@ class Events:
 
 **Código y pruebas:**
 
-- [ ] `IdleAsync` envía exactamente `idle player mixer playlist options`.
-- [ ] `player.subscribe` se parsea; con campos de más o tipo erróneo se comporta como cualquier mensaje inválido de hoy.
-- [ ] Tras `player.subscribe`, el Service responde enseguida con un `player.snapshot`.
-- [ ] Cada cambio del observador envía un `player.snapshot` a todos los suscriptores.
-- [ ] Un fallo de MPD en el observador envía la línea de error a los suscriptores.
-- [ ] Un suscriptor que cierra o no lee en 2 s se quita sin afectar a los demás ni a los comandos.
-- [ ] Otras conexiones siguen respondiendo pedidos normales mientras hay suscriptores.
-- [ ] El web agent reparte cada línea a todas las páginas abiertas y manda la última al conectar una nueva.
-- [ ] `GET /api/events` responde `text/event-stream`, manda `: ping` cada 15 s y la 9.ª página recibe 503.
-- [ ] Con el Service caído, las páginas reciben la línea de error y el web agent reintenta cada 2 s.
-- [ ] Todas las suites pasan (Core, Mpd, Service, web agent, hardware agent).
+- [x] `IdleAsync` envía exactamente `idle player mixer playlist options`.
+- [x] `player.subscribe` se parsea; con tipo erróneo se comporta como cualquier mensaje inválido de hoy. Los campos de más se ignoran, igual que en `player.get_snapshot` (decidido al implementar).
+- [x] Tras `player.subscribe`, el Service responde enseguida con un `player.snapshot`.
+- [x] Cada cambio del observador envía un `player.snapshot` a todos los suscriptores.
+- [x] Un fallo de MPD en el observador envía la línea de error a los suscriptores.
+- [x] Un suscriptor que cierra o no lee en 2 s se quita sin afectar a los demás ni a los comandos.
+- [x] Otras conexiones siguen respondiendo pedidos normales mientras hay suscriptores.
+- [x] El web agent reparte cada línea a todas las páginas abiertas y manda la última al conectar una nueva.
+- [x] `GET /api/events` responde `text/event-stream`, manda `: ping` cada 15 s y la 9.ª página recibe 503.
+- [x] Con el Service caído, las páginas reciben la línea de error y el web agent reintenta cada 2 s.
+- [x] Todas las suites pasan (Core, Mpd, Service, web agent, hardware agent).
 
 **En la Pi:**
 
-- [ ] ⏭ en el navegador: título y cola cambian en menos de 0,5 s.
-- [ ] `mpc next` y `mpc volume 40` desde la Pi: la página lo refleja en menos de 0,5 s.
-- [ ] Editar la cola en un navegador: el otro navegador la actualiza en menos de 0,5 s.
-- [ ] Con el stream conectado, la pestaña Red del navegador no muestra `GET /api/snapshot` cada 2 s.
-- [ ] `sudo systemctl restart openplayer`: la página muestra "Sin conexión con el reproductor" y se recupera sola al volver el Service.
-- [ ] La barra de progreso sigue avanzando entre eventos.
+- [x] ⏭ en el navegador: título y cola cambian en menos de 0,5 s.
+- [x] `mpc next` y `mpc volume 40` desde la Pi: la página lo refleja en menos de 0,5 s.
+- [x] Editar la cola en un navegador: el otro navegador la actualiza en menos de 0,5 s.
+- [x] Con el stream conectado, la pestaña Red del navegador no muestra `GET /api/snapshot` cada 2 s.
+- [x] `sudo systemctl restart openplayer`: la página muestra "Sin conexión con el reproductor" y se recupera sola al volver el Service.
+- [x] La barra de progreso sigue avanzando entre eventos.
 
 **Docs:**
 
-- [ ] `architecture.md` §5, §7 y §9 describen `/api/events`, `player.subscribe`, los subsistemas de `idle` y el sondeo de respaldo.
-- [ ] README explica que la página se actualiza al instante.
+- [x] `architecture.md` §5, §7 y §9 describen `/api/events`, `player.subscribe`, los subsistemas de `idle` y el sondeo de respaldo.
+- [x] README explica que la página se actualiza al instante.
 
 ## Decisions
 
