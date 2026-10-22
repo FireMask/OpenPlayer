@@ -84,6 +84,51 @@ public class MpdClientTests
         await server.AllClosed();
     }
 
+    [Fact]
+    public async Task Idle_sends_idle_player_and_returns_on_change()
+    {
+        await using var server = new FakeMpdServer { Respond = _ => "changed: player\nOK\n" };
+
+        await new MpdClient(server.Options()).IdleAsync(Ct);
+        await server.AllClosed();
+
+        Assert.Equal([["idle player"]], server.Connections);
+    }
+
+    [Fact]
+    public async Task Idle_waits_longer_than_the_connect_timeout()
+    {
+        await using var server = new FakeMpdServer
+        {
+            Respond = _ =>
+            {
+                Thread.Sleep(500);
+                return "changed: player\nOK\n";
+            },
+        };
+
+        await new MpdClient(server.Options(timeoutMs: 200)).IdleAsync(Ct);
+    }
+
+    [Fact]
+    public async Task Idle_cancel_closes_the_connection()
+    {
+        await using var server = new FakeMpdServer { Respond = _ => "" };
+        using var cts = new CancellationTokenSource(200);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new MpdClient(server.Options()).IdleAsync(cts.Token));
+        await server.AllClosed();
+    }
+
+    [Fact]
+    public async Task Idle_silent_server_times_out_as_unavailable()
+    {
+        await using var server = new FakeMpdServer { Greeting = null };
+
+        await Assert.ThrowsAsync<MpdUnavailableException>(
+            () => new MpdClient(server.Options(timeoutMs: 200)).IdleAsync(Ct));
+    }
+
     [Theory]
     [InlineData("a \"b\" \\c", "\"a \\\"b\\\" \\\\c\"")]
     [InlineData("Viaje 2026", "\"Viaje 2026\"")]

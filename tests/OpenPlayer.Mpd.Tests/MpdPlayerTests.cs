@@ -81,6 +81,17 @@ public class MpdPlayerTests
     }
 
     [Fact]
+    public async Task WaitForChange_sends_idle_player()
+    {
+        await using var server = new FakeMpdServer { Respond = _ => "changed: player\nOK\n" };
+
+        await PlayerFor(server).WaitForChangeAsync();
+        await server.AllClosed();
+
+        Assert.Equal([["idle player"]], server.Connections);
+    }
+
+    [Fact]
     public async Task Snapshot_uses_one_connection()
     {
         await using var server = new FakeMpdServer

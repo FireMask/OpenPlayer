@@ -12,13 +12,24 @@ public sealed class MpdClient(MpdOptions options)
     public static string Quote(string argument) =>
         "\"" + argument.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
 
-    public async Task<IReadOnlyList<MpdResponse>> ExecuteAsync(IReadOnlyList<string> commands, CancellationToken ct)
+    public Task<IReadOnlyList<MpdResponse>> ExecuteAsync(IReadOnlyList<string> commands, CancellationToken ct)
     {
         foreach (var command in commands)
             if (string.IsNullOrWhiteSpace(command) || command.Contains('\n') || command.Contains('\r'))
                 throw new ArgumentException($"Invalid MPD command: '{command}'.", nameof(commands));
 
         // ponytail: un solo timeout para toda la operación (conexión + lecturas), basta para comandos cortos.
+        return SessionAsync(commands, idle: false, ct);
+    }
+
+    /// <summary>
+    /// <c>idle player</c> en una conexión propia: vuelve cuando cambia el reproductor (canción, estado, seek).
+    /// Solo la conexión y el saludo tienen timeout; la espera dura lo que haga falta. Cancelar cierra la conexión.
+    /// </summary>
+    public Task IdleAsync(CancellationToken ct) => SessionAsync(["idle player"], idle: true, ct);
+
+    private async Task<IReadOnlyList<MpdResponse>> SessionAsync(IReadOnlyList<string> commands, bool idle, CancellationToken ct)
+    {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(options.ConnectTimeout);
         try
@@ -33,12 +44,13 @@ public sealed class MpdClient(MpdOptions options)
             if (greeting is null || !greeting.StartsWith("OK MPD ", StringComparison.Ordinal))
                 throw new MpdUnavailableException($"Unexpected MPD greeting: '{greeting}'.", new InvalidDataException());
 
+            var token = idle ? ct : timeout.Token;
             var responses = new List<MpdResponse>(commands.Count);
             foreach (var command in commands)
             {
-                await writer.WriteLineAsync(command.AsMemory(), timeout.Token);
-                await writer.FlushAsync(timeout.Token);
-                responses.Add(await ReadResponseAsync(reader, command, timeout.Token));
+                await writer.WriteLineAsync(command.AsMemory(), token);
+                await writer.FlushAsync(token);
+                responses.Add(await ReadResponseAsync(reader, command, token));
             }
             return responses;
         }

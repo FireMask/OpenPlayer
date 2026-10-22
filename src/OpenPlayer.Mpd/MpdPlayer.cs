@@ -46,5 +46,7 @@ public sealed class MpdPlayer(MpdClient client, TimeProvider time) : IPlayer
         return MpdSnapshotParser.Parse(responses[0], responses[1], time.GetUtcNow());
     }
 
+    public Task WaitForChangeAsync(CancellationToken ct = default) => client.IdleAsync(ct);
+
     private Task SendAsync(string command, CancellationToken ct) => client.ExecuteAsync([command], ct);
 }

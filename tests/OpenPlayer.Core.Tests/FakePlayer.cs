@@ -40,6 +40,9 @@ internal sealed class FakePlayer : IPlayer
         return SnapshotError is { } e ? Task.FromException<PlaybackSnapshot>(e) : Task.FromResult(Snapshot);
     }
 
+    // Sin cambios: espera hasta que se cancele. No se registra en Calls.
+    public Task WaitForChangeAsync(CancellationToken ct = default) => Task.Delay(Timeout.Infinite, ct);
+
     private Task Record(string call)
     {
         Calls.Add(call);

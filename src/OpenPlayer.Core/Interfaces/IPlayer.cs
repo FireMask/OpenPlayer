@@ -18,4 +18,7 @@ public interface IPlayer
     Task UpdateLibraryAsync(CancellationToken ct = default);
 
     Task<PlaybackSnapshot> GetSnapshotAsync(CancellationToken ct = default);
+
+    /// <summary>Espera hasta que cambie el estado del reproductor (canción, play/pausa, seek). MPD: <c>idle player</c>.</summary>
+    Task WaitForChangeAsync(CancellationToken ct = default);
 }
