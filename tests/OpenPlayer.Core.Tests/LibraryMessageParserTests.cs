@@ -28,6 +28,10 @@ public class LibraryMessageParserTests
         { """{"type":"queue.remove","id":17}""", new QueueRemoveRequested(17) },
         { """{"type":"queue.move","id":17,"to":2}""", new QueueMoveRequested(17, 2) },
         { """{"type":"queue.clear"}""", new QueueClearRequested() },
+        { """{"type":"queue.add","uri":"a.flac","next":true}""", new QueueAddRequested("a.flac", true) },
+        { """{"type":"queue.add","uri":"a.flac","next":false}""", new QueueAddRequested("a.flac", false) },
+        { """{"type":"queue.add","uri":"Rock/AC DC"}""", new QueueAddRequested("Rock/AC DC", false) },
+        { """{"type":"queue.save","name":"Viaje"}""", new QueueSaveRequested("Viaje") },
     };
 
     [Theory]
@@ -71,6 +75,16 @@ public class LibraryMessageParserTests
     [InlineData("""{"type":"queue.move","id":17,"to":-1}""", "queue.move", "invalid to")]
     [InlineData("""{"type":"queue.move","id":17,"to":"3"}""", "queue.move", "invalid to")]
     [InlineData("""{"type":"queue.move","id":17,"to":3.5}""", "queue.move", "invalid to")]
+    [InlineData("""{"type":"queue.add"}""", "queue.add", "invalid uri")]
+    [InlineData("""{"type":"queue.add","uri":""}""", "queue.add", "invalid uri")]
+    [InlineData("""{"type":"queue.add","uri":"a\nb"}""", "queue.add", "invalid uri")]
+    [InlineData("""{"type":"queue.add","uri":"a.flac","next":"true"}""", "queue.add", "invalid next")]
+    [InlineData("""{"type":"queue.add","uri":"a.flac","next":1}""", "queue.add", "invalid next")]
+    [InlineData("""{"type":"queue.add","uri":"a.flac","next":null}""", "queue.add", "invalid next")]
+    [InlineData("""{"type":"queue.save"}""", "queue.save", "invalid name")]
+    [InlineData("""{"type":"queue.save","name":""}""", "queue.save", "invalid name")]
+    [InlineData("""{"type":"queue.save","name":"a/b"}""", "queue.save", "invalid name")]
+    [InlineData("""{"type":"queue.save","name":".x"}""", "queue.save", "invalid name")]
     public void Rejects_invalid_without_throwing_and_keeps_request(string line, string expectedRequest, string expectedError)
     {
         Assert.False(IpcMessageParser.TryParse(line, out var message, out var error, out var request));
