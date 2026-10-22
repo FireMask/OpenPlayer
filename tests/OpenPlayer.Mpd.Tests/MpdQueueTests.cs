@@ -180,6 +180,27 @@ public class MpdQueueTests
     }
 
     [Fact]
+    public async Task Restore_adds_on_top_and_plays_it_in_one_connection()
+    {
+        await using var server = new FakeMpdServer();
+
+        await QueueFor(server).RestoreAsync("Rock/\"live\".flac");
+        await server.AllClosed();
+
+        Assert.Equal([["add \"Rock/\\\"live\\\".flac\" 0", "play 0"]], server.Connections);
+    }
+
+    [Fact]
+    public async Task Restore_missing_file_throws_MpdException()
+    {
+        await using var server = new FakeMpdServer { Respond = _ => "ACK [50@0] {add} No such directory\n" };
+
+        var e = await Assert.ThrowsAsync<MpdException>(() => QueueFor(server).RestoreAsync("gone.flac"));
+
+        Assert.Contains("No such directory", e.Message);
+    }
+
+    [Fact]
     public async Task Save_sends_quoted_name()
     {
         await using var server = new FakeMpdServer();

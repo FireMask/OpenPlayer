@@ -62,6 +62,13 @@ internal sealed class FakeLibrary : ILibrary, IPlaylistStore, IQueue
         Ids.Add(Ids.Count == 0 ? 1 : Ids.Max() + 1);
     }
 
+    // La restaurada entra arriba con un id nuevo.
+    public async Task RestoreAsync(string uri, CancellationToken ct = default)
+    {
+        await Record($"QueueRestore({uri})", 0);
+        Ids.Insert(0, Ids.Count == 0 ? 1 : Ids.Max() + 1);
+    }
+
     public Task SaveAsync(string name, CancellationToken ct = default) => Record($"QueueSave({name})", 0);
 
     /// <summary>Ids que devuelve <see cref="IdsAsync"/>; las pruebas los cambian para simular agregados.</summary>
