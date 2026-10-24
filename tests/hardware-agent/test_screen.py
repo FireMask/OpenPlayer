@@ -1,6 +1,8 @@
+from dataclasses import replace
+
 import pytest
 
-from screen import ACCENT, CENTER, HEIGHT, WIDTH, View, _font, fit, render
+from screen import ACCENT, CENTER, HEIGHT, VOLUME, WIDTH, View, _font, _mmss, fit, render, title_overflow
 
 PLAYING = View("playing", "Song", "Artist", position=60, duration=120, volume=35)
 
@@ -83,8 +85,6 @@ def band(image, top, height):
     ("queue_length", 186, 14),
 ])
 def test_line_is_drawn_only_with_its_data(field, top, height):
-    from dataclasses import replace
-
     assert band(render(FULL), top, height)
     assert not band(render(replace(FULL, **{field: None})), top, height)
 
@@ -94,19 +94,76 @@ def test_volume_is_not_drawn():
 
 
 def test_time_line_changes_with_position():
-    from dataclasses import replace
-
     assert render(FULL).crop((20, 162, 220, 180)).tobytes() != render(replace(FULL, position=84)).crop((20, 162, 220, 180)).tobytes()
 
 
 @pytest.mark.parametrize("seconds, text", [(0, "0:00"), (83, "1:23"), (600, "10:00"), (-3, "0:00")])
 def test_mmss(seconds, text):
-    from screen import _mmss
-
     assert _mmss(seconds) == text
 
 
 def test_queue_without_position_is_not_drawn():
-    from dataclasses import replace
-
     assert not band(render(replace(FULL, queue_position=None)), 186, 14)
+
+
+# Modo reloj, indicador de volumen y desplazamiento (SPEC 18)
+
+def test_clock_mode_differs_from_track_and_changes_with_time():
+    clock = replace(FULL, mode="clock", clock="21:47", date="vie 24 oct")
+
+    assert render(clock).tobytes() != render(FULL).tobytes()
+    assert render(clock).tobytes() != render(replace(clock, clock="21:48")).tobytes()
+    assert render(clock).tobytes() != render(replace(clock, date="sáb 25 oct")).tobytes()
+
+
+@pytest.mark.parametrize("status, ring", [("playing", True), ("paused", True), ("stopped", False)])
+def test_clock_ring_only_with_track_playing_or_paused(status, ring):
+    image = render(replace(FULL, status=status, mode="clock", clock="21:47", date="vie 24 oct"))
+
+    assert (accent_pixels(image, "right") > 0) == ring
+
+
+def test_stopped_clock_shows_time_instead_of_stopped_message():
+    assert render(View("stopped", mode="clock", clock="07:05", date="sáb 25 oct")).tobytes() != render(View("stopped")).tobytes()
+
+
+def volume_pixels(image):
+    return sum(1 for x in range(WIDTH) for y in range(HEIGHT) if image.getpixel((x, y)) == VOLUME)
+
+
+def test_volume_popup_draws_inner_ring_over_track_and_clock():
+    assert volume_pixels(render(FULL)) == 0
+    for view in (FULL, replace(FULL, mode="clock", clock="21:47", date="vie 24 oct")):
+        popup = render(replace(view, volume_popup=True))
+        assert volume_pixels(popup) > 0
+        assert accent_pixels(popup, "right") > 0  # el anillo de progreso sigue
+    # El anillo y el número cambian con el volumen.
+    assert volume_pixels(render(replace(FULL, volume_popup=True, volume=80))) > volume_pixels(render(replace(FULL, volume_popup=True)))
+
+
+def test_title_overflow():
+    assert title_overflow("Song") == 0
+    assert title_overflow(None) == 0
+    assert title_overflow("A very long song title that never ends at all") > 100
+
+
+LONG = "A very long song title that never ends at all"
+
+
+def title_band(view):
+    return render(view).crop((0, 88, WIDTH, 112)).tobytes()
+
+
+def test_long_title_scrolls_while_playing_and_clamps():
+    view = replace(FULL, title=LONG)
+    end = title_overflow(LONG)
+
+    assert title_band(view) != title_band(replace(view, scroll=10))
+    assert title_band(replace(view, scroll=end)) == title_band(replace(view, scroll=end + 50))
+    # En pausa no se desplaza: corte con "…".
+    paused = replace(view, status="paused")
+    assert title_band(paused) == title_band(replace(paused, scroll=10))
+
+
+def test_short_title_ignores_scroll():
+    assert title_band(FULL) == title_band(replace(FULL, scroll=10))
