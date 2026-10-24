@@ -64,7 +64,7 @@ src/hardware-agent/
   screen.py         // View, render()
   display.py        // Display (hilo: suscripción + avance local + dibujo)
   main.py           // arranca/detiene Display
-  requirements-dev.txt  // + Pillow==9.4.0 (python3-pil de Pi OS Bookworm, igual que gpiozero 2.0.1)
+  requirements-dev.txt  // + Pillow==11.1.0 (python3-pil de la Pi, Pi OS trixie)
 tests/hardware-agent/
   test_config.py    // + casos de display
   test_gc9a01.py
@@ -94,7 +94,7 @@ Cableado (módulo de 7 pines, sin BL; 3.3 V tanto en alimentación como en lógi
   "dc": 5,
   "rst": 6,
   "spiHz": 40000000,
-  "rotation": 0
+  "rotation": 180
 }
 ```
 
@@ -180,7 +180,7 @@ warning: display: disconnected from /run/openplayer/hardware.sock
    - Pruebas en `test_config.py`: sección ausente → `None`; `enabled: false` → `None`; válida; cada campo inválido; `dc`/`rst` repetidos entre sí o con un botón.
    - Verificar: `pytest tests/hardware-agent` en verde; el agente arranca igual que hoy con el ejemplo.
 2. **Render.**
-   - `screen.py` (`View`, `render`) y `Pillow==9.4.0` en `requirements-dev.txt`.
+   - `screen.py` (`View`, `render`) y `Pillow==11.1.0` en `requirements-dev.txt`.
    - `test_screen.py`: los 5 estados devuelven RGB 240x240; título largo cortado con "…"; anillo al 50 % pinta píxeles del lado derecho y ninguno del izquierdo; sin duración, no hay anillo.
    - Verificar: guardar los 5 PNG en el scratchpad y mirarlos.
 3. **Driver.**
@@ -279,7 +279,7 @@ warning: display: disconnected from /run/openplayer/hardware.sock
 - **`spiHz` y `rotation` configurables.** Los módulos baratos varían en el reloj que toleran y en la orientación; es calibración física, no una constante.
 - **Fallo de init: un `error` y sin reintento.** Reiniciar la unidad lo resuelve; un reintento en bucle solo llenaría el log.
 - **`install.sh` verifica, no instala ni activa SPI.** Mismo criterio que SPEC 05. Falta `/dev/spidev0.0` → warning, no error, porque la pantalla puede estar deshabilitada.
-- **Pillow fijado en 9.4.0 para desarrollo.** Es la versión de `python3-pil` en Bookworm, la misma base que `gpiozero` 2.0.1.
+- **Pillow fijado en 11.1.0 para desarrollo.** Es la versión de `python3-pil` medida en la Pi (Pi OS trixie, `11.1.0-5+deb13u4`). El plan asumía Bookworm (9.4.0); corregido al implementar. `rgb565()` usa `ImageMath.lambda_eval` en Pillow ≥ 11 (`eval` quedó obsoleto) y `eval` en versiones anteriores.
 
 **Descartadas:**
 
@@ -302,7 +302,7 @@ warning: display: disconnected from /run/openplayer/hardware.sock
 | Un cuadro a medio enviar mientras se detiene el agente. | `stop()` espera a que termine el `show()` en curso antes de cerrar SPI y GPIO. |
 | `spidev` o `/dev/spidev0.0` no está, o el usuario no está en el grupo `spi`. | Import y apertura adentro del `try`: un `error` claro en el log y los botones siguen. `install.sh` avisa si falta el device; la unidad agrega `spi`. |
 | GPIO5/GPIO6 en uso por otro HAT futuro. | Configurables en `player.json`. La validación rechaza choques con los botones. |
-| Diferencias entre Pillow de pip (Windows) y de apt (Pi). | `Pillow==9.4.0` fijado en `requirements-dev.txt`. Solo se usa API estable (`ImageDraw.text`, `arc`, `ImageFont.truetype`). |
+| Diferencias entre Pillow de pip (Windows) y de apt (Pi). | `Pillow==11.1.0` fijado en `requirements-dev.txt`. Solo se usa API estable (`ImageDraw.text`, `arc`, `ImageFont.truetype`). |
 | La fuente DejaVu tiene otra ruta en otra versión de Pi OS. | Ruta fija `/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf`. Si no está, `error` al iniciar la pantalla, sin tumbar los botones. |
 
 ## What is **not** in this spec

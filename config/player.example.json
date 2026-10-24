@@ -32,7 +32,7 @@
       "dc": 5,
       "rst": 6,
       "spiHz": 40000000,
-      "rotation": 0
+      "rotation": 180
     }
   },
   "web": {

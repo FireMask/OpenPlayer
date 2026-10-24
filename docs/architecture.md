@@ -369,7 +369,7 @@ Archivo `config/player.example.json`; el build y el publish del Service lo copia
 | `ipc.unixSocketPath` | Ruta del socket Unix; el directorio debe existir | Usado |
 | `ipc.maxMessageBytes` | Tamaño máximo de un mensaje IPC, 256–65536 bytes | Usado |
 | `hardware.buttons` / `hardware.debounceSeconds` | Pines BCM y debounce de los botones | Usado (agente) |
-| `hardware.display` | Pantalla GC9A01: `enabled` (por defecto `false`), `spiBus`/`spiDevice` 0–1, `dc`/`rst` BCM, `spiHz` 1–62,5 MHz (40 MHz por defecto), `rotation` 0/90/180/270. Opcional: sin la sección no hay pantalla | Usado (agente) |
+| `hardware.display` | Pantalla GC9A01: `enabled` (por defecto `false`), `spiBus`/`spiDevice` 0–1, `dc`/`rst` BCM, `spiHz` 1–62,5 MHz (40 MHz por defecto), `rotation` 0/90/180/270 (180 por defecto, validado en la Pi). Opcional: sin la sección no hay pantalla | Usado (agente) |
 | `web.port` | Puerto HTTP del web agent, 1024–65535 (por defecto 8080); `install.sh` lo agrega si falta | Usado (web agent) |
 
 El Service abre una conexión TCP a MPD por operación (sin conexión persistente ni reconexión con backoff); un MPD caído solo hace fallar esa operación con un warning.

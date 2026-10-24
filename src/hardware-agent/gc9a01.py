@@ -84,6 +84,10 @@ class GC9A01:
 def rgb565(image: Image.Image) -> bytes:
     """RGB → RGB565 big-endian (2 bytes por píxel), sin bucles en Python: la Pi Zero lo hace en milisegundos."""
     r, g, b = image.convert("RGB").split()
-    high = ImageMath.eval("convert((r & 248) | (g >> 5), 'L')", r=r, g=g)
-    low = ImageMath.eval("convert(((g << 3) & 224) | (b >> 3), 'L')", g=g, b=b)
+    if hasattr(ImageMath, "lambda_eval"):  # Pillow ≥ 11 (Pi OS trixie): eval() quedó obsoleto
+        high = ImageMath.lambda_eval(lambda a: a["convert"]((a["r"] & 248) | (a["g"] >> 5), "L"), r=r, g=g)
+        low = ImageMath.lambda_eval(lambda a: a["convert"](((a["g"] << 3) & 224) | (a["b"] >> 3), "L"), g=g, b=b)
+    else:
+        high = ImageMath.eval("convert((r & 248) | (g >> 5), 'L')", r=r, g=g)
+        low = ImageMath.eval("convert(((g << 3) & 224) | (b >> 3), 'L')", g=g, b=b)
     return Image.merge("LA", (high, low)).tobytes()

@@ -136,3 +136,5 @@ RST  -------- GPIO6         (31)
 - Activar SPI una vez: `sudo raspi-config nonint do_spi 0`, y comprobar con `ls /dev/spidev0.0`. `install.sh` avisa si falta.
 - Habilitar en `/opt/openplayer/player.json` con `"hardware": {"display": {"enabled": true, ...}}` y `sudo systemctl restart openplayer-hardware`.
 - Calibración: si aparece basura o parpadeo con cables dupont largos, bajar `spiHz` (por ejemplo a 20000000). Si la imagen sale girada, ajustar `rotation` (0, 90, 180 o 270).
+
+Validado (2026-10-24, Pi Zero 2 W, Pi OS trixie, cables dupont): con `rotation` 0 la imagen salía al revés; el valor por defecto quedó en 180. `spiHz` 40000000 sin problemas a la vista.
