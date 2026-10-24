@@ -19,7 +19,7 @@ class Display:
     def __init__(self, socket_path, panel, *, connect=None, tick_seconds=1.0, retry_seconds=2.0, label=""):
         """panel: algo con init() y show(image). connect inyectable igual que Sender (TCP en pruebas)."""
         self._path = socket_path
-        self._panel = panel
+        self.panel = panel
         self._connect = connect or (lambda: connect_unix(socket_path))
         self._tick = tick_seconds
         self._retry = retry_seconds
@@ -40,7 +40,7 @@ class Display:
 
     def _run(self):
         try:
-            self._panel.init()
+            self.panel.init()
             self._draw()  # "Sin conexión" hasta el primer snapshot; también valida la fuente
         except Exception as e:
             log.error("display init failed: %s", e)
@@ -110,7 +110,7 @@ class Display:
                 position = min(position, view.duration)
             view = View(view.status, view.title, view.artist, position, view.duration, view.volume)
         if view != self._shown:
-            self._panel.show(render(view))
+            self.panel.show(render(view))
             self._shown = view
 
 

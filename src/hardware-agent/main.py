@@ -1,4 +1,5 @@
 """Hardware agent (SPEC 05): botones GPIO → button.pressed por el socket IPC del Service.
+Con hardware.display habilitada (SPEC 17), también dibuja la pista actual en la pantalla GC9A01.
 
 Uso: python3 main.py [ruta/player.json]   (por defecto ../player.json, junto al Service en /opt/openplayer)
 """
@@ -38,6 +39,8 @@ def main(argv):
         sender.stop()
         return 1
 
+    display = _start_display(config) if config.display else None
+
     stopping = threading.Event()
     signal.signal(signal.SIGTERM, lambda *_: stopping.set())
     signal.signal(signal.SIGINT, lambda *_: stopping.set())
@@ -46,11 +49,44 @@ def main(argv):
     # wait() con timeout: en Windows un wait sin timeout no deja correr los manejadores de señal.
     while not stopping.wait(1):
         pass
+    if display:
+        display.stop()
+        display.panel.close()
     for button in buttons:
         button.close()
     sender.stop()
     log.info("stopped")
     return 0
+
+
+def _start_display(config):
+    """Arma y arranca la pantalla. Cualquier error (paquete, SPI, pin) se registra y los botones siguen."""
+    d = config.display
+    opened = []
+    try:
+        # Importados aquí: sin pantalla, el agente no necesita spidev ni Pillow.
+        import spidev
+        from gpiozero import DigitalOutputDevice
+
+        from display import Display
+        from gc9a01 import GC9A01
+
+        dc = DigitalOutputDevice(d.dc)
+        opened.append(dc)
+        rst = DigitalOutputDevice(d.rst)
+        opened.append(rst)
+        spi = spidev.SpiDev()
+        spi.open(d.spi_bus, d.spi_device)
+        opened.append(spi)
+        panel = GC9A01(spi, dc, rst, spi_hz=d.spi_hz, rotation=d.rotation)
+        display = Display(config.socket_path, panel, label=f"spi{d.spi_bus}.{d.spi_device}, {d.spi_hz} Hz")
+    except Exception as e:
+        log.error("display init failed: %s", e)
+        for resource in opened:
+            resource.close()
+        return None
+    display.start()
+    return display
 
 
 if __name__ == "__main__":
