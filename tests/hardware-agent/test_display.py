@@ -106,7 +106,7 @@ def display(service):
         d.stop()
 
 
-PLAYING = View("playing", "Song", "Artist", 10, 100, 35)
+PLAYING = View("playing", "Song", "Artist", position=10, duration=100, volume=35)
 
 
 def test_subscribes_and_shows_initial_snapshot(service, display):
@@ -124,14 +124,14 @@ def test_new_push_redraws(service, display):
     service.push(snapshot(state="paused"))
     service.push(snapshot(state="paused", title="Other", volume=40))
 
-    wait_until(lambda: panel.shows(View("paused", "Other", "Artist", 10, 100, 40)))
+    wait_until(lambda: panel.shows(View("paused", "Other", "Artist", position=10, duration=100, volume=40)))
 
 
 def test_same_view_does_not_redraw(service, display):
     _, panel = display(tick_seconds=0.05)
     wait_until(lambda: service.subscriptions)
     service.push(snapshot(state="paused"))
-    wait_until(lambda: panel.shows(View("paused", "Song", "Artist", 10, 100, 35)))
+    wait_until(lambda: panel.shows(View("paused", "Song", "Artist", position=10, duration=100, volume=35)))
     count = len(panel.images)
 
     service.push(snapshot(state="paused"))
@@ -153,7 +153,7 @@ def test_service_down_shows_offline_and_resubscribes(service, display):
     service.available = True
     wait_until(lambda: len(service.subscriptions) == 2, timeout=2.5)
     service.push(snapshot(title="Back"))
-    wait_until(lambda: panel.shows(View("playing", "Back", "Artist", 10, 100, 35)))
+    wait_until(lambda: panel.shows(View("playing", "Back", "Artist", position=10, duration=100, volume=35)))
 
 
 def test_starts_offline_without_service(service, display):
@@ -176,14 +176,14 @@ def test_position_advances_while_playing(service, display):
     wait_until(lambda: service.subscriptions)
     service.push(snapshot(position=10))
 
-    wait_until(lambda: panel.shows(View("playing", "Song", "Artist", 12, 100, 35)))
+    wait_until(lambda: panel.shows(View("playing", "Song", "Artist", position=12, duration=100, volume=35)))
 
 
 def test_position_stops_at_duration(service, display):
     _, panel = display(tick_seconds=0.02)
     wait_until(lambda: service.subscriptions)
     service.push(snapshot(position=98, duration=100))
-    wait_until(lambda: panel.shows(View("playing", "Song", "Artist", 100, 100, 35)))
+    wait_until(lambda: panel.shows(View("playing", "Song", "Artist", position=100, duration=100, volume=35)))
     count = len(panel.images)
     time.sleep(0.2)  # 10 ticks: la vista queda en 100 y no se redibuja
 
@@ -195,10 +195,10 @@ def test_position_does_not_advance_when_not_playing(service, display, state):
     _, panel = display(tick_seconds=0.05)
     wait_until(lambda: service.subscriptions)
     service.push(snapshot(state=state, position=10))
-    wait_until(lambda: panel.shows(View(state, "Song", "Artist", 10, 100, 35)))
+    wait_until(lambda: panel.shows(View(state, "Song", "Artist", position=10, duration=100, volume=35)))
     time.sleep(0.3)
 
-    assert not panel.shows(View(state, "Song", "Artist", 11, 100, 35))
+    assert not panel.shows(View(state, "Song", "Artist", position=11, duration=100, volume=35))
 
 
 def test_init_failure_logs_error_and_ends_thread(display, caplog):

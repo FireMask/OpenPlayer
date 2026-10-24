@@ -64,3 +64,49 @@ def test_no_ring_without_duration():
     assert accent_pixels(without, "right") == 0
     # Sin anillo ni pista: el borde queda negro.
     assert without.getpixel((CENTER, 3)) == (0, 0, 0) != with_ring.getpixel((CENTER, 3))
+
+
+# Modo pista (SPEC 18)
+
+FULL = View("playing", "Song", "Artist", album="Album", position=83, duration=243, volume=35,
+            queue_position=2, queue_length=12)
+
+
+def band(image, top, height):
+    """¿Hay algo dibujado entre top y top+height? x 60–180 deja afuera el anillo."""
+    return image.crop((60, top, WIDTH - 60, top + height)).getbbox() is not None
+
+
+@pytest.mark.parametrize("field, top, height", [
+    ("album", 138, 16),
+    ("duration", 162, 18),
+    ("queue_length", 186, 14),
+])
+def test_line_is_drawn_only_with_its_data(field, top, height):
+    from dataclasses import replace
+
+    assert band(render(FULL), top, height)
+    assert not band(render(replace(FULL, **{field: None})), top, height)
+
+
+def test_volume_is_not_drawn():
+    assert render(FULL).tobytes() == render(View(**{**FULL.__dict__, "volume": 90})).tobytes()
+
+
+def test_time_line_changes_with_position():
+    from dataclasses import replace
+
+    assert render(FULL).crop((20, 162, 220, 180)).tobytes() != render(replace(FULL, position=84)).crop((20, 162, 220, 180)).tobytes()
+
+
+@pytest.mark.parametrize("seconds, text", [(0, "0:00"), (83, "1:23"), (600, "10:00"), (-3, "0:00")])
+def test_mmss(seconds, text):
+    from screen import _mmss
+
+    assert _mmss(seconds) == text
+
+
+def test_queue_without_position_is_not_drawn():
+    from dataclasses import replace
+
+    assert not band(render(replace(FULL, queue_position=None)), 186, 14)

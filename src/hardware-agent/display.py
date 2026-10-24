@@ -5,6 +5,7 @@ import logging
 import socket
 import threading
 import time
+from dataclasses import replace
 
 from screen import View, render
 from sender import connect_unix
@@ -108,7 +109,7 @@ class Display:
             position = view.position + int((time.monotonic() - self._received) / self._tick)
             if view.duration:
                 position = min(position, view.duration)
-            view = View(view.status, view.title, view.artist, position, view.duration, view.volume)
+            view = replace(view, position=position)
         if view != self._shown:
             self.panel.show(render(view))
             self._shown = view
@@ -130,9 +131,9 @@ def parse(line: bytes) -> View | None:
     state = message.get("state")
     return View(
         state if state in STATES else "stopped",
-        message.get("trackTitle"),
-        message.get("trackArtist"),
-        message.get("positionSeconds"),
-        message.get("durationSeconds"),
-        message.get("volume"),
+        title=message.get("trackTitle"),
+        artist=message.get("trackArtist"),
+        position=message.get("positionSeconds"),
+        duration=message.get("durationSeconds"),
+        volume=message.get("volume"),
     )

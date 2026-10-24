@@ -1,4 +1,4 @@
-"""Dibujo de la pantalla redonda (SPEC 17): View → imagen RGB 240x240, sin hardware."""
+"""Dibujo de la pantalla redonda (SPEC 17, modos SPEC 18): View → imagen RGB 240x240, sin hardware."""
 
 import math
 from dataclasses import dataclass
@@ -28,9 +28,12 @@ class View:
     status: str  # "playing" | "paused" | "stopped" | "offline" | "mpd_error"
     title: str | None = None
     artist: str | None = None
+    album: str | None = None
     position: int | None = None  # segundos
     duration: int | None = None
     volume: int | None = None
+    queue_position: int | None = None  # 0-based; se muestra +1
+    queue_length: int | None = None
 
 
 def render(view: View) -> Image.Image:
@@ -47,11 +50,18 @@ def render(view: View) -> Image.Image:
     if view.duration and view.position is not None:
         _ring(draw, min(max(view.position / view.duration, 0), 1))
     _icon(draw, view.status, 60)
-    _text(draw, view.title or "", 105, 22, WHITE)
-    _text(draw, view.artist or "", 135, 16, GRAY)
-    if view.volume is not None:
-        _text(draw, f"Vol {view.volume}", 180, 16, GRAY)
+    _text(draw, view.title or "", 88, 22, WHITE)
+    _text(draw, view.artist or "", 116, 16, GRAY)
+    _text(draw, view.album or "", 138, 14, GRAY)
+    if view.duration and view.position is not None:
+        _text(draw, f"{_mmss(view.position)} / -{_mmss(view.duration - view.position)}", 162, 16, WHITE)
+    if view.queue_position is not None and view.queue_length:
+        _text(draw, f"{view.queue_position + 1} / {view.queue_length}", 186, 12, GRAY)
     return image
+
+
+def _mmss(seconds: int) -> str:
+    return f"{max(seconds, 0) // 60}:{max(seconds, 0) % 60:02d}"
 
 
 @lru_cache(maxsize=None)
