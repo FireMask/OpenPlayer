@@ -1,4 +1,5 @@
 # Solo desarrollo y pruebas (Windows/Linux). En la Pi se usan los paquetes del sistema
-# python3-gpiozero y python3-lgpio; gpiozero fijado a la versión de la Pi (apt).
+# python3-gpiozero, python3-lgpio, python3-pil y python3-spidev; versiones fijadas a las de la Pi (apt, Bookworm).
 gpiozero==2.0.1
+Pillow==9.4.0
 pytest
