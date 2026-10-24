@@ -1,6 +1,6 @@
 # SPEC 17 — Pantalla redonda GC9A01 240x240
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 05, SPEC 16
 > **Date:** 2026-10-24
 > **Objective:** Que el hardware agent muestre la pista actual (título, artista, estado, anillo de progreso y volumen) en una pantalla redonda GC9A01 de 1,28" por SPI, alimentada por `player.subscribe`, sin afectar a los botones si la pantalla falla o no está.
@@ -220,44 +220,44 @@ warning: display: disconnected from /run/openplayer/hardware.sock
 
 **Windows (automatizable):**
 
-- [ ] `pytest tests/hardware-agent` pasa todas las pruebas.
-- [ ] Sin `hardware.display` o con `enabled: false`, `AgentConfig.display` es `None` y el agente no importa `spidev` ni Pillow.
-- [ ] `config.py` rechaza con `ConfigError`, nombrando el campo:
+- [x] `pytest tests/hardware-agent` pasa todas las pruebas.
+- [x] Sin `hardware.display` o con `enabled: false`, `AgentConfig.display` es `None` y el agente no importa `spidev` ni Pillow.
+- [x] `config.py` rechaza con `ConfigError`, nombrando el campo:
   - `spiBus`/`spiDevice` fuera de 0–1;
   - `dc`/`rst` fuera de 0–27, no enteros, repetidos entre sí o con un botón;
   - `spiHz` fuera de 1 000 000–62 500 000;
   - `rotation` distinto de 0/90/180/270.
-- [ ] `render()` devuelve una imagen RGB 240x240 para `playing`, `paused`, `stopped`, `offline` y `mpd_error`.
-- [ ] Un título más ancho que el círculo se dibuja cortado y terminado en "…".
-- [ ] El anillo cubre una fracción proporcional a `position / duration`; sin `duration` no hay anillo.
-- [ ] `show()` manda CASET/RASET 0–239, `RAMWR` y exactamente 115 200 bytes; un píxel `(255,0,0)` se codifica como `0xF800`.
-- [ ] El init termina en `DISPON` (0x29) tras pulsar RST.
-- [ ] `Display` dibuja el snapshot inicial, redibuja con cada push que cambia la vista y no redibuja si la vista no cambió.
-- [ ] Con el Service caído, `Display` dibuja "Sin conexión" y vuelve a suscribirse en 2 s cuando el Service vuelve.
-- [ ] Una línea `error` dibuja "MPD no responde".
-- [ ] En `playing`, la posición avanza 1 s por tick; en `paused` y `stopped`, no.
-- [ ] Si `panel.init()` falla, se registra un `error`, el hilo termina y los botones siguen enviando `button.pressed`.
-- [ ] El agente solo importa stdlib, `gpiozero`, `PIL` y `spidev` (verificable con grep).
-- [ ] `dotnet build` y `dotnet test` siguen pasando.
+- [x] `render()` devuelve una imagen RGB 240x240 para `playing`, `paused`, `stopped`, `offline` y `mpd_error`.
+- [x] Un título más ancho que el círculo se dibuja cortado y terminado en "…".
+- [x] El anillo cubre una fracción proporcional a `position / duration`; sin `duration` no hay anillo.
+- [x] `show()` manda CASET/RASET 0–239, `RAMWR` y exactamente 115 200 bytes; un píxel `(255,0,0)` se codifica como `0xF800`.
+- [x] El init termina en `DISPON` (0x29) tras pulsar RST.
+- [x] `Display` dibuja el snapshot inicial, redibuja con cada push que cambia la vista y no redibuja si la vista no cambió.
+- [x] Con el Service caído, `Display` dibuja "Sin conexión" y vuelve a suscribirse en 2 s cuando el Service vuelve.
+- [x] Una línea `error` dibuja "MPD no responde".
+- [x] En `playing`, la posición avanza 1 s por tick; en `paused` y `stopped`, no.
+- [x] Si `panel.init()` falla, se registra un `error`, el hilo termina y los botones siguen enviando `button.pressed`.
+- [x] El agente solo importa stdlib, `gpiozero`, `PIL` y `spidev` (verificable con grep).
+- [x] `dotnet build` y `dotnet test` siguen pasando.
 
 **Raspberry Pi (manual):**
 
-- [ ] Con `enabled: false` y sin pantalla, `deploy.ps1` termina con exit 0 y el agente se comporta igual que en SPEC 05.
-- [ ] Con la pantalla cableada, SPI activo y `enabled: true`, `journalctl -u openplayer-hardware` muestra `display ready` y la pantalla dibuja título, artista, estado, anillo y volumen de la pista actual.
-- [ ] `mpc next` cambia título y artista en la pantalla en menos de 1 s.
-- [ ] Botón de volumen (o `mpc volume 40`): el volumen en pantalla cambia en menos de 1 s.
-- [ ] Play/pausa cambia el ícono en menos de 1 s; en pausa el anillo no avanza.
-- [ ] Durante la reproducción, el anillo avanza de forma continua y coincide con `mpc status` con 2 s de diferencia o menos.
-- [ ] `sudo systemctl stop openplayer` → la pantalla muestra "Sin conexión"; al iniciarlo, vuelve a la pista en 5 s o menos.
-- [ ] Con RST desconectado o `spiDevice` erróneo, los botones siguen funcionando y el log muestra el error de la pantalla.
-- [ ] La imagen no aparece espejada ni con colores invertidos (rojo se ve rojo); si hace falta, `rotation` y `spiHz` se ajustan y los valores finales quedan documentados.
-- [ ] Tras `sudo reboot`, la pantalla muestra la pista sin intervención.
+- [x] Con `enabled: false` y sin pantalla, `deploy.ps1` termina con exit 0 y el agente se comporta igual que en SPEC 05.
+- [x] Con la pantalla cableada, SPI activo y `enabled: true`, `journalctl -u openplayer-hardware` muestra `display ready` y la pantalla dibuja título, artista, estado, anillo y volumen de la pista actual.
+- [x] `mpc next` cambia título y artista en la pantalla en menos de 1 s.
+- [x] Botón de volumen (o `mpc volume 40`): el volumen en pantalla cambia en menos de 1 s.
+- [x] Play/pausa cambia el ícono en menos de 1 s; en pausa el anillo no avanza.
+- [x] Durante la reproducción, el anillo avanza de forma continua y coincide con `mpc status` con 2 s de diferencia o menos.
+- [x] `sudo systemctl stop openplayer` → la pantalla muestra "Sin conexión"; al iniciarlo, vuelve a la pista en 5 s o menos.
+- [x] Con RST desconectado o `spiDevice` erróneo, los botones siguen funcionando y el log muestra el error de la pantalla.
+- [x] La imagen no aparece espejada ni con colores invertidos (rojo se ve rojo); si hace falta, `rotation` y `spiHz` se ajustan y los valores finales quedan documentados.
+- [x] Tras `sudo reboot`, la pantalla muestra la pista sin intervención.
 
 **Documentación:**
 
-- [ ] `architecture.md`, `gpio-map.md` y `assembly.md` §11 describen la GC9A01 por SPI y ya no mencionan la OLED SSD1306 I²C como plan.
-- [ ] `gpio-map.md` tiene la tabla de cableado y cómo activar SPI.
-- [ ] El README explica cómo habilitar la pantalla (`hardware.display.enabled`) y ver sus logs.
+- [x] `architecture.md`, `gpio-map.md` y `assembly.md` §11 describen la GC9A01 por SPI y ya no mencionan la OLED SSD1306 I²C como plan.
+- [x] `gpio-map.md` tiene la tabla de cableado y cómo activar SPI.
+- [x] El README explica cómo habilitar la pantalla (`hardware.display.enabled`) y ver sus logs.
 
 ## Decisions
 
