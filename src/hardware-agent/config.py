@@ -11,10 +11,22 @@ class ConfigError(Exception):
 
 
 @dataclass(frozen=True)
+class DisplayConfig:
+    """Pantalla GC9A01 por SPI (SPEC 17)."""
+    spi_bus: int
+    spi_device: int
+    dc: int  # BCM
+    rst: int  # BCM
+    spi_hz: int
+    rotation: int  # 0 | 90 | 180 | 270
+
+
+@dataclass(frozen=True)
 class AgentConfig:
     socket_path: str
     pins: dict  # nombre IPC → pin BCM
     debounce_seconds: float
+    display: DisplayConfig | None = None  # None: sección ausente o enabled=false
 
 
 def load_config(path: str) -> AgentConfig:
@@ -47,7 +59,41 @@ def load_config(path: str) -> AgentConfig:
     if not isinstance(debounce, (int, float)) or isinstance(debounce, bool) or not 0.01 <= debounce <= 1:
         raise ConfigError("hardware.debounceSeconds must be 0.01-1")
 
-    return AgentConfig(socket_path, pins, float(debounce))
+    return AgentConfig(socket_path, pins, float(debounce), _display(data["hardware"], pins))
+
+
+def _display(hardware: dict, pins: dict) -> DisplayConfig | None:
+    section = hardware.get("display")
+    if section is None:
+        return None
+    if not isinstance(section, dict):
+        raise ConfigError("hardware.display must be an object")
+    enabled = section.get("enabled", False)
+    if not isinstance(enabled, bool):
+        raise ConfigError("hardware.display.enabled must be true or false")
+    if not enabled:
+        return None
+
+    def field(key, valid, rule):
+        if key not in section:
+            raise ConfigError(f"hardware.display.{key} is missing")
+        value = section[key]
+        if not isinstance(value, int) or isinstance(value, bool) or not valid(value):
+            raise ConfigError(f"hardware.display.{key} must be {rule}")
+        return value
+
+    bus = field("spiBus", lambda v: 0 <= v <= 1, "0-1")
+    device = field("spiDevice", lambda v: 0 <= v <= 1, "0-1")
+    used = dict(pins)
+    gpio = {}
+    for key in ("dc", "rst"):
+        pin = field(key, lambda v: 0 <= v <= 27, "a BCM pin 0-27")
+        if pin in used.values():
+            raise ConfigError(f"hardware.display.{key}: pin {pin} is already used")
+        used[key] = gpio[key] = pin
+    hz = field("spiHz", lambda v: 1_000_000 <= v <= 62_500_000, "1000000-62500000")
+    rotation = field("rotation", lambda v: v in (0, 90, 180, 270), "0, 90, 180 or 270")
+    return DisplayConfig(bus, device, gpio["dc"], gpio["rst"], hz, rotation)
 
 
 def _get(data, section: str, key: str):
