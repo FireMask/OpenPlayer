@@ -3,7 +3,7 @@ from gpiozero import Device, DigitalOutputDevice
 from gpiozero.pins.mock import MockFactory
 from PIL import Image
 
-from gc9a01 import CASET, DISPON, HEIGHT, INIT_SEQUENCE, RAMWR, RASET, SLPOUT, WIDTH, GC9A01, rgb565
+from gc9a01 import CASET, DISPOFF, DISPON, HEIGHT, INIT_SEQUENCE, RAMWR, RASET, SLPOUT, WIDTH, GC9A01, rgb565
 
 DC, RST = 5, 6
 
@@ -117,3 +117,12 @@ def test_close_releases_spi_and_pins(panel):
     display.close()
 
     assert spi.closed
+
+
+def test_sleep_and_wake_send_dispoff_and_dispon(panel):
+    display, spi = panel()
+    display.sleep_display()
+    display.wake_display()
+
+    assert spi.commands() == [(DISPOFF, b""), (DISPON, b"")]
+    assert (DISPOFF, DISPON) == (0x28, 0x29)

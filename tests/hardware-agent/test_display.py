@@ -4,11 +4,11 @@ import socket
 import threading
 import time
 from dataclasses import replace
-from datetime import datetime, timedelta
+from datetime import datetime, time as clock_time, timedelta
 
 import pytest
 
-from display import SCROLL_PAUSE, SCROLL_SPEED, Display, parse, scroll_offset
+from display import SCROLL_PAUSE, SCROLL_SPEED, WAKE_SECONDS, Display, in_range, parse, scroll_offset
 from screen import View, render, title_overflow
 
 
@@ -91,6 +91,7 @@ class FakePanel:
     def __init__(self, fail=False):
         self.fail = fail
         self.images = []
+        self.power = []  # "off" / "on" en orden
 
     def init(self):
         if self.fail:
@@ -98,6 +99,12 @@ class FakePanel:
 
     def show(self, image):
         self.images.append(image.tobytes())
+
+    def sleep_display(self):
+        self.power.append("off")
+
+    def wake_display(self):
+        self.power.append("on")
 
     def shows(self, view):
         return render(view).tobytes() in self.images
@@ -119,11 +126,11 @@ def clock():
 def display(service, clock):
     created = []
 
-    def make(panel=None, tick_seconds=0.05, retry_seconds=0.1, idle_clock_seconds=60, real_clock=False):
+    def make(panel=None, tick_seconds=0.05, retry_seconds=0.1, idle_clock_seconds=60, real_clock=False, **power):
         panel = panel or FakePanel()
         times = {} if real_clock else {"now": clock.now, "monotonic": clock.monotonic}
         d = Display("/x.sock", panel, connect=service.connect, tick_seconds=tick_seconds, retry_seconds=retry_seconds,
-                    idle_clock_seconds=idle_clock_seconds, **times)
+                    idle_clock_seconds=idle_clock_seconds, **power, **times)
         d.start()
         created.append(d)
         return d, panel
@@ -466,3 +473,103 @@ def test_scrolling_uses_fast_tick_and_short_title_does_not(service, display):
     service.push(snapshot(title=LONG))
     time.sleep(SCROLL_PAUSE + 0.6)
     assert len(panel.images) >= count + 4  # ~0,1 s por cuadro mientras se desplaza
+
+
+# Ahorro de pantalla (SPEC 18). El reloj falso arranca el sábado 24 a las 21:47:30.
+
+def at(hhmm):
+    h, m = map(int, hhmm.split(":"))
+    return clock_time(h, m)
+
+
+@pytest.mark.parametrize("t, start, end, inside", [
+    ("23:30", "23:00", "07:00", True), ("03:00", "23:00", "07:00", True), ("07:00", "23:00", "07:00", False),
+    ("12:00", "23:00", "07:00", False), ("23:00", "23:00", "07:00", True),
+    ("13:00", "12:00", "14:00", True), ("14:00", "12:00", "14:00", False), ("11:59", "12:00", "14:00", False),
+])
+def test_in_range(t, start, end, inside):
+    assert in_range(at(t), at(start), at(end)) == inside
+
+
+def test_night_turns_panel_off_inside_and_on_after(service, display, clock):
+    d, panel = display(idle_clock_seconds=None, night=(at("21:48"), at("21:50")))  # cruza al minuto siguiente
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(state="paused"))
+    wait_until(lambda: len(panel.images) >= 2)
+    assert panel.power == []
+
+    clock.advance(30)  # 21:48:00
+    wait_until(lambda: panel.power == ["off"])
+    count = len(panel.images)
+    service.push(snapshot(state="paused", title="Other"))
+    time.sleep(0.2)
+    assert len(panel.images) == count  # apagada: no se dibuja
+
+    clock.advance(120)  # 21:50:00
+    wait_until(lambda: panel.power == ["off", "on"])
+    wait_until(lambda: panel.shows(View("paused", "Other", "Artist", position=10, duration=100, volume=35,
+                                        queue_position=0)))
+
+
+def test_night_range_across_midnight_starts_off(service, display, clock):
+    _, panel = display(night=(at("21:00"), at("07:00")))
+
+    wait_until(lambda: panel.power == ["off"])
+
+
+def test_off_after_stopped_minutes(service, display, clock):
+    _, panel = display(idle_clock_seconds=None, off_after_stopped_minutes=2)
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(state="paused"))
+    wait_until(lambda: len(panel.images) >= 2)
+    clock.advance(300)  # pausa no cuenta
+    time.sleep(0.2)
+    assert panel.power == []
+
+    service.push(snapshot(state="stopped"))
+    clock.advance(119)
+    time.sleep(0.2)
+    assert panel.power == []
+    clock.advance(1)
+    wait_until(lambda: panel.power == ["off"])
+
+    service.push(snapshot())  # empezar a reproducir la enciende
+    wait_until(lambda: panel.power == ["off", "on"])
+    wait_until(lambda: panel.shows(PLAYING))
+
+
+def test_button_wakes_for_ten_seconds(service, display, clock):
+    d, panel = display(night=(at("21:00"), at("07:00")))
+    wait_until(lambda: panel.power == ["off"])
+
+    d.wake()
+    wait_until(lambda: panel.power == ["off", "on"])
+    clock.advance(WAKE_SECONDS - 0.5)
+    time.sleep(0.2)
+    assert panel.power == ["off", "on"]
+    clock.advance(0.5)
+    wait_until(lambda: panel.power == ["off", "on", "off"])
+
+
+def test_playing_at_night_wakes_for_ten_seconds(service, display, clock):
+    _, panel = display(night=(at("21:00"), at("07:00")))
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(state="paused"))
+    wait_until(lambda: panel.power == ["off"])
+
+    service.push(snapshot())
+    wait_until(lambda: panel.power == ["off", "on"])
+    wait_until(lambda: panel.shows(PLAYING))
+    clock.advance(WAKE_SECONDS)
+    wait_until(lambda: panel.power == ["off", "on", "off"])
+
+
+def test_without_power_fields_never_turns_off(service, display, clock):
+    _, panel = display()
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(state="stopped"))
+    wait_until(lambda: len(panel.images) >= 2)
+
+    clock.advance(86400)
+    time.sleep(0.2)
+    assert panel.power == []

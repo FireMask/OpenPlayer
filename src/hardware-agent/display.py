@@ -1,6 +1,6 @@
 """Hilo de la pantalla (SPEC 17): player.subscribe → View → render → panel.show.
 SPEC 18: modo del Service (displayMode), reloj automático, indicador de volumen y título con desplazamiento,
-calculados en cada tick."""
+calculados en cada tick. También apaga el panel (DISPOFF) de noche o tras un rato detenida."""
 
 import json
 import logging
@@ -28,12 +28,15 @@ _UNSET = object()
 SCROLL_TICK = 0.1
 SCROLL_SPEED = 30  # px/s
 SCROLL_PAUSE = 1.0  # s quieto en cada extremo
+WAKE_SECONDS = 10  # encendida tras un botón o al empezar a reproducir durante el horario nocturno
 
 
 class Display:
     def __init__(self, socket_path, panel, *, connect=None, tick_seconds=1.0, retry_seconds=2.0, label="",
-                 idle_clock_seconds=60, now=datetime.now, monotonic=time.monotonic):
-        """panel: algo con init() y show(image). connect inyectable igual que Sender (TCP en pruebas).
+                 idle_clock_seconds=60, night=None, off_after_stopped_minutes=None,
+                 now=datetime.now, monotonic=time.monotonic):
+        """panel: algo con init(), show(image), sleep_display() y wake_display().
+        connect inyectable igual que Sender (TCP en pruebas). night: (inicio, fin) como datetime.time, o None.
         now (hora local, para el reloj) y monotonic (temporizadores) son inyectables para las pruebas."""
         self._path = socket_path
         self.panel = panel
@@ -42,12 +45,17 @@ class Display:
         self._retry = retry_seconds
         self._label = label
         self._idle_clock = idle_clock_seconds
+        self._night = night
+        self._off_after = off_after_stopped_minutes * 60 if off_after_stopped_minutes else None
         self._now = now
         self._monotonic = monotonic
         self._stopping = threading.Event()
         self._base = View("offline")  # última vista recibida
         self._received = monotonic()  # cuándo llegó, para avanzar la posición localmente
         self._idle_since = None  # desde cuándo está en pausa o detenida
+        self._stopped_since = None  # desde cuándo está detenida
+        self._wake_until = 0.0  # hasta cuándo sigue encendida tras un botón
+        self._panel_on = True
         self._volume = _UNSET  # volumen del snapshot anterior de esta conexión
         self._volume_until = 0.0  # hasta cuándo se ve el indicador de volumen
         self._scroll_title = None  # título que se está desplazando
@@ -57,6 +65,10 @@ class Display:
 
     def start(self):
         self._thread.start()
+
+    def wake(self):
+        """La llama el callback de cada botón: enciende el panel WAKE_SECONDS (se nota en el próximo tick)."""
+        self._wake_until = self._monotonic() + WAKE_SECONDS
 
     def stop(self):
         """Espera a que termine el show() en curso; el llamador cierra después el panel."""
@@ -131,17 +143,26 @@ class Display:
             if self._volume is not _UNSET and view.volume is not None and view.volume != self._volume:
                 self._volume_until = now + VOLUME_POPUP_SECONDS
             self._volume = view.volume
+        if view.status == "playing" and self._base.status != "playing":
+            self._wake_until = now + WAKE_SECONDS  # de noche, empezar a reproducir también enciende
         if view.status in ("paused", "stopped"):
             if self._idle_since is None:
                 self._idle_since = now
         else:
             self._idle_since = None
+        if view.status == "stopped":
+            if self._stopped_since is None:
+                self._stopped_since = now
+        else:
+            self._stopped_since = None
         self._base = view
         self._received = now
         self._draw()
 
     def _draw(self):
         now = self._monotonic()
+        if not self._power(now):
+            return
         view = self._base
         changes = {}
         if view.status == "playing" and view.position is not None:
@@ -166,6 +187,27 @@ class Display:
         if view != self._shown:
             self.panel.show(render(view))
             self._shown = view
+
+
+    def _power(self, now) -> bool:
+        """Enciende o apaga el panel según el horario y la inactividad; True si está encendido."""
+        night = self._night is not None and in_range(self._now().time(), *self._night)
+        stopped = (self._off_after is not None and self._stopped_since is not None
+                   and now - self._stopped_since >= self._off_after)
+        on = not (night or stopped) or now < self._wake_until
+        if on != self._panel_on:
+            if on:
+                self.panel.wake_display()
+            else:
+                self.panel.sleep_display()
+                self._scroll_title = None  # sin cuadros mientras está apagada: tick normal
+            self._panel_on = on
+        return on
+
+
+def in_range(t, start, end) -> bool:
+    """start <= t < end; si start > end el rango cruza la medianoche."""
+    return start <= t < end if start < end else t >= start or t < end
 
 
 def scroll_offset(elapsed: float, overflow: int) -> int:

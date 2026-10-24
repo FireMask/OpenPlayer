@@ -7,7 +7,7 @@ from PIL import Image, ImageMath
 WIDTH = HEIGHT = 240
 
 CASET, RASET, RAMWR = 0x2A, 0x2B, 0x2C
-SLPOUT, INVON, DISPON = 0x11, 0x21, 0x29
+SLPOUT, INVON, DISPOFF, DISPON = 0x11, 0x21, 0x28, 0x29
 
 # Secuencia de init de referencia (Waveshare LCD_1inch28): (comando, datos).
 # ponytail: secuencia fija; si un módulo muestra colores invertidos o espejados, se ajusta 0x36 (MADCTL) o INVON acá.
@@ -67,6 +67,14 @@ class GC9A01:
         self._command(CASET, b"\x00\x00\x00\xEF")  # 0–239
         self._command(RASET, b"\x00\x00\x00\xEF")
         self._command(RAMWR, rgb565(image))
+
+    def sleep_display(self) -> None:
+        """Panel en negro (SPEC 18); sin pin BL es lo más cercano a apagarlo."""
+        self._command(DISPOFF)
+
+    def wake_display(self) -> None:
+        # ponytail: solo DISPON; si algún módulo no vuelve tras DISPOFF, rehacer init() acá.
+        self._command(DISPON)
 
     def close(self) -> None:
         self._spi.close()
