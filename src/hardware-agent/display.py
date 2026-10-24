@@ -1,5 +1,6 @@
 """Hilo de la pantalla (SPEC 17): player.subscribe → View → render → panel.show.
-SPEC 18: modo del Service (displayMode), reloj automático e indicador de volumen, calculados en cada tick."""
+SPEC 18: modo del Service (displayMode), reloj automático, indicador de volumen y título con desplazamiento,
+calculados en cada tick."""
 
 import json
 import logging
@@ -9,7 +10,7 @@ import time
 from dataclasses import replace
 from datetime import datetime
 
-from screen import View, render
+from screen import View, render, title_overflow
 from sender import connect_unix
 
 log = logging.getLogger(__name__)
@@ -22,6 +23,11 @@ VOLUME_POPUP_SECONDS = 2
 DAYS = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
 MONTHS = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
 _UNSET = object()
+# Desplazamiento del título: ~10 fps solo mientras se mueve.
+# ponytail: 10 fps fijos; si la Pi Zero no llega al criterio de CPU, bajar a 5 (SCROLL_TICK 0.2).
+SCROLL_TICK = 0.1
+SCROLL_SPEED = 30  # px/s
+SCROLL_PAUSE = 1.0  # s quieto en cada extremo
 
 
 class Display:
@@ -44,6 +50,8 @@ class Display:
         self._idle_since = None  # desde cuándo está en pausa o detenida
         self._volume = _UNSET  # volumen del snapshot anterior de esta conexión
         self._volume_until = 0.0  # hasta cuándo se ve el indicador de volumen
+        self._scroll_title = None  # título que se está desplazando
+        self._scroll_since = 0.0
         self._shown = None
         self._thread = threading.Thread(target=self._run, name="display", daemon=True)
 
@@ -100,7 +108,8 @@ class Display:
         while not self._stopping.is_set():
             # Despierta justo cuando la posición cambia de segundo, como mucho cada tick.
             elapsed = self._monotonic() - self._received
-            sock.settimeout(max(min(self._tick, 1 - elapsed % 1), 0.01))
+            tick = SCROLL_TICK if self._scroll_title is not None else self._tick
+            sock.settimeout(max(min(tick, 1 - elapsed % 1), 0.01))
             try:
                 chunk = sock.recv(65536)
             except socket.timeout:
@@ -146,10 +155,24 @@ class Display:
                            date=f"{DAYS[wall.weekday()]} {wall.day} {MONTHS[wall.month - 1]}")
         if now < self._volume_until:
             changes["volume_popup"] = True
+        overflow = title_overflow(view.title)
+        if view.status == "playing" and changes.get("mode", view.mode) == "track" and overflow:
+            if self._scroll_title != view.title:
+                self._scroll_title, self._scroll_since = view.title, now
+            changes["scroll"] = scroll_offset(now - self._scroll_since, overflow)
+        else:
+            self._scroll_title = None
         view = replace(view, **changes)
         if view != self._shown:
             self.panel.show(render(view))
             self._shown = view
+
+
+def scroll_offset(elapsed: float, overflow: int) -> int:
+    """Pausa al inicio, avanza a SCROLL_SPEED hasta el final, pausa y vuelve al inicio."""
+    travel = overflow / SCROLL_SPEED
+    phase = elapsed % (SCROLL_PAUSE + travel + SCROLL_PAUSE)
+    return min(int(max(phase - SCROLL_PAUSE, 0) * SCROLL_SPEED), overflow)
 
 
 def parse(line: bytes) -> View | None:

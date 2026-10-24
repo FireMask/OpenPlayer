@@ -8,8 +8,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from display import Display, parse
-from screen import View, render
+from display import SCROLL_PAUSE, SCROLL_SPEED, Display, parse, scroll_offset
+from screen import View, render, title_overflow
 
 
 def wait_until(condition, timeout=5.0):
@@ -119,10 +119,11 @@ def clock():
 def display(service, clock):
     created = []
 
-    def make(panel=None, tick_seconds=0.05, retry_seconds=0.1, idle_clock_seconds=60):
+    def make(panel=None, tick_seconds=0.05, retry_seconds=0.1, idle_clock_seconds=60, real_clock=False):
         panel = panel or FakePanel()
+        times = {} if real_clock else {"now": clock.now, "monotonic": clock.monotonic}
         d = Display("/x.sock", panel, connect=service.connect, tick_seconds=tick_seconds, retry_seconds=retry_seconds,
-                    idle_clock_seconds=idle_clock_seconds, now=clock.now, monotonic=clock.monotonic)
+                    idle_clock_seconds=idle_clock_seconds, **times)
         d.start()
         created.append(d)
         return d, panel
@@ -395,3 +396,73 @@ def test_same_volume_or_reconnect_does_not_show_popup(service, display):
     wait_until(lambda: last_view_is(panel, replace(other, title="Song", volume=50)))
     assert not any(img == render(replace(other, title="Song", volume=50, volume_popup=True)).tobytes()
                    for img in panel.images)
+
+
+# Desplazamiento del título (SPEC 18)
+
+LONG = "A very long song title that never ends at all"
+
+
+@pytest.mark.parametrize("elapsed, expected", [
+    (0, 0), (SCROLL_PAUSE, 0), (SCROLL_PAUSE + 1, SCROLL_SPEED), (SCROLL_PAUSE + 100 / SCROLL_SPEED, 100),  # 100 = tope
+    (SCROLL_PAUSE + 100 / SCROLL_SPEED + 0.9, 100),  # pausa al final
+    (2 * SCROLL_PAUSE + 100 / SCROLL_SPEED + 0.1, 0),  # vuelve al inicio
+])
+def test_scroll_offset(elapsed, expected):
+    assert scroll_offset(elapsed, 100) == expected
+
+
+def test_long_title_scrolls_pauses_and_returns(service, display, clock):
+    _, panel = display()
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(title=LONG))
+    start = replace(PLAYING, title=LONG)
+    wait_until(lambda: last_view_is(panel, start))
+    end = title_overflow(LONG)
+    travel = end / SCROLL_SPEED
+
+    clock.advance(SCROLL_PAUSE + 1)
+    wait_until(lambda: last_view_is(panel, replace(start, position=12, scroll=SCROLL_SPEED)))
+    clock.advance(travel)
+    wait_until(lambda: panel.shows(replace(start, position=12 + int(travel), scroll=end)))
+    clock.advance(SCROLL_PAUSE)
+    wait_until(lambda: last_view_is(panel, replace(start, position=12 + int(travel + SCROLL_PAUSE), scroll=0)))
+
+
+@pytest.mark.parametrize("state", ["paused", "stopped"])
+def test_long_title_does_not_scroll_when_not_playing(service, display, clock, state):
+    _, panel = display(idle_clock_seconds=None)
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(state=state, title=LONG))
+    wait_until(lambda: last_view_is(panel, View(state, LONG, "Artist", position=10, duration=100, volume=35,
+                                                queue_position=0)))
+    count = len(panel.images)
+
+    clock.advance(3)
+    time.sleep(0.2)
+    assert len(panel.images) == count
+
+
+def test_new_snapshot_with_same_title_keeps_scrolling(service, display, clock):
+    _, panel = display()
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(title=LONG))
+    wait_until(lambda: last_view_is(panel, replace(PLAYING, title=LONG)))
+    clock.advance(SCROLL_PAUSE + 1)
+
+    service.push(snapshot(title=LONG, position=11, volume=35))  # p. ej. un seek: no reinicia el desplazamiento
+    wait_until(lambda: last_view_is(panel, replace(PLAYING, title=LONG, position=11, scroll=SCROLL_SPEED)))
+
+
+def test_scrolling_uses_fast_tick_and_short_title_does_not(service, display):
+    _, panel = display(tick_seconds=1.0, real_clock=True)
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(title="Song"))
+    wait_until(lambda: panel.shows(PLAYING))
+    count = len(panel.images)
+    time.sleep(0.5)
+    assert len(panel.images) <= count + 1  # a lo sumo el cambio de segundo
+
+    service.push(snapshot(title=LONG))
+    time.sleep(SCROLL_PAUSE + 0.6)
+    assert len(panel.images) >= count + 4  # ~0,1 s por cuadro mientras se desplaza
