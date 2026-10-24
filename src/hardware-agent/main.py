@@ -79,7 +79,8 @@ def _start_display(config):
         spi.open(d.spi_bus, d.spi_device)
         opened.append(spi)
         panel = GC9A01(spi, dc, rst, spi_hz=d.spi_hz, rotation=d.rotation)
-        display = Display(config.socket_path, panel, label=f"spi{d.spi_bus}.{d.spi_device}, {d.spi_hz} Hz")
+        display = Display(config.socket_path, panel, label=f"spi{d.spi_bus}.{d.spi_device}, {d.spi_hz} Hz",
+                          idle_clock_seconds=d.idle_clock_seconds)
     except Exception as e:
         log.error("display init failed: %s", e)
         for resource in opened:
