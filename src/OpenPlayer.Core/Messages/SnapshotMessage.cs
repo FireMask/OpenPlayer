@@ -25,10 +25,12 @@ public static class SnapshotMessage
             },
             snapshot.CurrentTrack?.Title,
             snapshot.CurrentTrack?.Artist,
+            snapshot.CurrentTrack?.Album,
             WholeSeconds(snapshot.Position),
             WholeSeconds(snapshot.Duration),
             snapshot.Volume,
             snapshot.QueuePosition,
+            snapshot.QueueLength,
             snapshot.QueueVersion),
         Options);
 
@@ -39,9 +41,11 @@ public static class SnapshotMessage
         string State,
         string? TrackTitle,
         string? TrackArtist,
+        string? TrackAlbum,
         long? PositionSeconds,
         long? DurationSeconds,
         int? Volume,
         int? QueuePosition,
+        int? QueueLength,
         long? QueueVersion);
 }

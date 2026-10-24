@@ -31,7 +31,8 @@ public static class MpdSnapshotParser
             long.TryParse(status.Get("playlist"), NumberStyles.None, CultureInfo.InvariantCulture, out var version)
                 ? version
                 : null,
-            Index(status.Get("songid")));
+            Index(status.Get("songid")),
+            Index(status.Get("playlistlength")));
     }
 
     internal static TimeSpan? Seconds(string? value) =>

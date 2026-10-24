@@ -12,8 +12,10 @@ public class SnapshotMessageTests
         TimeSpan? duration = null,
         int? volume = null,
         int? queuePosition = null,
-        long? queueVersion = null) =>
-        new(state, track, position, duration, volume, DateTimeOffset.UnixEpoch, queuePosition, queueVersion);
+        long? queueVersion = null,
+        int? queueLength = null) =>
+        new(state, track, position, duration, volume, DateTimeOffset.UnixEpoch, queuePosition, queueVersion,
+            QueueLength: queueLength);
 
     [Fact]
     public void Serializes_full_snapshot_exactly()
@@ -21,10 +23,10 @@ public class SnapshotMessageTests
         var track = new Track("r/pa.flac", "Paranoid Android", "Radiohead", "OK Computer", null);
 
         var json = SnapshotMessage.Serialize(Snapshot(PlaybackState.Playing, track,
-            TimeSpan.FromSeconds(83), TimeSpan.FromSeconds(387), 35, 3, 42));
+            TimeSpan.FromSeconds(83), TimeSpan.FromSeconds(387), 35, 3, 42, 12));
 
         Assert.Equal(
-            """{"type":"player.snapshot","state":"playing","trackTitle":"Paranoid Android","trackArtist":"Radiohead","positionSeconds":83,"durationSeconds":387,"volume":35,"queuePosition":3,"queueVersion":42}""",
+            """{"type":"player.snapshot","state":"playing","trackTitle":"Paranoid Android","trackArtist":"Radiohead","trackAlbum":"OK Computer","positionSeconds":83,"durationSeconds":387,"volume":35,"queuePosition":3,"queueLength":12,"queueVersion":42}""",
             json);
     }
 
@@ -32,7 +34,7 @@ public class SnapshotMessageTests
     public void Serializes_nulls_explicitly()
     {
         Assert.Equal(
-            """{"type":"player.snapshot","state":"stopped","trackTitle":null,"trackArtist":null,"positionSeconds":null,"durationSeconds":null,"volume":null,"queuePosition":null,"queueVersion":null}""",
+            """{"type":"player.snapshot","state":"stopped","trackTitle":null,"trackArtist":null,"trackAlbum":null,"positionSeconds":null,"durationSeconds":null,"volume":null,"queuePosition":null,"queueLength":null,"queueVersion":null}""",
             SnapshotMessage.Serialize(Snapshot()));
     }
 
