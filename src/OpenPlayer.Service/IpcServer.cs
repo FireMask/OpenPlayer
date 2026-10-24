@@ -43,6 +43,9 @@ public sealed class IpcServer(
     private readonly List<NetworkStream> _subscribers = [];
     private static readonly TimeSpan PushTimeout = TimeSpan.FromSeconds(2);
 
+    // Modo de la pantalla (SPEC 18): lo alterna menu. Solo en memoria, bajo _commandLock; arranca en "track".
+    private string _displayMode = "track";
+
     internal int SubscriberCount
     {
         get { lock (_subscribers) return _subscribers.Count; }
@@ -195,6 +198,11 @@ public sealed class IpcServer(
                     logger.LogInformation("Button {Button} (sequence {Sequence})", pressed.Button, sequence);
                 else
                     logger.LogInformation("Button {Button}", pressed.Button);
+                if (pressed.Button == ButtonName.Menu)
+                {
+                    await ToggleDisplayModeAsync(ct);
+                    break;
+                }
                 try
                 {
                     await LockedAsync(() => pressed.Button == ButtonName.Previous
@@ -247,13 +255,28 @@ public sealed class IpcServer(
     {
         try
         {
-            return SnapshotMessage.Serialize(await player.GetSnapshotAsync(ct));
+            return SnapshotMessage.Serialize(await player.GetSnapshotAsync(ct), _displayMode);
         }
         catch (Exception e) when (e is MpdException or MpdUnavailableException)
         {
             logger.LogWarning("player.get_snapshot failed: {Error}", e.Message);
             return ErrorMessage.Serialize("player.get_snapshot", e.Message);
         }
+    }
+
+    // menu no toca MPD: el observador no despertaría, así que el snapshot con el modo nuevo se empuja desde acá.
+    private async Task ToggleDisplayModeAsync(CancellationToken ct)
+    {
+        string? line = null, mode = null;
+        List<NetworkStream> targets = [];
+        await LockedAsync(async () =>
+        {
+            mode = _displayMode = _displayMode == "track" ? "clock" : "track";
+            line = await SnapshotLineAsync(ct);
+            targets = Subscribers();
+        }, ct);
+        logger.LogInformation("Display mode {Mode}", mode);
+        await PushAsync(targets, line!, ct);
     }
 
     private static async Task WriteTimedAsync(NetworkStream stream, string line, CancellationToken ct)
@@ -442,15 +465,16 @@ public sealed class IpcServer(
             {
                 try
                 {
-                    PlaybackSnapshot? snapshot = null;
+                    string? line = null;
                     List<NetworkStream> targets = [];
                     await LockedAsync(async () =>
                     {
-                        snapshot = await player.GetSnapshotAsync(ct);
+                        var snapshot = await player.GetSnapshotAsync(ct);
                         Observe(snapshot);
+                        line = SnapshotMessage.Serialize(snapshot, _displayMode);
                         targets = Subscribers();
                     }, ct);
-                    await PushAsync(targets, SnapshotMessage.Serialize(snapshot!), ct);
+                    await PushAsync(targets, line!, ct);
                     await player.WaitForChangeAsync(ct);
                 }
                 catch (Exception e) when (e is MpdException or MpdUnavailableException)

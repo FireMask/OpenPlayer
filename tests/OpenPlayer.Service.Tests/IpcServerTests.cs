@@ -761,6 +761,57 @@ public sealed class IpcServerTests : IAsyncLifetime
         Assert.Equal(SnapshotMessage.Serialize(Song("b.flac", 2)), await stays.ReadLineAsync());
     }
 
+    private const string Menu = """{"type":"button.pressed","button":"menu"}""";
+
+    [Fact]
+    public async Task Display_mode_starts_as_track()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync(GetSnapshot + "\n");
+
+        Assert.EndsWith(""","displayMode":"track"}""", await client.ReadLineAsync());
+    }
+
+    [Fact]
+    public async Task Menu_toggles_display_mode_and_pushes_without_touching_mpd()
+    {
+        _player.Snapshot = Song("a.flac", 1);
+        await StartAsync();
+        await using var a = await SubscribeAsync();
+        await using var b = await SubscribeAsync();
+        await a.ReadLineAsync();
+        await b.ReadLineAsync();
+        await using var buttons = await Client.ConnectAsync(SocketPath);
+        _player.Calls.Clear();
+
+        await buttons.SendAsync(Menu + "\n");
+        var clock = SnapshotMessage.Serialize(_player.Snapshot, "clock");
+        Assert.Equal(clock, await a.ReadLineAsync());
+        Assert.Equal(clock, await b.ReadLineAsync());
+
+        await buttons.SendAsync(Menu + "\n");
+        Assert.Equal(SnapshotMessage.Serialize(_player.Snapshot, "track"), await a.ReadLineAsync());
+        Assert.Equal(["GetSnapshot", "GetSnapshot"], _player.Calls);
+        Assert.Contains("Display mode clock", _logger.Messages);
+    }
+
+    [Fact]
+    public async Task Observer_push_keeps_display_mode()
+    {
+        await StartAsync();
+        await using var sub = await SubscribeAsync();
+        await sub.ReadLineAsync();
+        await using var buttons = await Client.ConnectAsync(SocketPath);
+        await PressAsync(buttons, Menu);
+        await sub.ReadLineAsync();
+
+        await PlayingAsync("b.flac", 2);
+
+        Assert.Equal(SnapshotMessage.Serialize(Song("b.flac", 2), "clock"), await sub.ReadLineAsync());
+    }
+
     [Fact]
     public async Task Subscriber_that_does_not_read_is_dropped_and_commands_keep_working()
     {

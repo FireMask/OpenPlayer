@@ -26,7 +26,7 @@ public class SnapshotMessageTests
             TimeSpan.FromSeconds(83), TimeSpan.FromSeconds(387), 35, 3, 42, 12));
 
         Assert.Equal(
-            """{"type":"player.snapshot","state":"playing","trackTitle":"Paranoid Android","trackArtist":"Radiohead","trackAlbum":"OK Computer","positionSeconds":83,"durationSeconds":387,"volume":35,"queuePosition":3,"queueLength":12,"queueVersion":42}""",
+            """{"type":"player.snapshot","state":"playing","trackTitle":"Paranoid Android","trackArtist":"Radiohead","trackAlbum":"OK Computer","positionSeconds":83,"durationSeconds":387,"volume":35,"queuePosition":3,"queueLength":12,"queueVersion":42,"displayMode":"track"}""",
             json);
     }
 
@@ -34,9 +34,13 @@ public class SnapshotMessageTests
     public void Serializes_nulls_explicitly()
     {
         Assert.Equal(
-            """{"type":"player.snapshot","state":"stopped","trackTitle":null,"trackArtist":null,"trackAlbum":null,"positionSeconds":null,"durationSeconds":null,"volume":null,"queuePosition":null,"queueLength":null,"queueVersion":null}""",
+            """{"type":"player.snapshot","state":"stopped","trackTitle":null,"trackArtist":null,"trackAlbum":null,"positionSeconds":null,"durationSeconds":null,"volume":null,"queuePosition":null,"queueLength":null,"queueVersion":null,"displayMode":"track"}""",
             SnapshotMessage.Serialize(Snapshot()));
     }
+
+    [Fact]
+    public void Includes_display_mode() =>
+        Assert.EndsWith(",\"displayMode\":\"clock\"}", SnapshotMessage.Serialize(Snapshot(), "clock"));
 
     [Fact]
     public void Truncates_seconds()
