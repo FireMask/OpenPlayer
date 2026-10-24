@@ -4,7 +4,7 @@
 
 ## 1. Alcance
 
-Este documento lleva desde una Raspberry Pi Zero 2 W recién preparada hasta un prototipo con reproducción por DAC USB, control por SSH y botones GPIO. OLED, Bluetooth y batería integrada se incorporan después.
+Este documento lleva desde una Raspberry Pi Zero 2 W recién preparada hasta un prototipo con reproducción por DAC USB, control por SSH, botones GPIO y pantalla redonda opcional (§11). Bluetooth y batería integrada se incorporan después.
 
 ## 2. Antes de empezar
 
@@ -237,18 +237,18 @@ La instalación manual de SPEC 02/03 (`~/openplayer` y `mkdir /run/openplayer` a
 El agente (SPEC 05, `src/hardware-agent`) usa los paquetes del sistema, ya presentes en Raspberry Pi OS. Comprobarlos (y, si faltan, instalarlos; `install.sh` solo los verifica):
 
 ```bash
-apt-cache policy python3-gpiozero python3-lgpio
-sudo apt install python3-gpiozero python3-lgpio
+apt-cache policy python3-gpiozero python3-lgpio python3-pil python3-spidev fonts-dejavu-core
+sudo apt install python3-gpiozero python3-lgpio python3-pil python3-spidev fonts-dejavu-core
 ```
 
-El mismo `deploy.ps1` de §7 lo instala en `/opt/openplayer/hardware-agent` con la unidad `openplayer-hardware` (usuario `openplayer` en el grupo `gpio`, que da acceso a `/dev/gpiochip0`). Lee pines y debounce de `/opt/openplayer/player.json`. Usar los GPIO BCM de `gpio-map.md` con pull-up interno; el esquema es GPIO ↔ botón ↔ GND, nunca a 3.3 V ni 5 V.
+El mismo `deploy.ps1` de §7 lo instala en `/opt/openplayer/hardware-agent` con la unidad `openplayer-hardware` (usuario `openplayer` en los grupos `gpio`, que da acceso a `/dev/gpiochip0`, y `spi`, para la pantalla). Lee pines y debounce de `/opt/openplayer/player.json`. Usar los GPIO BCM de `gpio-map.md` con pull-up interno; el esquema es GPIO ↔ botón ↔ GND, nunca a 3.3 V ni 5 V.
 
 ```bash
 systemctl status openplayer-hardware
 journalctl -u openplayer-hardware -b -f
 ```
 
-Sin botones, probar con un cable de puente siguiendo `gpio-map.md` §9. Más adelante: OLED y visualización de snapshots.
+Sin botones, probar con un cable de puente siguiendo `gpio-map.md` §9. La pantalla se monta en §11.
 
 ### Control desde el navegador (web agent)
 
@@ -303,14 +303,29 @@ No implementar Bluetooth hasta que la salida DAC USB sea estable.
 
 Los paquetes y comandos de emparejamiento pueden variar por versión. No copiar una receta de otra versión sin comprobar servicios y logs. No exponer servicios de audio a redes no confiables.
 
-## 11. OLED (fase posterior)
+## 11. Pantalla redonda GC9A01 (SPEC 17)
 
-1. Verificar el módulo SSD1306 exacto, tensión y pinout.
-2. Habilitar I²C.
-3. Conectar SDA a GPIO2/pin físico 3 y SCL a GPIO3/pin físico 5.
-4. Verificar la dirección I²C detectada.
-5. Implementar `oled.py` como adaptador independiente.
-6. La pantalla muestra datos recibidos del servicio; no mantiene un estado de reproducción paralelo.
+Módulo de 1,28" 240x240 ("1.28 TFT ver 1.0", 7 pines, sin BL). La dibuja el hardware agent con el estado de `player.subscribe`; no mantiene un estado de reproducción paralelo ni habla con MPD.
+
+1. Con la Pi apagada, cablear según `gpio-map.md` §10 (VCC a 3.3 V, pin 17; nunca a 5 V). Verificar el pinout serigrafiado del módulo.
+2. Encender y activar SPI: `sudo raspi-config nonint do_spi 0`. Comprobar: `ls /dev/spidev0.0`.
+3. Paquetes: `python3-pil`, `python3-spidev` y `fonts-dejavu-core` (§8; `install.sh` los verifica).
+4. En `/opt/openplayer/player.json`, poner `hardware.display.enabled` en `true` (el resto de la sección trae los valores del cableado de §10).
+5. `sudo systemctl restart openplayer-hardware` y `journalctl -u openplayer-hardware -b -f`: debe aparecer `display ready (spi0.0, 40000000 Hz)`.
+6. Prueba: con música, la pantalla muestra título, artista, ícono de estado, anillo de progreso y volumen. `mpc next`, `mpc volume 40` y play/pausa se reflejan en menos de 1 s. `sudo systemctl stop openplayer` → "Sin conexión"; al volver, la pista.
+
+Si falla, el log muestra `display init failed: <motivo>` y los botones siguen funcionando:
+
+| Síntoma | Causa probable |
+|---|---|
+| `No such file or directory` en el init | SPI apagado (paso 2) |
+| `Permission denied` | La unidad no tiene el grupo `spi`; volver a desplegar |
+| `No module named 'spidev'` o `'PIL'` | Falta un paquete (paso 3) |
+| `cannot open resource` | Falta `fonts-dejavu-core` |
+| Pantalla negra sin error | Revisar cableado de DC, RST, CS y VCC |
+| Basura o parpadeo | Bajar `spiHz` (p. ej. 20000000) |
+| Imagen girada | Ajustar `rotation` (0, 90, 180, 270) |
+| Colores invertidos o espejados | Ajustar `MADCTL` (0x36) o `INVON` en `gc9a01.py` y documentarlo |
 
 ## 12. Integración de batería y carcasa
 
@@ -326,6 +341,7 @@ Seguir `battery-design.md`. No imprimir la carcasa definitiva antes de medir DAC
 - [ ] Biblioteca MPD se actualiza y lista archivos.
 - [ ] Servicio C# se conecta a MPD y devuelve snapshot.
 - [ ] Los botones generan un solo evento por pulsación.
+- [ ] La pantalla (si está montada) muestra la pista actual y "Sin conexión" con el Service detenido.
 - [ ] El servicio se recupera tras reiniciar MPD.
 - [ ] El agente reconecta después de reiniciar C#.
 - [ ] Los logs son accesibles por journalctl.

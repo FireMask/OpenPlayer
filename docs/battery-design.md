@@ -44,7 +44,7 @@ Medir con un medidor USB o instrumento apropiado al menos estos escenarios:
 2. Inactividad con Wi-Fi conectado.
 3. Reproducción por DAC USB.
 4. Reproducción por Bluetooth A2DP.
-5. Uso de botones/OLED cuando estén montados.
+5. Uso de botones/pantalla cuando estén montados.
 6. Máxima carga prevista (actividad de CPU, Wi-Fi y audio simultáneos).
 
 Registrar tensión, corriente y duración. Medir en el punto de alimentación del sistema, no estimar únicamente a partir del consumo típico de la placa.

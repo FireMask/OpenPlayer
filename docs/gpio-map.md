@@ -9,7 +9,7 @@
 - Apagar y desconectar la Pi antes de modificar el cableado.
 - Para botones, conectar un terminal a GPIO y el otro a GND; activar pull-up interno.
 - No conectar salidas de módulos desconocidos hasta verificar tensión y pinout.
-- La OLED es opcional en la fase 2. Verificar si el módulo admite 3.3 V tanto en alimentación como en lógica.
+- La pantalla GC9A01 (SPEC 17) es opcional. El módulo "1.28 TFT ver 1.0" funciona a 3.3 V en alimentación y lógica: VCC va a 3.3 V, nunca a 5 V.
 - El DAC USB se conecta al puerto USB de datos mediante OTG, no a los GPIO.
 
 ## 2. Asignación propuesta
@@ -22,10 +22,13 @@
 | Volumen + | GPIO23 | 16 | Botón entre GPIO23 y GND | MVP |
 | Volumen − | GPIO24 | 18 | Botón entre GPIO24 y GND | MVP |
 | Menú | GPIO25 | 22 | Botón entre GPIO25 y GND | Reservado |
-| OLED SDA | GPIO2 / SDA1 | 3 | SDA del módulo | Fase 2 |
-| OLED SCL | GPIO3 / SCL1 | 5 | SCL del módulo | Fase 2 |
-| OLED VCC | — | 1 | 3.3 V, solo si el módulo lo admite | Fase 2 |
-| OLED GND | — | 6 | GND | Fase 2 |
+| Pantalla SCL (SCLK) | GPIO11 / SPI0 SCLK | 23 | SCL del módulo | SPEC 17 |
+| Pantalla SDA (MOSI) | GPIO10 / SPI0 MOSI | 19 | SDA del módulo | SPEC 17 |
+| Pantalla CS | GPIO8 / SPI0 CE0 | 24 | CS del módulo | SPEC 17 |
+| Pantalla DC | GPIO5 | 29 | DC del módulo (`hardware.display.dc`) | SPEC 17 |
+| Pantalla RST | GPIO6 | 31 | RST del módulo (`hardware.display.rst`) | SPEC 17 |
+| Pantalla VCC | — | 17 | 3.3 V | SPEC 17 |
+| Pantalla GND | — | 20 | GND | SPEC 17 |
 
 BCM GPIO y número físico son identificadores distintos. En el código usar los números BCM. Verificar el pinout oficial del modelo de Pi antes de conectar cables.
 
@@ -60,7 +63,7 @@ Configurar entradas con pull-up interno. Estado en reposo: alto. Estado pulsado:
 | `next` | Ir a siguiente pista |
 | `volume_up` | Aumentar volumen según paso configurado |
 | `volume_down` | Disminuir volumen según paso configurado |
-| `menu` | Reservado para menú OLED; por ahora ignorar o registrar |
+| `menu` | Reservado para un menú en pantalla; por ahora ignorar o registrar |
 | `refresh_library` | Reescanear la biblioteca (MPD `update`); solo desde el web agent |
 
 Los nombres de eventos son parte del contrato IPC. Si se renombran, actualizar Python, C#, pruebas y documentación en el mismo cambio.
@@ -79,11 +82,11 @@ Los nombres de eventos son parte del contrato IPC. Si se renombran, actualizar P
 - Con la Pi apagada, verificar que ningún botón cortocircuite 3.3 V a GND.
 - Iniciar un script mínimo de lectura GPIO y comprobar cada botón por separado.
 - Confirmar que GPIO17, 27, 22, 23, 24 y 25 corresponden al mapa elegido en la revisión de placa utilizada.
-- Para OLED, activar I²C, detectar el dispositivo con una herramienta compatible y verificar dirección I²C antes de inicializar el display.
+- Para la pantalla, activar SPI y confirmar que existe `/dev/spidev0.0` (§10) antes de habilitarla.
 
 ## 8. Reglas para LLMs
 
-No cambiar el mapa GPIO por conveniencia sin revisar conflictos con I²C, SPI, UART u otras funciones. Nunca sugerir aplicar 5 V a GPIO. No afirmar que una OLED es compatible solo por tener cuatro pines; comprobar pinout, tensión y controlador. Mantener asignaciones de hardware configurables cuando sea razonable, pero documentar un valor predeterminado único.
+No cambiar el mapa GPIO por conveniencia sin revisar conflictos con I²C, SPI, UART u otras funciones. Nunca sugerir aplicar 5 V a GPIO. No afirmar que una pantalla es compatible solo por el tamaño o la cantidad de pines; comprobar pinout, tensión y controlador. Mantener asignaciones de hardware configurables cuando sea razonable, pero documentar un valor predeterminado único.
 
 ## 9. Prueba sin botones: cable de puente
 
@@ -112,3 +115,24 @@ Reglas: el cable va **solo** entre un GPIO de la tabla y GND. Nunca tocar los pi
 Debounce: un cable rebota más que un botón. Si un toque genera dos líneas `button …` en el log, subir `hardware.debounceSeconds` en `/opt/openplayer/player.json` (rango 0.01–1) y aplicar con `sudo systemctl restart openplayer-hardware`. Recalibrar al cablear los botones reales.
 
 Validado (2026-10-20, Pi Zero 2 W, cable dupont): con `debounceSeconds` 0.08 (valor por defecto), 31 toques dieron 31 eventos, sin dobles.
+
+## 10. Pantalla GC9A01 por SPI
+
+Implementada por el hardware agent (SPEC 17). Módulo redondo de 1,28" 240x240 con 7 pines (VCC, GND, SCL, SDA, DC, CS, RST), sin pin de retroiluminación: la luz queda encendida mientras haya alimentación.
+
+```text
+Módulo        Pi (pin físico)
+VCC  -------- 3.3 V (17)
+GND  -------- GND   (20)
+SCL  -------- GPIO11 / SCLK (23)
+SDA  -------- GPIO10 / MOSI (19)
+CS   -------- GPIO8  / CE0  (24)
+DC   -------- GPIO5         (29)
+RST  -------- GPIO6         (31)
+```
+
+- Cablear con la Pi apagada y verificar el pinout serigrafiado del módulo antes de energizar.
+- La pantalla usa el bus SPI0, así que GPIO7–11 no quedan libres para otros usos. GPIO5 y GPIO6 no chocan con los botones (§2); si se cambian en `player.json`, el agente rechaza un pin repetido.
+- Activar SPI una vez: `sudo raspi-config nonint do_spi 0`, y comprobar con `ls /dev/spidev0.0`. `install.sh` avisa si falta.
+- Habilitar en `/opt/openplayer/player.json` con `"hardware": {"display": {"enabled": true, ...}}` y `sudo systemctl restart openplayer-hardware`.
+- Calibración: si aparece basura o parpadeo con cables dupont largos, bajar `spiHz` (por ejemplo a 20000000). Si la imagen sale girada, ajustar `rotation` (0, 90, 180 o 270).

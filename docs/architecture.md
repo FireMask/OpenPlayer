@@ -4,7 +4,7 @@
 
 ## 1. Propósito
 
-OpenPlayer es un reproductor de música local modular para Raspberry Pi Zero 2 W. Debe funcionar sin monitor ni teclado después de configurarse. La primera versión prioriza audio fiable, controles físicos y administración por SSH. OLED, Bluetooth como salida y batería integrada son fases posteriores.
+OpenPlayer es un reproductor de música local modular para Raspberry Pi Zero 2 W. Debe funcionar sin monitor ni teclado después de configurarse. La primera versión prioriza audio fiable, controles físicos y administración por SSH. La pantalla redonda (SPEC 17) es opcional; Bluetooth como salida y batería integrada son fases posteriores.
 
 ## 2. Hardware conocido y objetivos
 
@@ -13,7 +13,7 @@ OpenPlayer es un reproductor de música local modular para Raspberry Pi Zero 2 W
 - DAC USB existente con jack de 3.5 mm.
 - Protoboard, cables Dupont y botones momentáneos.
 - Impresora 3D para la carcasa.
-- Pantalla OLED SSD1306 I²C opcional, 128x64, en fase posterior.
+- Pantalla redonda IPS de 1,28" 240x240 con controlador GC9A01 (módulo "1.28 TFT ver 1.0", 7 pines, sin BL), por SPI, opcional (SPEC 17).
 - Bluetooth integrado de la Pi; objetivo: salida a auriculares mediante A2DP.
 - Alimentación portátil futura. Durante el desarrollo inicial, usar fuente USB estable o power bank validado.
 
@@ -25,7 +25,7 @@ No se ha confirmado el modelo exacto del DAC, la distribución de Raspberry Pi O
 2. **MPD como motor de reproducción:** no desarrollar decodificadores propios en la primera versión.
 3. **Una sola fuente de verdad:** MPD es autoridad para canción, cola, estado, posición y volumen cuando este último lo controla MPD.
 4. **C# como orquestador:** valida comandos/eventos, coordina adaptadores y publica el estado.
-5. **Python como agente de hardware:** lee GPIO, aplica debounce y emite eventos; en el futuro también actualiza OLED a partir del estado recibido.
+5. **Python como agente de hardware:** lee GPIO, aplica debounce y emite eventos; también dibuja la pantalla a partir del estado que publica el Service (SPEC 17).
 6. **Interfaces reemplazables:** el hardware no invoca MPD directamente.
 7. **Seguridad local:** MPD y IPC solo deben estar disponibles para procesos locales o usuarios/grupos autorizados.
 8. **Resiliencia:** los servicios se reinician ante fallos, reconectan y registran errores sin bucles de log descontrolados.
@@ -34,6 +34,7 @@ No se ha confirmado el modelo exacto del DAC, la distribución de Raspberry Pi O
 
 ```text
 [Botones GPIO] ---> [Hardware Agent: Python] -- JSON Lines / Unix socket --+
+[Pantalla GC9A01] <-- SPI -- (Hardware Agent, player.subscribe)          |
                                                                          |
 [SSH: mpc / diagnóstico] -----------------------------------------------+--> [OpenPlayer.Service: C#]
                                                                          |       |
@@ -92,7 +93,7 @@ Proceso Python:
 - Configura botones GPIO con pull-up y debounce.
 - Envía eventos JSON Lines al socket Unix.
 - Maneja reconexión si el servicio aún no está disponible.
-- En la fase OLED, dibuja el estado recibido o consultado por un canal definido; no consulta MPD directamente.
+- Dibuja la pantalla con el estado de `player.subscribe` (SPEC 17); no consulta MPD directamente.
 - Debe permitir simulación o pruebas sin hardware real.
 
 Implementado en SPEC 05 (Python 3, solo stdlib y `gpiozero` con `lgpio`, paquetes del sistema, sin venv):
@@ -101,7 +102,15 @@ Implementado en SPEC 05 (Python 3, solo stdlib y `gpiozero` con `lgpio`, paquete
 - `buttons.py`: un `gpiozero.Button` por pin (pull-up, `bounce_time` = debounce, aplicado por `lgpio`); el callback solo encola.
 - `sender.py`: hilo que envía `button.pressed` con `sequence` por proceso. Reconexión con espera incremental 0.5–10 s; registra solo `connected`/`disconnected`; detecta el cierre del Service en reposo (`select`). Sin conexión, la pulsación se descarta (no se reenvía).
 - `main.py`: entrada; SIGTERM/Ctrl+C → exit 0.
-- Unidad `deploy/openplayer-hardware.service` (usuario `openplayer`, grupo `gpio`), instalada por `deploy/install.sh`. Pruebas en `tests/hardware-agent` con `MockFactory` y un servidor TCP local.
+
+Pantalla (SPEC 17, `python3-pil`, `python3-spidev` y `fonts-dejavu-core`; solo con `hardware.display.enabled`):
+
+- `config.py`: `hardware.display` opcional (ausente o `enabled: false` → sin pantalla; DC/RST no pueden repetir pines de botones).
+- `gc9a01.py`: driver mínimo; init de referencia (Waveshare), cuadro completo 240x240 RGB565 por SPI, DC/RST con `gpiozero`, rotación con Pillow.
+- `screen.py`: `render(View)` → imagen: título, artista, ícono, anillo de progreso y volumen; "Detenido", "Sin conexión", "MPD no responde". Texto cortado con "…" al ancho del círculo.
+- `display.py`: hilo con su propia conexión `player.subscribe`, reintento cada 2 s; avanza la posición localmente una vez por segundo en `playing` y redibuja solo si cambia la vista.
+- Un fallo de la pantalla (paquete, SPI, init) registra `display init failed` y los botones siguen.
+- Unidad `deploy/openplayer-hardware.service` (usuario `openplayer`, grupos `gpio` y `spi`), instalada por `deploy/install.sh`. Pruebas en `tests/hardware-agent` con `MockFactory` y un servidor TCP local.
 
 ### `src/web-agent`
 
@@ -267,7 +276,7 @@ Mensajes de entrada:
 - `type` obligatorio. Campos extra se ignoran.
 - `button.pressed`: `button` obligatorio, uno de `play_pause`, `previous`, `next`, `volume_up`, `volume_down`, `menu` (exacto). `sequence` opcional (entero); solo se registra en el log. No hay respuesta.
 - `player.get_snapshot`: responde una línea solo al cliente que la pidió.
-- `player.subscribe` (SPEC 16): la conexión queda dedicada a la suscripción; el Service ya no lee sus pedidos (las líneas siguientes se ignoran) y la quita al cerrarse. Responde enseguida con el `player.snapshot` actual (o la línea `error` si MPD falla) y, tras cada `WaitForChangeAsync` del observador (SPEC 15), envía el mismo snapshot que usa para el historial; si el observador falla con MPD, envía `{"type":"error","request":"player.get_snapshot",...}` una vez por fallo. El envío ocurre fuera del lock global, en paralelo, con timeout de 2 s: un suscriptor cuya escritura falla o tarda más se descarta (warning `Subscriber dropped`) y se cierra, sin frenar a los demás ni a los comandos. Varios suscriptores a la vez (web agent; OLED futura).
+- `player.subscribe` (SPEC 16): la conexión queda dedicada a la suscripción; el Service ya no lee sus pedidos (las líneas siguientes se ignoran) y la quita al cerrarse. Responde enseguida con el `player.snapshot` actual (o la línea `error` si MPD falla) y, tras cada `WaitForChangeAsync` del observador (SPEC 15), envía el mismo snapshot que usa para el historial; si el observador falla con MPD, envía `{"type":"error","request":"player.get_snapshot",...}` una vez por fallo. El envío ocurre fuera del lock global, en paralelo, con timeout de 2 s: un suscriptor cuya escritura falla o tarda más se descarta (warning `Subscriber dropped`) y se cierra, sin frenar a los demás ni a los comandos. Varios suscriptores a la vez (web agent y pantalla del hardware agent, SPEC 17).
 - `player.seek` (SPEC 09): `positionSeconds` obligatorio, entero JSON 0–86400 (no `83.5`, `"83"` ni `true`). Ejecuta `IPlayer.SeekAsync` (`seekcur`) y registra `Seek to N s`. No hay respuesta; si MPD falla (detenido, posición fuera de la pista) solo registra warning `Seek failed: …`. No se recorta contra la duración.
 - `library.*` y `playlist.*` (SPEC 10): **siempre responden una línea**, aunque sean inválidos. Validación en el Core: `name`/`newName` con `PlaylistName.EnsureValid`; `uri` 1–1024 caracteres y `path` 0–1024 (`""` = raíz), sin caracteres de control; `query` 2–100; `offset`, `position`, `from`, `to` enteros JSON ≥ 0 (`offset` y la `position` de `playlist.play` son opcionales, 0). Se ejecutan bajo el mismo lock global. `library.play` y `playlist.play` reemplazan la cola (`clear` + `consume 1` + `add`/`load` + `play N`; SPEC 14: `consume 1`, y `playlist.play` desde N > 0 borra antes las pistas 0..N−1 con `delete 0:N` y hace `play 0`).
 - `queue.*` (SPEC 11): también responden siempre una línea. `queue.get`: `offset` entero JSON ≥ 0, opcional (0); responde `queue.page` y registra `queue.get ok (offset N)` (la única consulta que se registra: permite ver en `journalctl` que la web no sondea la cola). `queue.play`: `position` entero JSON ≥ 0, obligatorio; ejecuta `play N` y responde `ok`. SPEC 12: `queue.remove` (`id`), `queue.move` (`id`, `to`) y `queue.clear` editan por id de MPD (`deleteid`, `moveid`, `clear`); `id` y `to` enteros JSON ≥ 0, obligatorios; responden `ok`. El id no cambia al mover ni al quitar otras pistas: una cola vieja en la página da un `ACK` de id inexistente, nunca toca otra pista. SPEC 13: `queue.add` (`uri` como `library.play`; `next` booleano JSON opcional, `false`) agrega pista o carpeta (recursivo): al final con `add "<uri>"`; con `next`, `status` y luego `add "<uri>" <song+1>` en dos conexiones bajo el lock global (sin pista actual, al final). `add` con posición requiere MPD ≥ 0.23.3 (la Pi tiene 0.24.4). `queue.save` (`name` con `PlaylistName.EnsureValid`) ejecuta `save "<name>"`; si la lista existe, MPD responde `ACK` y nada se sobrescribe.
@@ -315,7 +324,7 @@ Socket:
 - `previous`: si la posición actual es mayor que `PreviousRestartThreshold` (3 s por defecto), reinicia la pista (`SeekAsync(0)`); si no, o si la posición es desconocida, va a la pista anterior. Con `consume` (SPEC 14) no queda pista anterior en la cola: medido en la Pi (MPD 0.24.4), `previous` reinicia la actual sin quitarla, así que sin historial ⏮ reinicia la canción. Con historial (SPEC 15), hasta el umbral (o sin posición) el Service saca la última escuchada y la reproduce arriba de la cola (`IQueue.RestoreAsync`: `add URI 0` + `play 0`; medido en la Pi: con `consume` la que sonaba queda segunda), con su etiqueta de origen. Un cambio causado por ⏮ no entra al historial (⏮⏮ retrocede dos canciones sin rebotar); la restaurada vuelve a entrar cuando termina. Si MPD rechaza el archivo (borrado), se descarta la entrada (warning `restore <uri> failed`) y ⏮ reinicia la actual. Mismo comportamiento en web y botón físico.
 - `next`: siguiente pista.
 - `volume_up` / `volume_down`: cambiar volumen en pasos de `VolumeStep` (5 por defecto), recortando a 0–100. Si el volumen es desconocido (MPD sin mixer), no hacer nada.
-- `menu`: reservado para navegación OLED futura; en el MVP no hace nada.
+- `menu`: reservado para navegación en pantalla futura; en el MVP no hace nada.
 
 Implementado en `OpenPlayer.Core.Commands.ButtonCommandHandler` (SPEC 01).
 
@@ -340,7 +349,7 @@ Estado (SPEC 10, desde la web):
 - Hecho (SPEC 14): cola independiente de su origen: `consume` (lo escuchado sale de la cola), etiqueta de origen por fila, ⏮ reinicia la actual.
 - Hecho (SPEC 15): historial real para ⏮ (observador `idle player`, últimas 50 en memoria, la anterior vuelve arriba de la cola).
 - Hecho (SPEC 16): actualización instantánea (observador `idle player mixer playlist options` → push `player.subscribe` → SSE `/api/events`); el sondeo de 2 s queda solo de respaldo.
-- Pendiente: reproducir una lista sin borrar lo agregado (modelo tipo Spotify), arrastrar para reordenar en la cola y en Listas (asa ⠿ a la izquierda, Pointer Events sin librería, animación del lugar de destino antes de soltar), agregar a la cola desde Listas, refresco automático de la pestaña Listas (`idle stored_playlist`), navegación artista → álbum, OLED y botones (spec futura).
+- Pendiente: reproducir una lista sin borrar lo agregado (modelo tipo Spotify), arrastrar para reordenar en la cola y en Listas (asa ⠿ a la izquierda, Pointer Events sin librería, animación del lugar de destino antes de soltar), agregar a la cola desde Listas, refresco automático de la pestaña Listas (`idle stored_playlist`), navegación artista → álbum, menú en pantalla con botones (spec futura).
 - Sin botón de reescaneo: `auto_update` de MPD (SPEC 07) indexa lo copiado por Samba.
 
 Una base SQLite propia queda pospuesta para preferencias, historial de reproducción, ratings o datos que MPD no cubra.
@@ -359,7 +368,8 @@ Archivo `config/player.example.json`; el build y el publish del Service lo copia
 | `player.preferredOutput` / `player.resumePlaybackOnBoot` | Salida preferida / reanudar al arrancar | Reservado |
 | `ipc.unixSocketPath` | Ruta del socket Unix; el directorio debe existir | Usado |
 | `ipc.maxMessageBytes` | Tamaño máximo de un mensaje IPC, 256–65536 bytes | Usado |
-| `hardware.*` | Pines BCM, debounce, OLED; los lee el agente Python | Reservado (agente) |
+| `hardware.buttons` / `hardware.debounceSeconds` | Pines BCM y debounce de los botones | Usado (agente) |
+| `hardware.display` | Pantalla GC9A01: `enabled` (por defecto `false`), `spiBus`/`spiDevice` 0–1, `dc`/`rst` BCM, `spiHz` 1–62,5 MHz (40 MHz por defecto), `rotation` 0/90/180/270. Opcional: sin la sección no hay pantalla | Usado (agente) |
 | `web.port` | Puerto HTTP del web agent, 1024–65535 (por defecto 8080); `install.sh` lo agrega si falta | Usado (web agent) |
 
 El Service abre una conexión TCP a MPD por operación (sin conexión persistente ni reconexión con backoff); un MPD caído solo hace fallar esa operación con un warning.
@@ -401,10 +411,10 @@ Integración en Pi:
 2. Crear solución .NET, Core e interfaz `IPlayer`. *(Hecho: SPEC 01.)*
 3. Implementar adaptador MPD y snapshot de estado. *(Hecho: SPEC 02.)*
 4. Implementar socket Unix y agente Python con dos botones. *(Hecho: socket SPEC 03, agente SPEC 05 con los 6 botones; validado con cable de puente, botones físicos pendientes.)*
-5. Añadir biblioteca y playlists. *(Web: SPEC 10 a 14; OLED + botones: spec futura.)*
+5. Añadir biblioteca y playlists. *(Web: SPEC 10 a 14; menú en pantalla + botones: spec futura.)*
 6. Instalar servicios systemd y validar arranque automático. *(Hecho: SPEC 04 `deploy/openplayer.service`, SPEC 05 `deploy/openplayer-hardware.service`.)*
 7. Configurar Bluetooth A2DP y selector de salida.
-8. Añadir OLED.
+8. Añadir pantalla. *(SPEC 17: GC9A01 redonda por SPI, solo pista actual; carátula y menú pendientes.)*
 9. Medir consumo y desarrollar alimentación portátil segura.
 10. Diseñar carcasa 3D y consolidar cableado en PCB/perfboard.
 
