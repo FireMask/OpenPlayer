@@ -9,7 +9,8 @@ StartLimitBurst=5
 Type=simple
 User=openplayer
 Group=openplayer
-SupplementaryGroups=gpio
+# spi: /dev/spidev0.0 de la pantalla (SPEC 17).
+SupplementaryGroups=gpio spi
 WorkingDirectory=/opt/openplayer/hardware-agent
 Environment=GPIOZERO_PIN_FACTORY=lgpio
 # lgpio crea archivos de notificación en LG_WD (por defecto el cwd, de solo lectura con ProtectSystem=strict).

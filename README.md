@@ -13,7 +13,8 @@ Este repositorio contiene la documentación base para que una persona o un LLM p
 - Controlar reproducción, navegación y volumen mediante botones GPIO.
 - Controlar y diagnosticar el sistema por SSH.
 - Mantener separadas las responsabilidades del servicio C# y del agente Python.
-- Preparar soporte futuro para OLED, salida Bluetooth A2DP y alimentación portátil.
+- Pantalla redonda GC9A01 opcional con la pista actual (SPEC 17).
+- Preparar soporte futuro para salida Bluetooth A2DP y alimentación portátil.
 
 ## Documentación de diseño
 
@@ -107,7 +108,7 @@ La instalación anterior en `~/openplayer` (SPEC 02/03) ya no se usa; se puede b
 
 ## Hardware agent (botones GPIO)
 
-`src/hardware-agent` (Python, solo stdlib y `gpiozero`) lee los botones de `hardware.buttons` en `player.json` (BCM, pull-up interno, debounce `hardware.debounceSeconds`) y envía `button.pressed` al socket. Corre como unidad `openplayer-hardware`; si el Service no está disponible, descarta la pulsación con un warning y reconecta solo.
+`src/hardware-agent` (Python, stdlib y `gpiozero`; Pillow y `spidev` solo con pantalla) lee los botones de `hardware.buttons` en `player.json` (BCM, pull-up interno, debounce `hardware.debounceSeconds`) y envía `button.pressed` al socket. Corre como unidad `openplayer-hardware`; si el Service no está disponible, descarta la pulsación con un warning y reconecta solo.
 
 ```bash
 systemctl status openplayer-hardware
@@ -125,6 +126,20 @@ python -m venv .venv
 ```
 
 Para correrlo en Windows sin hardware: `GPIOZERO_PIN_FACTORY=mock python src/hardware-agent/main.py config/player.example.json` (sin `AF_UNIX`, solo queda desconectado).
+
+### Pantalla redonda (opcional)
+
+El mismo agente dibuja la pista actual (título, artista, ícono, anillo de progreso y volumen) en una pantalla GC9A01 de 1,28" 240x240 por SPI (SPEC 17), con el estado que publica el Service (`player.subscribe`). Viene deshabilitada. Para usarla:
+
+1. Cablear según [`docs/gpio-map.md`](docs/gpio-map.md) §10 (VCC a 3.3 V).
+2. Activar SPI (`sudo raspi-config nonint do_spi 0`) e instalar `sudo apt install python3-pil python3-spidev fonts-dejavu-core`.
+3. Poner `hardware.display.enabled` en `true` en `/opt/openplayer/player.json` y `sudo systemctl restart openplayer-hardware`.
+
+```bash
+journalctl -u openplayer-hardware -b -f   # display ready (spi0.0, 40000000 Hz) / display init failed: … / display: disconnected …
+```
+
+Con el Service detenido muestra "Sin conexión"; si la pantalla falla, el log lo dice y los botones siguen. `spiHz` y `rotation` se calibran en `player.json`; montaje y problemas en [`docs/assembly.md`](docs/assembly.md) §11.
 
 ## Web agent (control desde el navegador)
 

@@ -3,7 +3,7 @@ import json
 import pytest
 
 from conftest import EXAMPLE_CONFIG
-from config import BUTTON_NAMES, ConfigError, load_config
+from config import BUTTON_NAMES, ConfigError, DisplayConfig, load_config
 
 DELETE = object()
 
@@ -100,3 +100,62 @@ def test_rejects_invalid_json(tmp_path, text):
 
 def test_button_names_match_ipc_contract():
     assert BUTTON_NAMES == ("play_pause", "previous", "next", "volume_up", "volume_down", "menu")
+
+
+# hardware.display (SPEC 17)
+
+def with_display(**fields):
+    data = example()
+    data["hardware"]["display"].update({"enabled": True, **fields})
+    return data
+
+
+def test_example_display_is_disabled():
+    assert load_config(EXAMPLE_CONFIG).display is None
+
+
+def test_missing_display_section_is_none(tmp_path):
+    data = example()
+    del data["hardware"]["display"]
+
+    assert load_config(write(tmp_path, data)).display is None
+
+
+def test_loads_enabled_display(tmp_path):
+    display = load_config(write(tmp_path, with_display())).display
+
+    assert display == DisplayConfig(spi_bus=0, spi_device=0, dc=5, rst=6, spi_hz=40_000_000, rotation=180)
+
+
+@pytest.mark.parametrize("fields, field", [
+    ({"spiBus": 2}, "hardware.display.spiBus"),
+    ({"spiDevice": -1}, "hardware.display.spiDevice"),
+    ({"dc": 28}, "hardware.display.dc"),
+    ({"dc": "5"}, "hardware.display.dc"),
+    ({"rst": True}, "hardware.display.rst"),
+    ({"rst": 5}, "hardware.display.rst: pin 5 is already used"),
+    ({"dc": 17}, "hardware.display.dc: pin 17 is already used"),
+    ({"spiHz": 999_999}, "hardware.display.spiHz"),
+    ({"spiHz": 62_500_001}, "hardware.display.spiHz"),
+    ({"rotation": 45}, "hardware.display.rotation"),
+    ({"enabled": "yes"}, "hardware.display.enabled"),
+])
+def test_rejects_invalid_display(tmp_path, fields, field):
+    with pytest.raises(ConfigError, match=field.replace(".", r"\.")):
+        load_config(write(tmp_path, with_display(**fields)))
+
+
+def test_rejects_missing_display_field(tmp_path):
+    data = with_display()
+    del data["hardware"]["display"]["rst"]
+
+    with pytest.raises(ConfigError, match=r"hardware\.display\.rst is missing"):
+        load_config(write(tmp_path, data))
+
+
+def test_rejects_display_not_object(tmp_path):
+    data = example()
+    data["hardware"]["display"] = True
+
+    with pytest.raises(ConfigError, match=r"hardware\.display must be an object"):
+        load_config(write(tmp_path, data))

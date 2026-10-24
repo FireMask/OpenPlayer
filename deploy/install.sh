@@ -1,5 +1,5 @@
 #!/bin/bash
-# Instala OpenPlayer.Service (SPEC 04), el hardware agent (SPEC 05) y el web agent (SPEC 08) en /opt/openplayer como unidades systemd. Idempotente.
+# Instala OpenPlayer.Service (SPEC 04), el hardware agent (SPEC 05, pantalla SPEC 17) y el web agent (SPEC 08) en /opt/openplayer como unidades systemd. Idempotente.
 # Uso: sudo bash install.sh <ruta.tgz> <openplayer.service> <usuario-que-despliega>
 # El .tgz trae el publish del Service, hardware-agent/ y web-agent/; las unidades de los agentes van junto a openplayer.service.
 set -euo pipefail
@@ -24,10 +24,15 @@ SOCK=/run/openplayer/hardware.sock
 id "$DEPLOYER" >/dev/null 2>&1 || { echo "Unknown user: $DEPLOYER" >&2; exit 1; }
 
 # El agente usa los paquetes del sistema (sin venv). Solo se verifican: instalarlos es decisión del administrador.
-for pkg in python3-gpiozero python3-lgpio; do
+# python3-pil, python3-spidev y fonts-dejavu-core son de la pantalla (SPEC 17).
+PACKAGES="python3-gpiozero python3-lgpio python3-pil python3-spidev fonts-dejavu-core"
+for pkg in $PACKAGES; do
     dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed" ||
-        { echo "Missing package $pkg: sudo apt install python3-gpiozero python3-lgpio" >&2; exit 1; }
+        { echo "Missing package $pkg: sudo apt install $PACKAGES" >&2; exit 1; }
 done
+# SPI apagado no es error: la pantalla puede estar deshabilitada (hardware.display.enabled).
+[ -e /dev/spidev0.0 ] ||
+    echo "Warning: /dev/spidev0.0 not found; the display needs SPI: sudo raspi-config nonint do_spi 0" >&2
 
 # Usuario de sistema sin login ni home; el que despliega entra al grupo para usar el socket (socat).
 getent group openplayer >/dev/null || groupadd --system openplayer
