@@ -15,11 +15,24 @@ POLL_SECONDS = 1.0
 SEND_TIMEOUT_SECONDS = 2.0
 
 
+def connect_unix(path):
+    """Conexión al socket del Service; también la usa la pantalla (display.py)."""
+    if not hasattr(socket, "AF_UNIX"):
+        raise OSError("AF_UNIX not supported on this platform")
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect(path)
+    except OSError:
+        sock.close()
+        raise
+    return sock
+
+
 class Sender:
     def __init__(self, socket_path, *, connect=None, min_backoff=0.5, max_backoff=10.0):
         self._path = socket_path
         # Inyectable: en Windows no hay AF_UNIX y las pruebas usan TCP local.
-        self._connect = connect or self._connect_unix
+        self._connect = connect or (lambda: connect_unix(socket_path))
         self._min_backoff = min_backoff
         self._max_backoff = max_backoff
         self._backoff = min_backoff
@@ -40,17 +53,6 @@ class Sender:
         self._stopping.set()
         self._queue.put(None)  # despierta al hilo si espera en la cola o en el backoff
         self._thread.join(timeout=5)
-
-    def _connect_unix(self):
-        if not hasattr(socket, "AF_UNIX"):
-            raise OSError("AF_UNIX not supported on this platform")
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        try:
-            sock.connect(self._path)
-        except OSError:
-            sock.close()
-            raise
-        return sock
 
     def _run(self):
         try:
