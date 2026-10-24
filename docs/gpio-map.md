@@ -63,7 +63,7 @@ Configurar entradas con pull-up interno. Estado en reposo: alto. Estado pulsado:
 | `next` | Ir a siguiente pista |
 | `volume_up` | Aumentar volumen según paso configurado |
 | `volume_down` | Disminuir volumen según paso configurado |
-| `menu` | Reservado para un menú en pantalla; por ahora ignorar o registrar |
+| `menu` | Alterna el modo de la pantalla redonda: pista ↔ reloj (SPEC 18) |
 | `refresh_library` | Reescanear la biblioteca (MPD `update`); solo desde el web agent |
 
 Los nombres de eventos son parte del contrato IPC. Si se renombran, actualizar Python, C#, pruebas y documentación en el mismo cambio.
