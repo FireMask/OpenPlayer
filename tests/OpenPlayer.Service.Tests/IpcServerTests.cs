@@ -17,6 +17,7 @@ public sealed class IpcServerTests : IAsyncLifetime
     private readonly DirectoryInfo _dir = Directory.CreateTempSubdirectory("op");
     private readonly FakePlayer _player = new();
     private readonly FakeLibrary _library = new();
+    private readonly FakePowerControl _power = new();
     private readonly ListLogger _logger = new();
     private IpcServer _server = null!;
 
@@ -34,7 +35,7 @@ public sealed class IpcServerTests : IAsyncLifetime
     private async Task StartAsync()
     {
         _server = new IpcServer(new IpcOptions(SocketPath, MaxBytes), _player,
-            new ButtonCommandHandler(_player, new PlayerSettings()), new PlayerSettings(), _library, _library, _library, _logger);
+            new ButtonCommandHandler(_player, new PlayerSettings()), new PlayerSettings(), _library, _library, _library, _power, _logger);
         // ExecuteAsync corre síncrono hasta el primer AcceptAsync: al volver, el socket ya escucha.
         await _server.StartAsync(CancellationToken.None);
         // El observador lee un snapshot al arrancar: esperar a que quede en idle y olvidar esa llamada.
@@ -81,6 +82,35 @@ public sealed class IpcServerTests : IAsyncLifetime
 
         Assert.Contains("Button Next", _logger.Messages);
         Assert.DoesNotContain(_logger.Messages, m => m.Contains("sequence"));
+    }
+
+    [Fact]
+    public async Task Power_off_logs_and_powers_off_without_touching_mpd()
+    {
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync("""{"type":"button.pressed","button":"power_off","sequence":14}""" + "\n");
+        await client.SendAsync(GetSnapshot + "\n");
+        await client.ReadLineAsync();
+
+        Assert.Equal(1, _power.Calls);
+        Assert.Equal(["GetSnapshot"], _player.Calls);
+        Assert.Contains("Power off requested (button)", _logger.Messages);
+    }
+
+    [Fact]
+    public async Task Power_off_failure_logs_and_keeps_serving()
+    {
+        _power.Error = new InvalidOperationException("Access denied");
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync("""{"type":"button.pressed","button":"power_off"}""" + "\n");
+        await client.SendAsync(GetSnapshot + "\n");
+
+        Assert.StartsWith("""{"type":"player.snapshot",""", await client.ReadLineAsync());
+        Assert.Contains("Power off failed: Access denied", _logger.Messages);
     }
 
     [Fact]

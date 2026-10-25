@@ -15,7 +15,8 @@ public sealed class ButtonCommandHandler(IPlayer player, PlayerSettings settings
         ButtonName.Previous => PreviousAsync(ct),
         ButtonName.VolumeUp => ChangeVolumeAsync(_settings.VolumeStep, ct),
         ButtonName.VolumeDown => ChangeVolumeAsync(-_settings.VolumeStep, ct),
-        ButtonName.Menu => Task.CompletedTask,
+        // Los maneja IpcServer: modo de pantalla y apagado no tocan MPD.
+        ButtonName.Menu or ButtonName.PowerOff => Task.CompletedTask,
         ButtonName.RefreshLibrary => _player.UpdateLibraryAsync(ct),
         ButtonName.SeekForward => SeekRelativeAsync(_settings.SeekStepSeconds, ct),
         ButtonName.SeekBackward => SeekRelativeAsync(-_settings.SeekStepSeconds, ct),

@@ -24,10 +24,12 @@ public class ButtonCommandHandlerTests
         Assert.Equal(["Next"], _player.Calls);
     }
 
-    [Fact]
-    public async Task Menu_does_nothing()
+    [Theory]
+    [InlineData(ButtonName.Menu)]
+    [InlineData(ButtonName.PowerOff)]
+    public async Task Menu_and_power_off_do_nothing(ButtonName button)
     {
-        await Press(ButtonName.Menu);
+        await Press(button);
         Assert.Empty(_player.Calls);
     }
 

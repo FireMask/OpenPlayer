@@ -14,6 +14,7 @@ public class ButtonNamesTests
     [InlineData("refresh_library", ButtonName.RefreshLibrary)]
     [InlineData("seek_forward", ButtonName.SeekForward)]
     [InlineData("seek_backward", ButtonName.SeekBackward)]
+    [InlineData("power_off", ButtonName.PowerOff)]
     public void Parses_ipc_names(string value, ButtonName expected)
     {
         Assert.True(ButtonNames.TryParse(value, out var button));

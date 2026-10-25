@@ -19,6 +19,7 @@ public sealed class IpcServer(
     ILibrary library,
     IPlaylistStore playlists,
     IQueue queue,
+    IPowerControl power,
     ILogger<IpcServer> logger) : BackgroundService
 {
     // ponytail: lock global para todos los comandos; evita que dos volume_up lean el mismo volumen.
@@ -212,6 +213,11 @@ public sealed class IpcServer(
                     await ToggleDisplayModeAsync(ct);
                     break;
                 }
+                if (pressed.Button == ButtonName.PowerOff)
+                {
+                    await PowerOffAsync(ct);
+                    break;
+                }
                 try
                 {
                     await LockedAsync(() => pressed.Button == ButtonName.Previous
@@ -286,6 +292,20 @@ public sealed class IpcServer(
         }, ct);
         logger.LogInformation("Display mode {Mode}", mode);
         await PushAsync(targets, line!, ct);
+    }
+
+    // Sin el lock: no toca MPD. Si falla (polkit, systemctl), se registra y el Service sigue.
+    private async Task PowerOffAsync(CancellationToken ct)
+    {
+        logger.LogWarning("Power off requested (button)");
+        try
+        {
+            await power.PowerOffAsync(ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            logger.LogError("Power off failed: {Error}", e.Message);
+        }
     }
 
     private static async Task WriteTimedAsync(NetworkStream stream, string line, CancellationToken ct)

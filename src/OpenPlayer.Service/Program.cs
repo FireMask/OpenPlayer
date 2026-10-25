@@ -59,6 +59,7 @@ builder.Services.AddSingleton<ILibrary, MpdLibrary>();
 builder.Services.AddSingleton<IPlaylistStore, MpdPlaylistStore>();
 builder.Services.AddSingleton<IQueue, MpdQueue>();
 builder.Services.AddSingleton<ButtonCommandHandler>();
+builder.Services.AddSingleton<IPowerControl, SystemdPowerControl>();
 builder.Services.AddHostedService<IpcServer>();
 
 try

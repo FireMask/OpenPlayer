@@ -274,7 +274,7 @@ Mensajes de entrada:
 ```
 
 - `type` obligatorio. Campos extra se ignoran.
-- `button.pressed`: `button` obligatorio, uno de `play_pause`, `previous`, `next`, `volume_up`, `volume_down`, `menu` (exacto). `sequence` opcional (entero); solo se registra en el log. No hay respuesta.
+- `button.pressed`: `button` obligatorio, uno de `play_pause`, `previous`, `next`, `volume_up`, `volume_down`, `menu`, `refresh_library`, y desde SPEC 20 `seek_forward`, `seek_backward`, `power_off` (exacto). `sequence` opcional (entero); solo se registra en el log. No hay respuesta.
 - `player.get_snapshot`: responde una línea solo al cliente que la pidió.
 - `player.subscribe` (SPEC 16): la conexión queda dedicada a la suscripción; el Service ya no lee sus pedidos (las líneas siguientes se ignoran) y la quita al cerrarse. Responde enseguida con el `player.snapshot` actual (o la línea `error` si MPD falla) y, tras cada `WaitForChangeAsync` del observador (SPEC 15), envía el mismo snapshot que usa para el historial; si el observador falla con MPD, envía `{"type":"error","request":"player.get_snapshot",...}` una vez por fallo. El envío ocurre fuera del lock global, en paralelo, con timeout de 2 s: un suscriptor cuya escritura falla o tarda más se descarta (warning `Subscriber dropped`) y se cierra, sin frenar a los demás ni a los comandos. Varios suscriptores a la vez (web agent y pantalla del hardware agent, SPEC 17).
 - `player.get_cover` (SPEC 19): carátula de la pista actual; responde una línea `{"type":"player.cover","songId":17,"mime":"image/jpeg","data":"<base64>"}`. `data` es la imagen original (sin redimensionar): primero la incrustada (`readpicture`), si no la de la carpeta (`albumart`, p. ej. `cover.jpg`); `data` y `mime` `null` si no hay carátula, `songId` `null` sin pista actual. Más de 2 MB → `error` con `cover too large`; MPD caído → `error` como el resto. Corre fuera del lock global (no frena botones). Pide `binarylimit 1048576` en la misma conexión de cada trozo; si MPD no lo conoce, sigue con trozos de 8 KB.
@@ -327,10 +327,12 @@ Socket:
 - `next`: siguiente pista.
 - `volume_up` / `volume_down`: cambiar volumen en pasos de `VolumeStep` (5 por defecto), recortando a 0–100. Si el volumen es desconocido (MPD sin mixer), no hacer nada.
 - `menu` (SPEC 18, 19): cicla `displayMode` de la pantalla redonda (`track` → `clock` → `art` → `track`) y empuja el snapshot a los suscriptores; no toca MPD. Lo atiende `IpcServer`, no `ButtonCommandHandler`.
+- `seek_forward` / `seek_backward` (SPEC 20): seek relativo de ±`SeekStepSeconds` (10 por defecto, `player.seekStepSeconds`, 1–60) sobre la posición del snapshot, recortado a 0 y a duración − 1 s (nunca cambia de pista; sin duración conocida no se recorta hacia adelante). Sin posición o detenido no hace nada.
+- `power_off` (SPEC 20): `IpcServer` registra `Power off requested (button)` y llama `IPowerControl.PowerOffAsync`; `SystemdPowerControl` ejecuta `systemctl poweroff` (timeout 5 s), permitido al usuario `openplayer` por la regla polkit `deploy/50-openplayer-poweroff.rules`. Si falla (código de salida, timeout, polkit), registra `Power off failed: …` y el Service sigue. No toca MPD ni el lock global.
 
 Implementado en `OpenPlayer.Core.Commands.ButtonCommandHandler` (SPEC 01).
 
-Las pulsaciones largas, combinaciones y doble clic son posteriores al MVP. Evitar que una misma pulsación genere tanto una acción corta como una larga.
+Pulsaciones largas (SPEC 20): las detecta el hardware agent (`gestures.py`) y las traduce en los nombres de arriba; el Service no ve tiempos de pulsación. ⏭/⏮ mantenidos → `seek_forward`/`seek_backward` repetido; vol± mantenido → el mismo comando repetido; ▶︎ mantenido `shutdownHoldSeconds` → `power_off`. Una pulsación larga nunca dispara la corta. Combinaciones y doble clic siguen fuera.
 
 ## 9. Biblioteca, cola y listas
 
