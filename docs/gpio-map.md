@@ -50,7 +50,7 @@ Configurar entradas con pull-up interno. Estado en reposo: alto. Estado pulsado:
 - Valor inicial sugerido: 50–100 ms (comenzar con 80 ms y probar botones reales).
 - Una pulsación corta genera exactamente un evento `button.pressed`: al soltar en ⏭ ⏮ ▶︎ menu (para distinguirla de la larga), al apretar en vol±.
 - Pulsación mantenida (SPEC 20): apretada al menos `hardware.holdSeconds` (0,6 s por defecto). Una larga nunca dispara la corta. La detecta `gestures.py` (un hilo hace tick cada 50 ms y suelta un botón cuyo `is_pressed` ya es falso, por si se pierde el evento de soltar).
-- `holdSeconds` calibrado con los botones reales: _pendiente de medir en la Pi_.
+- `holdSeconds` calibrado con los botones reales: 0,6 s (el valor por defecto; probado en la Pi el 2026-10-24, sin falsas pulsaciones largas).
 - Evitar bloquear el proceso de lectura de botones mientras espera respuesta del servicio C#.
 - Si el socket no está disponible, reintentar con backoff; no perder el control del loop de GPIO.
 

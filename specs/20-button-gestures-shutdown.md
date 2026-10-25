@@ -168,10 +168,10 @@ polkit.addRule(function (action, subject) {
 - [ ] Todas las pruebas del hardware-agent pasan, también con las advertencias de obsolescencia tratadas como errores.
 
 ### En la Pi
-- [ ] `install.sh` instala la regla polkit, y `sudo -u openplayer busctl call org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager CanPowerOff` responde `s "yes"`. (Cambiado al implementar: `systemctl poweroff --dry-run` termina antes de consultar a logind y polkit, así que no prueba la regla.)
+- [x] `install.sh` instala la regla polkit, y `sudo -u openplayer busctl call org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager CanPowerOff` responde `s "yes"`. (Cambiado al implementar: `systemctl poweroff --dry-run` termina antes de consultar a logind y polkit, así que no prueba la regla.)
 - [ ] Mantener ▶︎ 3 s apaga la Pi. En el arranque siguiente, `journalctl -b -1` termina con `Reached target poweroff` / `System Power Off`, sin cortes (requiere journal persistente: `sudo mkdir -p /var/log/journal`, ver `assembly.md` §8).
 - [ ] Mantener ⏭ durante una canción avanza de 10 en 10 s y nunca salta a la siguiente pista.
-- [ ] Con los botones reales no hay falsas pulsaciones largas, con `holdSeconds` calibrado y el valor anotado en `gpio-map.md`.
+- [x] Con los botones reales no hay falsas pulsaciones largas, con `holdSeconds` calibrado y el valor anotado en `gpio-map.md`.
 
 ### General
 - [ ] README (tabla de gestos), `architecture.md` §7/§8, `gpio-map.md` y `assembly.md` describen los gestos, el apagado y la regla polkit.
