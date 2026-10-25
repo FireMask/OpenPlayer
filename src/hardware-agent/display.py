@@ -10,6 +10,7 @@ import time
 from dataclasses import replace
 from datetime import datetime
 
+from cover import fetch_cover, prepare
 from screen import View, render, title_overflow
 from sender import connect_unix
 
@@ -17,7 +18,7 @@ log = logging.getLogger(__name__)
 
 MAX_LINE_BYTES = 65536
 STATES = ("playing", "paused", "stopped")
-MODES = ("track", "clock")
+MODES = ("track", "clock", "art")
 VOLUME_POPUP_SECONDS = 2
 # Tabla propia: la Pi puede no tener el locale es instalado.
 DAYS = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
@@ -30,18 +31,21 @@ SCROLL_TICK = 0.2
 SCROLL_SPEED = 30  # px/s
 SCROLL_PAUSE = 1.0  # s quieto en cada extremo
 WAKE_SECONDS = 10  # encendida tras un botón o al empezar a reproducir durante el horario nocturno
+COVER_TICK = 0.1  # mientras carga la carátula: se ve apenas llega
 
 
 class Display:
     def __init__(self, socket_path, panel, *, connect=None, tick_seconds=1.0, retry_seconds=2.0, label="",
                  idle_clock_seconds=60, night=None, off_after_stopped_minutes=None,
-                 now=datetime.now, monotonic=time.monotonic):
+                 now=datetime.now, monotonic=time.monotonic, fetch=None):
         """panel: algo con init(), show(image), sleep_display() y wake_display().
         connect inyectable igual que Sender (TCP en pruebas). night: (inicio, fin) como datetime.time, o None.
-        now (hora local, para el reloj) y monotonic (temporizadores) son inyectables para las pruebas."""
+        now (hora local, para el reloj) y monotonic (temporizadores) son inyectables para las pruebas.
+        fetch: bytes de la carátula actual o None (SPEC 19); por defecto player.get_cover por connect."""
         self._path = socket_path
         self.panel = panel
         self._connect = connect or (lambda: connect_unix(socket_path))
+        self._fetch = fetch or (lambda: fetch_cover(self._connect))
         self._tick = tick_seconds
         self._retry = retry_seconds
         self._label = label
@@ -61,6 +65,11 @@ class Display:
         self._volume_until = 0.0  # hasta cuándo se ve el indicador de volumen
         self._scroll_title = None  # título que se está desplazando
         self._scroll_since = 0.0
+        # Carátula (SPEC 19): solo la última, por (artista, álbum). Los escribe el hilo de la petición.
+        self._cover_key = None
+        self._cover = None
+        self._cover_state = "none"  # "loading" | "ok" | "none"
+        self._was_art = False
         self._shown = None
         self._thread = threading.Thread(target=self._run, name="display", daemon=True)
 
@@ -121,7 +130,11 @@ class Display:
         while not self._stopping.is_set():
             # Despierta justo cuando la posición cambia de segundo, como mucho cada tick.
             elapsed = self._monotonic() - self._received
-            tick = SCROLL_TICK if self._scroll_title is not None else self._tick
+            tick = self._tick
+            if self._scroll_title is not None:
+                tick = SCROLL_TICK
+            if self._cover_state == "loading":
+                tick = min(tick, COVER_TICK)
             sock.settimeout(max(min(tick, 1 - elapsed % 1), 0.01))
             try:
                 chunk = sock.recv(65536)
@@ -184,11 +197,33 @@ class Display:
             changes["scroll"] = scroll_offset(now - self._scroll_since, overflow)
         else:
             self._scroll_title = None
+        art = changes.get("mode", view.mode) == "art" and view.status in STATES
+        if art:
+            self._update_cover(view)
+            changes["cover"] = self._cover
+        self._was_art = art
         view = replace(view, **changes)
         if view != self._shown:
             self.panel.show(render(view))
             self._shown = view
 
+
+    def _update_cover(self, view):
+        """Pide la carátula si cambió (artista, álbum) o al entrar al modo art sin una buena en caché."""
+        key = (view.artist, view.album) if view.artist or view.album else (None, None, view.title)
+        if not any(key):
+            self._cover_key, self._cover, self._cover_state = None, None, "none"
+            return
+        if key == self._cover_key and (self._was_art or self._cover_state != "none"):
+            return  # misma clave: en caché, cargando, o ya se sabe que no tiene (hasta salir y volver a entrar)
+        self._cover_key, self._cover, self._cover_state = key, None, "loading"
+        threading.Thread(target=self._load_cover, args=(key,), name="cover", daemon=True).start()
+
+    def _load_cover(self, key):
+        data = self._fetch()
+        image = prepare(data) if data else None
+        if self._cover_key == key:  # si la pista cambió mientras tanto, se descarta
+            self._cover, self._cover_state = image, "ok" if image is not None else "none"
 
     def _power(self, now) -> bool:
         """Enciende o apaga el panel según el horario y la inactividad; True si está encendido."""
