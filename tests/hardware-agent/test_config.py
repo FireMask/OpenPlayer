@@ -27,6 +27,23 @@ def test_loads_example_config():
     assert config.pins == {"play_pause": 17, "previous": 27, "next": 22,
                            "volume_up": 23, "volume_down": 24, "menu": 25}
     assert config.debounce_seconds == 0.08
+    assert (config.hold_seconds, config.shutdown_hold_seconds) == (0.6, 3.0)
+
+
+def test_missing_hold_fields_use_defaults(tmp_path):
+    data = example()
+    del data["hardware"]["holdSeconds"], data["hardware"]["shutdownHoldSeconds"]
+    config = load_config(write(tmp_path, data))
+
+    assert (config.hold_seconds, config.shutdown_hold_seconds) == (0.6, 3.0)
+
+
+def test_accepts_hold_bounds(tmp_path):
+    data = example()
+    data["hardware"].update(holdSeconds=0.2, shutdownHoldSeconds=10)
+    config = load_config(write(tmp_path, data))
+
+    assert (config.hold_seconds, config.shutdown_hold_seconds) == (0.2, 10.0)
 
 
 def test_accepts_integer_debounce(tmp_path):
@@ -68,6 +85,13 @@ def set_pin(name, value):
     (mutate("hardware", "debounceSeconds", 2), "hardware.debounceSeconds"),
     (mutate("hardware", "debounceSeconds", "0.08"), "hardware.debounceSeconds"),
     (mutate("hardware", "debounceSeconds", DELETE), "hardware.debounceSeconds is missing"),
+    (mutate("hardware", "holdSeconds", 0.19), "hardware.holdSeconds"),
+    (mutate("hardware", "holdSeconds", 2.01), "hardware.holdSeconds"),
+    (mutate("hardware", "holdSeconds", "0.6"), "hardware.holdSeconds"),
+    (mutate("hardware", "holdSeconds", None), "hardware.holdSeconds"),
+    (mutate("hardware", "shutdownHoldSeconds", 0.9), "hardware.shutdownHoldSeconds"),
+    (mutate("hardware", "shutdownHoldSeconds", 11), "hardware.shutdownHoldSeconds"),
+    (mutate("hardware", "shutdownHoldSeconds", True), "hardware.shutdownHoldSeconds"),
     (mutate("ipc", "unixSocketPath", ""), "ipc.unixSocketPath"),
     (mutate("ipc", "unixSocketPath", "  "), "ipc.unixSocketPath"),
     (mutate("ipc", "unixSocketPath", DELETE), "ipc.unixSocketPath is missing"),

@@ -33,6 +33,9 @@ class AgentConfig:
     pins: dict  # nombre IPC → pin BCM
     debounce_seconds: float
     display: DisplayConfig | None = None  # None: sección ausente o enabled=false
+    # SPEC 20: pulsación mantenida y apagado manteniendo ▶︎.
+    hold_seconds: float = 0.6
+    shutdown_hold_seconds: float = 3.0
 
 
 def load_config(path: str) -> AgentConfig:
@@ -65,7 +68,17 @@ def load_config(path: str) -> AgentConfig:
     if not isinstance(debounce, (int, float)) or isinstance(debounce, bool) or not 0.01 <= debounce <= 1:
         raise ConfigError("hardware.debounceSeconds must be 0.01-1")
 
-    return AgentConfig(socket_path, pins, float(debounce), _display(data["hardware"], pins))
+    hold = _seconds(data["hardware"], "holdSeconds", 0.6, 0.2, 2)
+    shutdown_hold = _seconds(data["hardware"], "shutdownHoldSeconds", 3, 1, 10)
+    return AgentConfig(socket_path, pins, float(debounce), _display(data["hardware"], pins), hold, shutdown_hold)
+
+
+# SPEC 20: opcional; ausente = defecto.
+def _seconds(hardware: dict, key: str, default: float, low: float, high: float) -> float:
+    value = hardware.get(key, default)
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not low <= value <= high:
+        raise ConfigError(f"hardware.{key} must be {low}-{high}")
+    return float(value)
 
 
 def _display(hardware: dict, pins: dict) -> DisplayConfig | None:

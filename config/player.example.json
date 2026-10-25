@@ -26,6 +26,8 @@
       "menu": 25
     },
     "debounceSeconds": 0.08,
+    "holdSeconds": 0.6,
+    "shutdownHoldSeconds": 3,
     "display": {
       "enabled": false,
       "spiBus": 0,
