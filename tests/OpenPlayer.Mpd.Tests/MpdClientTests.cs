@@ -160,4 +160,82 @@ public class MpdClientTests
 
         Assert.Empty(server.Connections);
     }
+
+    // Respuestas binarias (SPEC 19)
+
+    private static byte[] Utf8(string text) => System.Text.Encoding.UTF8.GetBytes(text);
+
+    private static byte[] BinaryResponse(byte[] data, string pairs = "") =>
+        [.. Utf8(pairs + $"binary: {data.Length}\n"), .. data, .. Utf8("\nOK\n")];
+
+    // Bytes con \n, "OK" y "ACK" adentro: el lector no debe confundirlos con el fin de la respuesta.
+    private static byte[] TrickyBytes(int length) =>
+        [.. Enumerable.Range(0, length).Select(i => (byte)(i % 7 == 0 ? '\n' : "OKACK\r"[i % 6]))];
+
+    [Fact]
+    public async Task Reads_binary_section_and_keeps_other_pairs()
+    {
+        var data = TrickyBytes(500);
+        await using var server = new FakeMpdServer
+        {
+            RespondBytes = _ => BinaryResponse(data, "size: 500\ntype: image/jpeg\n"),
+        };
+
+        var response = (await new MpdClient(server.Options()).ExecuteAsync(["readpicture \"a.flac\" 0"], Ct))[0];
+
+        Assert.Equal(data, response.Binary);
+        Assert.Equal("500", response.Get("size"));
+        Assert.Equal("image/jpeg", response.Get("type"));
+        Assert.Null(response.Get("binary"));
+    }
+
+    [Fact]
+    public async Task Binary_larger_than_buffer_then_next_command_still_parses()
+    {
+        var data = TrickyBytes(100_000);
+        await using var server = new FakeMpdServer
+        {
+            RespondBytes = c => c.StartsWith("readpicture") ? BinaryResponse(data) : Utf8("state: play\nOK\n"),
+        };
+
+        var responses = await new MpdClient(server.Options()).ExecuteAsync(["readpicture \"a.flac\" 0", "status"], Ct);
+
+        Assert.Equal(data, responses[0].Binary);
+        Assert.Equal("play", responses[1].Get("state"));
+        Assert.Null(responses[1].Binary);
+    }
+
+    [Fact]
+    public async Task Response_without_binary_has_null_binary()
+    {
+        await using var server = new FakeMpdServer { Respond = _ => "OK\n" };
+
+        var response = (await new MpdClient(server.Options()).ExecuteAsync(["readpicture \"a.flac\" 0"], Ct))[0];
+
+        Assert.Null(response.Binary);
+        Assert.Empty(response.Pairs);
+    }
+
+    [Fact]
+    public async Task Long_utf8_line_split_across_reads_decodes_intact()
+    {
+        var title = string.Concat(Enumerable.Repeat("Canción ñandú 日本 ", 1_000)); // > 8 KB, multibyte en los bordes
+        await using var server = new FakeMpdServer { Respond = _ => $"Title: {title}\nOK\n" };
+
+        var response = (await new MpdClient(server.Options()).ExecuteAsync(["currentsong"], Ct))[0];
+
+        Assert.Equal(title, response.Get("Title"));
+    }
+
+    [Fact]
+    public async Task Truncated_binary_throws_unavailable()
+    {
+        await using var server = new FakeMpdServer { RespondBytes = _ => Utf8("binary: 1000\nonly a few bytes") };
+
+        await Assert.ThrowsAsync<MpdUnavailableException>(async () =>
+        {
+            var client = new MpdClient(server.Options(timeoutMs: 500));
+            await client.ExecuteAsync(["readpicture \"a.flac\" 0"], Ct);
+        });
+    }
 }
