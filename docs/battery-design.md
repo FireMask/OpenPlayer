@@ -89,7 +89,7 @@ La batería no debe cortar la alimentación sin aviso cuando sea posible evitarl
 
 Si el power bank no ofrece señal de batería baja, el software no puede conocer con precisión el estado de carga sin hardware adicional. Documentar esa limitación.
 
-Una pulsación larga del botón de encendido puede iniciar `sudo systemctl poweroff` a través de un mecanismo controlado y con privilegios mínimos. No dar permisos generales de `sudo` al agente Python.
+Implementado en SPEC 20: mantener ▶︎ 3 s envía `power_off` y el Service ejecuta `systemctl poweroff`, permitido solo por una regla polkit (`deploy/50-openplayer-poweroff.rules`), sin `sudo` (ver `assembly.md` §8). Tras el apagado la Pi Zero mantiene los 3,3 V mientras haya alimentación: el panel GC9A01 sin pin BL queda negro (`DISPOFF`) pero con la luz encendida, y gasta batería. Hace falta el interruptor de alimentación (o, más adelante, un MOSFET en el VCC del panel).
 
 ## 8. Seguridad mecánica y térmica
 

@@ -250,6 +250,18 @@ journalctl -u openplayer-hardware -b -f
 
 Sin botones, probar con un cable de puente siguiendo `gpio-map.md` §9. La pantalla se monta en §11.
 
+### Apagado con ▶︎ (SPEC 20)
+
+Mantener ▶︎ 3 s (`hardware.shutdownHoldSeconds`) apaga la Pi: el Service ejecuta `systemctl poweroff` como `openplayer`. Las unidades corren con `NoNewPrivileges` (sudo no sirve); el permiso lo da la regla polkit `/etc/polkit-1/rules.d/50-openplayer-poweroff.rules`, que instala `install.sh` y solo permite `org.freedesktop.login1.power-off`. Necesita `polkitd` (`install.sh` avisa si falta: `sudo apt install polkitd`).
+
+```bash
+sudo -u openplayer systemctl poweroff --dry-run   # sin contraseña ni "Access denied"
+journalctl -u openplayer -b -f                    # Power off requested (button) / Power off failed: …
+journalctl -b -1 | tail                           # en el arranque siguiente: Reached target poweroff / System Power Off
+```
+
+Si falla, el Service registra `Power off failed: …` y sigue funcionando. Después del apagado la Pi Zero sigue entregando 3,3 V mientras tenga alimentación: el panel queda negro (`DISPOFF`) pero con la luz encendida y consumiendo. Cortar con el interruptor de alimentación (ver `battery-design.md` §7).
+
 ### Control desde el navegador (web agent)
 
 El mismo `deploy.ps1` instala el web agent (SPEC 08) en `/opt/openplayer/web-agent` con la unidad `openplayer-web` (usuario `openplayer`). No necesita paquetes extra: solo Python 3 de la imagen. Escucha en el puerto `web.port` de `/opt/openplayer/player.json` (8080; `install.sh` agrega la sección si un `player.json` anterior no la tiene).
@@ -356,7 +368,7 @@ Seguir `battery-design.md`. No imprimir la carcasa definitiva antes de medir DAC
 - [ ] Los logs son accesibles por journalctl.
 - [ ] Bluetooth funciona sin romper DAC USB.
 - [ ] La alimentación portátil supera prueba de carga y autonomía.
-- [ ] Apagado ordenado probado antes de usar batería integrada.
+- [ ] Apagado ordenado probado antes de usar batería integrada (▶︎ 3 s; `journalctl -b -1` termina en `Reached target poweroff`).
 
 ## 14. Solución de problemas
 
