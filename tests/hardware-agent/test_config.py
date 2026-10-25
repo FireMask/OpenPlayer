@@ -125,7 +125,7 @@ def test_missing_display_section_is_none(tmp_path):
 def test_loads_enabled_display(tmp_path):
     display = load_config(write(tmp_path, with_display())).display
 
-    assert display == DisplayConfig(spi_bus=0, spi_device=0, dc=5, rst=6, spi_hz=40_000_000, rotation=180)
+    assert display == DisplayConfig(spi_bus=0, spi_device=0, dc=16, rst=26, spi_hz=40_000_000, rotation=180)
 
 
 @pytest.mark.parametrize("fields, field", [
@@ -134,7 +134,7 @@ def test_loads_enabled_display(tmp_path):
     ({"dc": 28}, "hardware.display.dc"),
     ({"dc": "5"}, "hardware.display.dc"),
     ({"rst": True}, "hardware.display.rst"),
-    ({"rst": 5}, "hardware.display.rst: pin 5 is already used"),
+    ({"rst": 16}, "hardware.display.rst: pin 16 is already used"),
     ({"dc": 17}, "hardware.display.dc: pin 17 is already used"),
     ({"spiHz": 999_999}, "hardware.display.spiHz"),
     ({"spiHz": 62_500_001}, "hardware.display.spiHz"),

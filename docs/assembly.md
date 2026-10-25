@@ -325,13 +325,14 @@ Si falla, el log muestra `display init failed: <motivo>` y los botones siguen fu
 | `Permission denied` | La unidad no tiene el grupo `spi`; volver a desplegar |
 | `No module named 'spidev'` o `'PIL'` | Falta un paquete (paso 3) |
 | `cannot open resource` | Falta `fonts-dejavu-core` |
-| Pantalla negra sin error | Revisar cableado de DC, RST, CS y VCC |
+| Pantalla negra sin error | Revisar cableado de DC, RST, CS y VCC; medir continuidad entre pines vecinos del header (un corto RST–GND la deja en reset) |
+| Imagen que se desvanece a blanco | Alimentación o RST inestable: contacto flojo o corto en VCC, GND o RST |
 | Basura o parpadeo | Bajar `spiHz` (p. ej. 20000000) |
 | Imagen girada | Ajustar `rotation` (0, 90, 180, 270) |
 | Colores invertidos o espejados | Ajustar `MADCTL` (0x36) o `INVON` en `gc9a01.py` y documentarlo |
 | Reloj con hora equivocada | Sin NTP todavía (ver arriba) o zona horaria: `sudo timedatectl set-timezone <Zona>` |
 | No vuelve a encenderse tras el ahorro | El módulo no responde a `DISPON` solo: rehacer `init()` en `wake_display()` (`gc9a01.py`) |
-| Mucha CPU con títulos largos | El desplazamiento dibuja ~10 fps; bajar a 5 con `SCROLL_TICK = 0.2` en `display.py` |
+| Mucha CPU con títulos largos | El desplazamiento dibuja 5 fps (~14 % de un núcleo en la Pi Zero 2 W); subir `SCROLL_TICK` en `display.py` para menos |
 
 ## 12. Integración de batería y carcasa
 

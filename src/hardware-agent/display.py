@@ -23,9 +23,10 @@ VOLUME_POPUP_SECONDS = 2
 DAYS = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
 MONTHS = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
 _UNSET = object()
-# Desplazamiento del título: ~10 fps solo mientras se mueve.
-# ponytail: 10 fps fijos; si la Pi Zero no llega al criterio de CPU, bajar a 5 (SCROLL_TICK 0.2).
-SCROLL_TICK = 0.1
+# Desplazamiento del título: 5 fps solo mientras se mueve. Medido en la Pi Zero 2 W (2026-10-24): 10 fps = 28 %
+# de un núcleo, 5 fps = 14 %; cada cuadro completo cuesta ~27 ms de CPU (render 12 + RGB565 15).
+# ponytail: cuadro completo por SPI; para más fps, enviar solo la franja del título (CASET/RASET parcial).
+SCROLL_TICK = 0.2
 SCROLL_SPEED = 30  # px/s
 SCROLL_PAUSE = 1.0  # s quieto en cada extremo
 WAKE_SECONDS = 10  # encendida tras un botón o al empezar a reproducir durante el horario nocturno

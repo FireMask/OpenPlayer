@@ -1,6 +1,6 @@
 # SPEC 18 — Modos de pantalla, anillo de volumen y ahorro nocturno
 
-**Estado:** Approved
+**Estado:** Implemented
 **Depende de:** SPEC 05 (botones GPIO), SPEC 16 (player.subscribe), SPEC 17 (pantalla GC9A01)
 **Fecha:** 2026-10-24
 
@@ -30,7 +30,7 @@
   - se redibuja al cambiar el minuto.
 - **Reloj automático:** con la reproducción detenida o en pausa durante `idleClockSeconds` (60 por defecto), el agente muestra el reloj. Vuelve al modo del Service al reanudar la reproducción. Es una superposición local: no cambia `displayMode`.
 - **Indicador de volumen:** cada cambio de volumen (botones o web) muestra durante 2 s un anillo interior azul y el número grande en el centro, encima de cualquier modo.
-- **Título con desplazamiento:** solo el título y solo en reproducción, a unos 10 fps, con una pausa de 1 s en cada extremo. Los títulos que caben no se mueven.
+- **Título con desplazamiento:** solo el título y solo en reproducción, a 5 fps (medido; ver riesgos), con una pausa de 1 s en cada extremo. Los títulos que caben no se mueven.
 - **Ahorro de pantalla (`DISPOFF`/`DISPON`), ambos opcionales y apagados por defecto:**
   - **Nocturno:** entre `nightStart` y `nightEnd` (`"HH:MM"`, el rango puede cruzar la medianoche).
   - **Por inactividad:** tras `offAfterStoppedMinutes` minutos detenida.
@@ -72,7 +72,7 @@ Hace falta porque MPD no cambia y el observador no despertaría.
 ### `hardware.display` en `player.json`, campos nuevos opcionales
 ```json
 "display": {
-  "enabled": true, "spiBus": 0, "spiDevice": 0, "dc": 5, "rst": 6,
+  "enabled": true, "spiBus": 0, "spiDevice": 0, "dc": 16, "rst": 26,
   "spiHz": 40000000, "rotation": 180,
   "idleClockSeconds": 60,
   "nightStart": null, "nightEnd": null,
@@ -151,7 +151,7 @@ class View:
    - Redibujado al cambiar el minuto en modo reloj.
    - Pruebas con `FakeService`, un reloj inyectable (`now`) y ticks cortos.
 7. **`display.py`, desplazamiento del título:**
-   - Tick de unos 0,1 s solo mientras el título no cabe y se reproduce; si no, 1 s.
+   - Tick de 0,2 s (5 fps, medido) solo mientras el título no cabe y se reproduce; si no, 1 s.
    - Pausa de 1 s en cada extremo.
    - Pruebas: el título corto no se redibuja y el largo avanza y vuelve.
 8. **Ahorro de pantalla:**
@@ -168,15 +168,15 @@ class View:
 ## Criterios de aceptación
 
 ### Service
-- [ ] `player.snapshot` incluye `trackAlbum` (`null` si no hay etiqueta), `queueLength` (`null` sin cola) y `displayMode`.
-- [ ] `displayMode` vale `"track"` al arrancar el Service.
-- [ ] Cada `button.pressed` `menu` alterna `displayMode` entre `track` y `clock` y empuja un snapshot a todos los suscriptores, sin que cambie nada en MPD.
-- [ ] `menu` no llega a `ButtonCommandHandler` ni toca MPD.
-- [ ] La web sigue funcionando sin cambios: las pruebas .NET y las de la web pasan.
+- [x] `player.snapshot` incluye `trackAlbum` (`null` si no hay etiqueta), `queueLength` (`null` sin cola) y `displayMode`.
+- [x] `displayMode` vale `"track"` al arrancar el Service.
+- [x] Cada `button.pressed` `menu` alterna `displayMode` entre `track` y `clock` y empuja un snapshot a todos los suscriptores, sin que cambie nada en MPD.
+- [x] `menu` no llega a `ButtonCommandHandler` ni toca MPD.
+- [x] La web sigue funcionando sin cambios: las pruebas .NET y las de la web pasan.
 
 ### Config
-- [ ] Una config sin los campos nuevos carga con `idleClockSeconds=60`, sin modo nocturno y sin apagado por inactividad.
-- [ ] Se rechaza con un error claro:
+- [x] Una config sin los campos nuevos carga con `idleClockSeconds=60`, sin modo nocturno y sin apagado por inactividad.
+- [x] Se rechaza con un error claro:
   - `idleClockSeconds` fuera de 1–3600;
   - `offAfterStoppedMinutes` fuera de 1–1440;
   - `nightStart` sin `nightEnd`, o al revés;
@@ -184,41 +184,41 @@ class View:
   - `nightStart == nightEnd`.
 
 ### Modo pista
-- [ ] Muestra el icono, el título, el artista, el álbum, `m:ss / -m:ss` y `n / total` (con `n` 1-based).
-- [ ] Sin álbum, duración o cola, esa línea no se dibuja y nada falla.
-- [ ] Ya no aparece el texto "Vol N".
+- [x] Muestra el icono, el título, el artista, el álbum, `m:ss / -m:ss` y `n / total` (con `n` 1-based).
+- [x] Sin álbum, duración o cola, esa línea no se dibuja y nada falla.
+- [x] Ya no aparece el texto "Vol N".
 
 ### Modo reloj
-- [ ] Muestra HH:MM de 24 h y la fecha en español (`vie 24 oct`), con la hora local de la Pi.
-- [ ] El anillo de progreso sigue visible en reproducción o en pausa con duración; detenida, no hay anillo.
-- [ ] La pantalla se redibuja al cambiar el minuto y no en cada tick.
-- [ ] Con `menu` en la Pi, la pantalla cambia de modo en menos de 1 s.
+- [x] Muestra HH:MM de 24 h y la fecha en español (`vie 24 oct`), con la hora local de la Pi.
+- [x] El anillo de progreso sigue visible en reproducción o en pausa con duración; detenida, no hay anillo.
+- [x] La pantalla se redibuja al cambiar el minuto y no en cada tick.
+- [x] Con `menu` en la Pi, la pantalla cambia de modo en menos de 1 s.
 
 ### Reloj automático
-- [ ] Detenida o en pausa durante `idleClockSeconds`, el agente muestra el reloj aunque `displayMode` sea `track`.
-- [ ] Al reanudar la reproducción vuelve al modo pista.
-- [ ] Con `idleClockSeconds: null` nunca pasa.
+- [x] Detenida o en pausa durante `idleClockSeconds`, el agente muestra el reloj aunque `displayMode` sea `track`.
+- [x] Al reanudar la reproducción vuelve al modo pista.
+- [x] Con `idleClockSeconds: null` nunca pasa.
 
 ### Indicador de volumen
-- [ ] Un cambio de volumen (botón o web) muestra el anillo interior azul y el número grande durante 2 s, sobre cualquier modo, y luego desaparece.
-- [ ] El primer snapshot tras conectar no lo muestra.
+- [x] Un cambio de volumen (botón o web) muestra el anillo interior azul y el número grande durante 2 s, sobre cualquier modo, y luego desaparece.
+- [x] El primer snapshot tras conectar no lo muestra.
 
 ### Desplazamiento del título
-- [ ] Un título que no cabe se desplaza mientras se reproduce, con una pausa de 1 s en cada extremo.
-- [ ] Un título que cabe, o la reproducción en pausa o detenida, no genera redibujados extra.
-- [ ] En la Pi Zero 2 W, el proceso del agente usa menos del 25 % de un núcleo mientras desplaza (medido con `top`).
+- [x] Un título que no cabe se desplaza mientras se reproduce, con una pausa de 1 s en cada extremo.
+- [x] Un título que cabe, o la reproducción en pausa o detenida, no genera redibujados extra.
+- [x] En la Pi Zero 2 W, el proceso del agente usa menos del 25 % de un núcleo mientras desplaza (medido: 14 % a 5 fps, 2026-10-24).
 
 ### Ahorro de pantalla
-- [ ] Con `nightStart`/`nightEnd` (incluido un rango que cruza la medianoche), la pantalla recibe `DISPOFF` dentro del horario y `DISPON` al salir de él.
-- [ ] Con `offAfterStoppedMinutes`, detenida durante ese tiempo recibe `DISPOFF`.
-- [ ] Apagada, cualquier botón la enciende durante 10 s y además hace su acción normal.
-- [ ] Apagada por inactividad, empezar la reproducción la enciende.
-- [ ] Apagada por el horario nocturno, empezar la reproducción la enciende 10 s.
-- [ ] Sin los campos de ahorro, la pantalla nunca se apaga.
+- [x] Con `nightStart`/`nightEnd` (incluido un rango que cruza la medianoche), la pantalla recibe `DISPOFF` dentro del horario y `DISPON` al salir de él.
+- [x] Con `offAfterStoppedMinutes`, detenida durante ese tiempo recibe `DISPOFF`.
+- [x] Apagada, cualquier botón la enciende durante 10 s y además hace su acción normal.
+- [x] Apagada por inactividad, empezar la reproducción la enciende.
+- [x] Apagada por el horario nocturno, empezar la reproducción la enciende 10 s.
+- [x] Sin los campos de ahorro, la pantalla nunca se apaga.
 
 ### General
-- [ ] Todas las pruebas del hardware-agent pasan, también con las advertencias de obsolescencia tratadas como errores.
-- [ ] La documentación (README, `architecture.md` §7, `assembly.md` §11 y `player.example.json`) refleja los campos y el comportamiento nuevos.
+- [x] Todas las pruebas del hardware-agent pasan, también con las advertencias de obsolescencia tratadas como errores.
+- [x] La documentación (README, `architecture.md` §7, `assembly.md` §11 y `player.example.json`) refleja los campos y el comportamiento nuevos.
 
 ## Decisiones tomadas y descartadas
 
@@ -230,7 +230,7 @@ class View:
 | El volumen se ve 2 s tras cada cambio | Un anillo de volumen siempre visible | Menos ruido visual; el anillo de progreso sigue siendo el protagonista. |
 | El número del volumen va grande en el centro, junto al anillo | Solo el anillo | El anillo por sí solo no da un valor preciso. |
 | Solo se desplaza el título | Desplazar también el artista y el álbum | Limita los redibujados y el uso de CPU en la Pi Zero; el título es lo que más importa. |
-| El tick rápido (0,1 s) corre solo mientras se desplaza | Tick rápido fijo | Sin desplazamiento, el agente queda casi inactivo como en SPEC 17. |
+| El tick rápido (0,2 s) corre solo mientras se desplaza | Tick rápido fijo | Sin desplazamiento, el agente queda casi inactivo como en SPEC 17. |
 | El ahorro usa `DISPOFF`/`DISPON` | Atenuar con una paleta más oscura | Sin pin BL no hay brillo real; `DISPOFF` deja el panel en negro y consume menos. |
 | El botón que despierta también hace su acción | Tragarse esa pulsación | Más simple, y en la oscuridad se puede pulsar play sin tener que mirar. |
 | La hora, la fecha y el desplazamiento entran en la `View` | Que `render()` lea el reloj | `render` queda pura y las pruebas son deterministas. |
@@ -244,7 +244,7 @@ class View:
 | Riesgo | Impacto | Mitigación |
 |---|---|---|
 | La Pi no tiene RTC: sin red, la hora es falsa hasta que NTP sincroniza | El reloj y el horario nocturno quedan mal tras arrancar sin Wi-Fi | Se acepta; queda documentado en `assembly.md`. El horario nocturno se recalcula en cada tick, así se corrige solo cuando NTP sincroniza. |
-| El desplazamiento a 10 fps (unos 115 KB por SPI y un render por cuadro) carga la Pi Zero | Más CPU y temperatura; puede competir con MPD | Solo con un título largo y en reproducción. Hay un criterio de < 25 % de un núcleo medido en la Pi. Si no se cumple, se baja a 5 fps (`ponytail:` con el límite). |
+| El desplazamiento a 10 fps (unos 115 KB por SPI y un render por cuadro) carga la Pi Zero | Más CPU y temperatura; puede competir con MPD | Solo con un título largo y en reproducción. Hay un criterio de < 25 % de un núcleo medido en la Pi. Si no se cumple, se baja a 5 fps (`ponytail:` con el límite). **Medido (2026-10-24):** 10 fps = 28 %, 5 fps = 14 % → quedó en 5 fps (`SCROLL_TICK = 0.2`). |
 | Un cambio de volumen por reconexión o por un snapshot repetido dispara el indicador | Aparece sin que nadie tocara el volumen | Solo cuenta un cambio respecto del snapshot anterior de la misma conexión; el primero tras conectar no cuenta. |
 | `menu` se pulsa sin suscriptores, o con el Service sin MPD | El modo cambia pero nadie lo ve, o falla el snapshot | El modo cambia igual. Si el snapshot falla se registra y se empuja el error como hoy; el siguiente snapshot lleva el modo correcto. |
 | `DISPOFF` deja el panel sin responder en algunos módulos | La pantalla no vuelve a encenderse | Se prueba en la Pi real. Si pasa, `wake_display()` puede rehacer `init()` (`ponytail:` con la alternativa). |

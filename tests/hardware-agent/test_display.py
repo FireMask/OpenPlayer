@@ -471,8 +471,8 @@ def test_scrolling_uses_fast_tick_and_short_title_does_not(service, display):
     assert len(panel.images) <= count + 1  # a lo sumo el cambio de segundo
 
     service.push(snapshot(title=LONG))
-    time.sleep(SCROLL_PAUSE + 0.6)
-    assert len(panel.images) >= count + 4  # ~0,1 s por cuadro mientras se desplaza
+    time.sleep(SCROLL_PAUSE + 1.0)
+    assert len(panel.images) >= count + 3  # ~0,2 s por cuadro mientras se desplaza
 
 
 # Ahorro de pantalla (SPEC 18). El reloj falso arranca el sábado 24 a las 21:47:30.
@@ -527,6 +527,8 @@ def test_off_after_stopped_minutes(service, display, clock):
     assert panel.power == []
 
     service.push(snapshot(state="stopped"))
+    wait_until(lambda: last_view_is(panel, View("stopped", "Song", "Artist", position=10, duration=100, volume=35,
+                                                queue_position=0)))
     clock.advance(119)
     time.sleep(0.2)
     assert panel.power == []
