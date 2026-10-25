@@ -255,9 +255,17 @@ Sin botones, probar con un cable de puente siguiendo `gpio-map.md` §9. La panta
 Mantener ▶︎ 3 s (`hardware.shutdownHoldSeconds`) apaga la Pi: el Service ejecuta `systemctl poweroff` como `openplayer`. Las unidades corren con `NoNewPrivileges` (sudo no sirve); el permiso lo da la regla polkit `/etc/polkit-1/rules.d/50-openplayer-poweroff.rules`, que instala `install.sh` y solo permite `org.freedesktop.login1.power-off`. Necesita `polkitd` (`install.sh` avisa si falta: `sudo apt install polkitd`).
 
 ```bash
-sudo -u openplayer systemctl poweroff --dry-run   # sin contraseña ni "Access denied"
+# La regla funciona si responde s "yes" ("challenge" = falta la regla o polkitd). No apaga.
+# (systemctl poweroff --dry-run no sirve: termina antes de consultar a logind y polkit.)
+sudo -u openplayer busctl call org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager CanPowerOff
 journalctl -u openplayer -b -f                    # Power off requested (button) / Power off failed: …
-journalctl -b -1 | tail                           # en el arranque siguiente: Reached target poweroff / System Power Off
+```
+
+Para confirmar en el arranque siguiente que el apagado fue limpio hace falta el journal persistente (Raspberry Pi OS lo guarda solo en RAM: sin `/var/log/journal`, `journalctl -b -1` responde "no persistent journal was found"). Activarlo una vez:
+
+```bash
+sudo mkdir -p /var/log/journal && sudo systemctl restart systemd-journald
+journalctl -b -1 | tail                           # tras apagar con ▶︎ y volver a encender: Reached target poweroff / System Power Off
 ```
 
 Si falla, el Service registra `Power off failed: …` y sigue funcionando. Después del apagado la Pi Zero sigue entregando 3,3 V mientras tenga alimentación: el panel queda negro (`DISPOFF`) pero con la luz encendida y consumiendo. Cortar con el interruptor de alimentación (ver `battery-design.md` §7).

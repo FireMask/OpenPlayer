@@ -145,7 +145,7 @@ polkit.addRule(function (action, subject) {
    - README, `gpio-map.md` y `assembly.md`.
    - Desplegar y probar cada gesto en los botones reales.
    - Calibrar `holdSeconds`.
-   - Apagar con ▶︎ 3 s y confirmar en el siguiente arranque que el apagado fue limpio: `journalctl -b -1 | tail` muestra `Reached target poweroff`.
+   - Activar el journal persistente (`sudo mkdir -p /var/log/journal`), apagar con ▶︎ 3 s y confirmar en el siguiente arranque que el apagado fue limpio: `journalctl -b -1 | tail` muestra `Reached target poweroff`.
 
 ## Criterios de aceptación
 
@@ -168,8 +168,8 @@ polkit.addRule(function (action, subject) {
 - [ ] Todas las pruebas del hardware-agent pasan, también con las advertencias de obsolescencia tratadas como errores.
 
 ### En la Pi
-- [ ] `install.sh` instala la regla polkit, y `sudo -u openplayer systemctl poweroff --dry-run` no pide contraseña ni falla por permisos.
-- [ ] Mantener ▶︎ 3 s apaga la Pi. En el arranque siguiente, `journalctl -b -1` termina con `Reached target poweroff` / `System Power Off`, sin cortes.
+- [ ] `install.sh` instala la regla polkit, y `sudo -u openplayer busctl call org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager CanPowerOff` responde `s "yes"`. (Cambiado al implementar: `systemctl poweroff --dry-run` termina antes de consultar a logind y polkit, así que no prueba la regla.)
+- [ ] Mantener ▶︎ 3 s apaga la Pi. En el arranque siguiente, `journalctl -b -1` termina con `Reached target poweroff` / `System Power Off`, sin cortes (requiere journal persistente: `sudo mkdir -p /var/log/journal`, ver `assembly.md` §8).
 - [ ] Mantener ⏭ durante una canción avanza de 10 en 10 s y nunca salta a la siguiente pista.
 - [ ] Con los botones reales no hay falsas pulsaciones largas, con `holdSeconds` calibrado y el valor anotado en `gpio-map.md`.
 
@@ -200,7 +200,7 @@ polkit.addRule(function (action, subject) {
 | Tras `poweroff`, la Pi Zero mantiene los 3,3 V mientras haya alimentación: el panel sin pin BL queda con la luz encendida | Gasta batería con la Pi apagada | `DISPOFF` deja el panel negro, pero la luz sigue. Queda documentado en `assembly.md` y `battery-design.md`: hace falta el interruptor de alimentación (o un MOSFET en VCC del panel más adelante). |
 | El rebote de los botones reales genera falsos soltar/apretar durante una pulsación larga | Una pulsación larga se corta y dispara la corta | El debounce de gpiozero ya está; `holdSeconds` es configurable; hay un criterio de calibración en la Pi. |
 | Disparar al soltar agrega latencia percibida en ⏭⏮▶︎menu | Se siente más lento | Es la duración real de la pulsación (~0,1 s); vol± sigue inmediato. Se evalúa en la Pi. |
-| La regla polkit no se carga (polkitd ausente, otra ruta, versión vieja de JS) | `power_off` falla | `install.sh` avisa si falta `polkitd`; el criterio en la Pi prueba `systemctl poweroff --dry-run` como `openplayer`; el Service registra `Power off failed` y sigue. |
+| La regla polkit no se carga (polkitd ausente, otra ruta, versión vieja de JS) | `power_off` falla | `install.sh` avisa si falta `polkitd`; el criterio en la Pi prueba `CanPowerOff` (busctl) como `openplayer`; el Service registra `Power off failed` y sigue. |
 | Un `power_off` por accidente (algo apoyado sobre el botón) | La Pi se apaga sola | Hacen falta 3 s seguidos, con cuenta regresiva visible; soltar cancela. |
 | La repetición de seek o de volumen sigue si el GPIO no informa el soltar (cable flojo) | Seek o volumen sin control | La repetición se basa en `is_pressed` en cada tick, no solo en el evento de soltar; el volumen ya queda recortado a 0–100. |
 | Varias pulsaciones a la vez (dos botones mantenidos) | Estados cruzados | Un estado independiente por botón en `Gestures`; hay pruebas con dos botones a la vez. |
