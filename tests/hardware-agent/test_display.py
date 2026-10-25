@@ -732,3 +732,65 @@ def test_idle_clock_overrides_art_without_fetching_again(service, display, clock
     service.push(snapshot(mode="art", album="A"))  # play: vuelve a art con la carátula en caché
     wait_until(lambda: center_of_last(panel) == RED)
     assert service.cover_requests == ["A"]
+
+
+# Avisos de gestos (SPEC 20)
+
+PAUSED = View("paused", "Song", "Artist", position=10, duration=100, volume=35, queue_position=0)
+
+
+def paused_display(service, display):
+    d, panel = display()
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(state="paused"))
+    wait_until(lambda: last_view_is(panel, PAUSED))
+    return d, panel
+
+
+def test_toast_shows_at_once_and_goes_after_its_seconds(service, display, clock):
+    d, panel = paused_display(service, display)
+
+    d.toast("+10 s")
+    assert last_view_is(panel, replace(PAUSED, toast="+10 s"))  # dibujado en la llamada, sin esperar al tick
+
+    clock.advance(1.4)
+    time.sleep(0.2)
+    assert last_view_is(panel, replace(PAUSED, toast="+10 s"))
+    clock.advance(0.1)
+    wait_until(lambda: last_view_is(panel, PAUSED))
+
+
+def test_new_toast_replaces_and_none_removes(service, display):
+    d, panel = paused_display(service, display)
+
+    d.toast("Apagar 3…")
+    d.toast("Apagar 2…")
+    assert last_view_is(panel, replace(PAUSED, toast="Apagar 2…"))
+    d.toast(None)
+    assert last_view_is(panel, PAUSED)
+
+
+def test_shutting_down_stays(service, display, clock):
+    d, panel = paused_display(service, display)
+
+    d.shutting_down()
+    clock.advance(10)  # mucho más que los 1,5 s de un aviso común
+    service.push(snapshot(state="stopped"))
+    wait_until(lambda: last_view_is(panel, replace(PAUSED, status="stopped", toast="Apagando…")))
+
+
+def test_toast_over_offline(service, display):
+    service.available = False
+    d, panel = display()
+    wait_until(lambda: last_view_is(panel, View("offline")))
+
+    d.toast("Menú: próximamente")
+    assert last_view_is(panel, View("offline", toast="Menú: próximamente"))
+
+
+def test_toast_before_panel_init_does_not_draw(service, clock):
+    panel = FakePanel()
+    d = Display("/x.sock", panel, connect=service.connect, monotonic=clock.monotonic, now=clock.now)
+
+    d.toast("+10 s")
+    assert panel.images == []

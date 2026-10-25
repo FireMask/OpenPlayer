@@ -107,7 +107,7 @@ polkit.addRule(function (action, subject) {
   - `toast(text, seconds=1.5)` muestra el aviso; con `None` lo quita.
   - `shutting_down()` muestra "Apagando…" fijo.
   - Al detener el agente, `main.py` llama `panel.sleep_display()` (`DISPOFF`) antes de cerrar el panel.
-- `View` gana `toast: str | None`. `render` dibuja una píldora (fondo `(40, 40, 40)`, texto blanco a 16 px) centrada en y≈200, encima de todo, incluido el indicador de volumen.
+- `View` gana `toast: str | None`. `render` dibuja una píldora (fondo `(40, 40, 40)`, texto blanco a 16 px) centrada en y≈180, encima de todo, incluido el indicador de volumen. (Se subió de y≈200 al implementar: a 16 px, "Menú: próximamente" mide 172 px y en y≈200 la cuerda del círculo deja ~152 px.)
 
 ## Plan de implementación
 

@@ -220,3 +220,37 @@ def test_volume_popup_over_art():
 
 def test_art_mode_stopped_without_track_shows_stopped_message():
     assert render(View("stopped", mode="art")).tobytes() == render(View("stopped")).tobytes()
+
+
+# Avisos de gestos (SPEC 20)
+
+TOAST_PILL = (CENTER, 169)  # borde superior de la píldora, sin texto
+
+
+@pytest.mark.parametrize("view", [FULL, ART, replace(FULL, mode="clock", clock="21:47"), View("offline"),
+                                  replace(FULL, volume_popup=True)])
+def test_toast_pill_over_every_mode(view):
+    image = render(replace(view, toast="+10 s"))
+
+    assert image.getpixel(TOAST_PILL) == (40, 40, 40)
+    assert image.tobytes() != render(view).tobytes()
+
+
+def test_toast_over_cover():
+    image = render(replace(ART, cover=red_cover(), toast="+10 s"))
+
+    assert image.getpixel(TOAST_PILL) == (40, 40, 40)
+
+
+def test_long_toast_fits_inside_circle():
+    image = render(View("offline", toast="Menú: próximamente"))
+    row = [x for x in range(WIDTH) if image.getpixel((x, 180)) != (0, 0, 0)]
+
+    # La cuerda en el borde inferior de la píldora (y=193) mide ~190 px: todo dentro del círculo.
+    assert CENTER - 95 <= row[0] and row[-1] <= CENTER + 95
+    # Sin "…": la píldora mide el texto completo (172 px a 16 px) más el margen.
+    assert row[-1] - row[0] >= _font(16).getlength("Menú: próximamente") + 14
+
+
+def test_no_toast_draws_nothing_extra():
+    assert render(replace(FULL, toast=None)).tobytes() == render(FULL).tobytes()

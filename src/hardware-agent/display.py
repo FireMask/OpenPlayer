@@ -4,6 +4,7 @@ calculados en cada tick. También apaga el panel (DISPOFF) de noche o tras un ra
 
 import json
 import logging
+import math
 import socket
 import threading
 import time
@@ -71,7 +72,12 @@ class Display:
         self._cover_state = "none"  # "loading" | "ok" | "none"
         self._was_art = False
         self._shown = None
-        self._thread = threading.Thread(target=self._run, name="display", daemon=True)
+        # Aviso de un gesto (SPEC 20). Lo pone el hilo de los botones; _lock evita dos show() a la vez.
+        self._toast = None
+        self._toast_until = 0.0
+        self._lock = threading.Lock()
+        self._ready = False  # panel iniciado: recién ahí toast() puede dibujar
+        self._thread =threading.Thread(target=self._run, name="display", daemon=True)
 
     def start(self):
         self._thread.start()
@@ -79,6 +85,17 @@ class Display:
     def wake(self):
         """La llama el callback de cada botón: enciende el panel WAKE_SECONDS (se nota en el próximo tick)."""
         self._wake_until = self._monotonic() + WAKE_SECONDS
+
+    def toast(self, text, seconds=1.5):
+        """Muestra el aviso seconds segundos (o hasta el próximo); None lo quita. Se dibuja enseguida."""
+        self._toast = text
+        self._toast_until = self._monotonic() + seconds
+        if self._ready:
+            self._draw()
+
+    def shutting_down(self):
+        """"Apagando…" fijo: el Service ya pidió el apagado."""
+        self.toast("Apagando…", seconds=math.inf)
 
     def stop(self):
         """Espera a que termine el show() en curso; el llamador cierra después el panel."""
@@ -92,6 +109,7 @@ class Display:
         except Exception as e:
             log.error("display init failed: %s", e)
             return
+        self._ready = True
         log.info("display ready%s", f" ({self._label})" if self._label else "")
         try:
             while not self._stopping.is_set():
@@ -135,6 +153,9 @@ class Display:
                 tick = SCROLL_TICK
             if self._cover_state == "loading":
                 tick = min(tick, COVER_TICK)
+            toast_left = self._toast_until - self._monotonic() if self._toast else 0
+            if toast_left > 0:
+                tick = min(tick, toast_left)  # que el aviso se vaya a tiempo
             sock.settimeout(max(min(tick, 1 - elapsed % 1), 0.01))
             try:
                 chunk = sock.recv(65536)
@@ -174,6 +195,10 @@ class Display:
         self._draw()
 
     def _draw(self):
+        with self._lock:
+            self._draw_locked()
+
+    def _draw_locked(self):
         now = self._monotonic()
         if not self._power(now):
             return
@@ -202,6 +227,8 @@ class Display:
             self._update_cover(view)
             changes["cover"] = self._cover
         self._was_art = art
+        if self._toast and now < self._toast_until:
+            changes["toast"] = self._toast
         view = replace(view, **changes)
         if view != self._shown:
             self.panel.show(render(view))
