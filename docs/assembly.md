@@ -313,7 +313,7 @@ Módulo de 1,28" 240x240 ("1.28 TFT ver 1.0", 7 pines, sin BL). La dibuja el har
 4. En `/opt/openplayer/player.json`, poner `hardware.display.enabled` en `true` (el resto de la sección trae los valores del cableado de §10).
 5. `sudo systemctl restart openplayer-hardware` y `journalctl -u openplayer-hardware -b -f`: debe aparecer `display ready (spi0.0, 40000000 Hz)`.
 6. Prueba: con música, la pantalla muestra ícono de estado, título, artista, álbum, `m:ss / -m:ss`, `n / total` y anillo de progreso. `mpc next`, `mpc volume 40` (anillo azul y número 2 s) y play/pausa se reflejan en menos de 1 s. `sudo systemctl stop openplayer` → "Sin conexión"; al volver, la pista.
-7. Modos (SPEC 18): `menu` alterna pista ↔ reloj en menos de 1 s. En pausa 60 s (`idleClockSeconds`) aparece el reloj solo. Para probar el ahorro, poner `nightStart`/`nightEnd` alrededor de la hora actual o `offAfterStoppedMinutes: 1` con `mpc stop`: el panel queda negro y un botón lo enciende 10 s.
+7. Modos (SPEC 18, 19): `menu` cicla pista → reloj → carátula en menos de 1 s; la carátula aparece en menos de 1,5 s (antes, ♪ y el título). En pausa 60 s (`idleClockSeconds`) aparece el reloj solo. Para probar el ahorro, poner `nightStart`/`nightEnd` alrededor de la hora actual o `offAfterStoppedMinutes: 1` con `mpc stop`: el panel queda negro y un botón lo enciende 10 s.
 
 La Pi no tiene RTC: sin red, la hora del reloj (y el horario nocturno) es incorrecta hasta que NTP sincroniza. Se corrige sola, sin reiniciar el agente. Comprobar con `timedatectl` (`System clock synchronized: yes`).
 
@@ -327,6 +327,7 @@ Si falla, el log muestra `display init failed: <motivo>` y los botones siguen fu
 | `cannot open resource` | Falta `fonts-dejavu-core` |
 | Pantalla negra sin error | Revisar cableado de DC, RST, CS y VCC; medir continuidad entre pines vecinos del header (un corto RST–GND la deja en reset) |
 | Imagen que se desvanece a blanco | Alimentación o RST inestable: contacto flojo o corto en VCC, GND o RST |
+| Modo carátula siempre con ♪ | La pista no tiene imagen incrustada ni `cover.jpg`; ver `cover:` en `journalctl -u openplayer-hardware` (`cover too large` = más de 2 MB) |
 | Basura o parpadeo | Bajar `spiHz` (p. ej. 20000000) |
 | Imagen girada | Ajustar `rotation` (0, 90, 180, 270) |
 | Colores invertidos o espejados | Ajustar `MADCTL` (0x36) o `INVON` en `gc9a01.py` y documentarlo |

@@ -108,7 +108,7 @@ Pantalla (SPEC 17, `python3-pil`, `python3-spidev` y `fonts-dejavu-core`; solo c
 - `config.py`: `hardware.display` opcional (ausente o `enabled: false` → sin pantalla; DC/RST no pueden repetir pines de botones).
 - `gc9a01.py`: driver mínimo; init de referencia (Waveshare), cuadro completo 240x240 RGB565 por SPI, DC/RST con `gpiozero`, rotación con Pillow.
 - `screen.py`: `render(View)` → imagen: título, artista, ícono, anillo de progreso y volumen; "Detenido", "Sin conexión", "MPD no responde". Texto cortado con "…" al ancho del círculo.
-- `display.py`: hilo con su propia conexión `player.subscribe`, reintento cada 2 s; avanza la posición localmente una vez por segundo en `playing` y redibuja solo si cambia la vista.
+- `display.py`: hilo con su propia conexión `player.subscribe`, reintento cada 2 s; avanza la posición localmente una vez por segundo en `playing` y redibuja solo si cambia la vista. En modo `art` (SPEC 19) pide `player.get_cover` en una conexión corta aparte (`cover.py`) cuando cambia (artista, álbum), decodifica con Pillow (`draft` en JPEG) a 228x228 circular y guarda solo la última.
 - Un fallo de la pantalla (paquete, SPI, init) registra `display init failed` y los botones siguen.
 - Unidad `deploy/openplayer-hardware.service` (usuario `openplayer`, grupos `gpio` y `spi`), instalada por `deploy/install.sh`. Pruebas en `tests/hardware-agent` con `MockFactory` y un servidor TCP local.
 
