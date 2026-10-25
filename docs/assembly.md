@@ -312,7 +312,10 @@ Módulo de 1,28" 240x240 ("1.28 TFT ver 1.0", 7 pines, sin BL). La dibuja el har
 3. Paquetes: `python3-pil`, `python3-spidev` y `fonts-dejavu-core` (§8; `install.sh` los verifica).
 4. En `/opt/openplayer/player.json`, poner `hardware.display.enabled` en `true` (el resto de la sección trae los valores del cableado de §10).
 5. `sudo systemctl restart openplayer-hardware` y `journalctl -u openplayer-hardware -b -f`: debe aparecer `display ready (spi0.0, 40000000 Hz)`.
-6. Prueba: con música, la pantalla muestra título, artista, ícono de estado, anillo de progreso y volumen. `mpc next`, `mpc volume 40` y play/pausa se reflejan en menos de 1 s. `sudo systemctl stop openplayer` → "Sin conexión"; al volver, la pista.
+6. Prueba: con música, la pantalla muestra ícono de estado, título, artista, álbum, `m:ss / -m:ss`, `n / total` y anillo de progreso. `mpc next`, `mpc volume 40` (anillo azul y número 2 s) y play/pausa se reflejan en menos de 1 s. `sudo systemctl stop openplayer` → "Sin conexión"; al volver, la pista.
+7. Modos (SPEC 18): `menu` alterna pista ↔ reloj en menos de 1 s. En pausa 60 s (`idleClockSeconds`) aparece el reloj solo. Para probar el ahorro, poner `nightStart`/`nightEnd` alrededor de la hora actual o `offAfterStoppedMinutes: 1` con `mpc stop`: el panel queda negro y un botón lo enciende 10 s.
+
+La Pi no tiene RTC: sin red, la hora del reloj (y el horario nocturno) es incorrecta hasta que NTP sincroniza. Se corrige sola, sin reiniciar el agente. Comprobar con `timedatectl` (`System clock synchronized: yes`).
 
 Si falla, el log muestra `display init failed: <motivo>` y los botones siguen funcionando:
 
@@ -322,10 +325,14 @@ Si falla, el log muestra `display init failed: <motivo>` y los botones siguen fu
 | `Permission denied` | La unidad no tiene el grupo `spi`; volver a desplegar |
 | `No module named 'spidev'` o `'PIL'` | Falta un paquete (paso 3) |
 | `cannot open resource` | Falta `fonts-dejavu-core` |
-| Pantalla negra sin error | Revisar cableado de DC, RST, CS y VCC |
+| Pantalla negra sin error | Revisar cableado de DC, RST, CS y VCC; medir continuidad entre pines vecinos del header (un corto RST–GND la deja en reset) |
+| Imagen que se desvanece a blanco | Alimentación o RST inestable: contacto flojo o corto en VCC, GND o RST |
 | Basura o parpadeo | Bajar `spiHz` (p. ej. 20000000) |
 | Imagen girada | Ajustar `rotation` (0, 90, 180, 270) |
 | Colores invertidos o espejados | Ajustar `MADCTL` (0x36) o `INVON` en `gc9a01.py` y documentarlo |
+| Reloj con hora equivocada | Sin NTP todavía (ver arriba) o zona horaria: `sudo timedatectl set-timezone <Zona>` |
+| No vuelve a encenderse tras el ahorro | El módulo no responde a `DISPON` solo: rehacer `init()` en `wake_display()` (`gc9a01.py`) |
+| Mucha CPU con títulos largos | El desplazamiento dibuja 5 fps (~14 % de un núcleo en la Pi Zero 2 W); subir `SCROLL_TICK` en `display.py` para menos |
 
 ## 12. Integración de batería y carcasa
 
@@ -342,6 +349,7 @@ Seguir `battery-design.md`. No imprimir la carcasa definitiva antes de medir DAC
 - [ ] Servicio C# se conecta a MPD y devuelve snapshot.
 - [ ] Los botones generan un solo evento por pulsación.
 - [ ] La pantalla (si está montada) muestra la pista actual y "Sin conexión" con el Service detenido.
+- [ ] `menu` alterna pista ↔ reloj; el ahorro nocturno o por inactividad apaga y un botón enciende (si se configuró).
 - [ ] El servicio se recupera tras reiniciar MPD.
 - [ ] El agente reconecta después de reiniciar C#.
 - [ ] Los logs son accesibles por journalctl.

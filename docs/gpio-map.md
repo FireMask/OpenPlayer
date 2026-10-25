@@ -25,8 +25,8 @@
 | Pantalla SCL (SCLK) | GPIO11 / SPI0 SCLK | 23 | SCL del módulo | SPEC 17 |
 | Pantalla SDA (MOSI) | GPIO10 / SPI0 MOSI | 19 | SDA del módulo | SPEC 17 |
 | Pantalla CS | GPIO8 / SPI0 CE0 | 24 | CS del módulo | SPEC 17 |
-| Pantalla DC | GPIO5 | 29 | DC del módulo (`hardware.display.dc`) | SPEC 17 |
-| Pantalla RST | GPIO6 | 31 | RST del módulo (`hardware.display.rst`) | SPEC 17 |
+| Pantalla DC | GPIO16 | 36 | DC del módulo (`hardware.display.dc`) | SPEC 17 |
+| Pantalla RST | GPIO26 | 37 | RST del módulo (`hardware.display.rst`) | SPEC 17 |
 | Pantalla VCC | — | 17 | 3.3 V | SPEC 17 |
 | Pantalla GND | — | 20 | GND | SPEC 17 |
 
@@ -63,7 +63,7 @@ Configurar entradas con pull-up interno. Estado en reposo: alto. Estado pulsado:
 | `next` | Ir a siguiente pista |
 | `volume_up` | Aumentar volumen según paso configurado |
 | `volume_down` | Disminuir volumen según paso configurado |
-| `menu` | Reservado para un menú en pantalla; por ahora ignorar o registrar |
+| `menu` | Alterna el modo de la pantalla redonda: pista ↔ reloj (SPEC 18) |
 | `refresh_library` | Reescanear la biblioteca (MPD `update`); solo desde el web agent |
 
 Los nombres de eventos son parte del contrato IPC. Si se renombran, actualizar Python, C#, pruebas y documentación en el mismo cambio.
@@ -123,18 +123,20 @@ Implementada por el hardware agent (SPEC 17). Módulo redondo de 1,28" 240x240 c
 ```text
 Módulo        Pi (pin físico)
 VCC  -------- 3.3 V (17)
-GND  -------- GND   (20)
+GND  -------- GND   (34)
 SCL  -------- GPIO11 / SCLK (23)
 SDA  -------- GPIO10 / MOSI (19)
 CS   -------- GPIO8  / CE0  (24)
-DC   -------- GPIO5         (29)
-RST  -------- GPIO6         (31)
+DC   -------- GPIO16        (36)
+RST  -------- GPIO26        (37)
 ```
 
 - Cablear con la Pi apagada y verificar el pinout serigrafiado del módulo antes de energizar.
-- La pantalla usa el bus SPI0, así que GPIO7–11 no quedan libres para otros usos. GPIO5 y GPIO6 no chocan con los botones (§2); si se cambian en `player.json`, el agente rechaza un pin repetido.
+- La pantalla usa el bus SPI0, así que GPIO7–11 no quedan libres para otros usos. GPIO16 y GPIO26 no chocan con los botones (§2); si se cambian en `player.json`, el agente rechaza un pin repetido.
 - Activar SPI una vez: `sudo raspi-config nonint do_spi 0`, y comprobar con `ls /dev/spidev0.0`. `install.sh` avisa si falta.
 - Habilitar en `/opt/openplayer/player.json` con `"hardware": {"display": {"enabled": true, ...}}` y `sudo systemctl restart openplayer-hardware`.
 - Calibración: si aparece basura o parpadeo con cables dupont largos, bajar `spiHz` (por ejemplo a 20000000). Si la imagen sale girada, ajustar `rotation` (0, 90, 180 o 270).
 
 Validado (2026-10-24, Pi Zero 2 W, Pi OS trixie, cables dupont): con `rotation` 0 la imagen salía al revés; el valor por defecto quedó en 180. `spiHz` 40000000 sin problemas a la vista.
+
+Cambio de pines (2026-10-24): DC y RST pasaron de GPIO5/GPIO6 (pines 29/31) a GPIO16/GPIO26 (36/37) y GND del 20 al 34 tras un cortocircuito entre los pines 29, 30 y 31 (RST unido a DC y GND: pantalla encendida pero negra). Si la pantalla queda negra o se desvanece a blanco, medir continuidad entre pines vecinos del header antes de tocar el código.

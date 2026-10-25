@@ -1,7 +1,9 @@
 """Configuración del agente: secciones hardware e ipc de player.json (architecture.md §10)."""
 
 import json
+import re
 from dataclasses import dataclass
+from datetime import time
 
 BUTTON_NAMES = ("play_pause", "previous", "next", "volume_up", "volume_down", "menu")
 
@@ -19,6 +21,10 @@ class DisplayConfig:
     rst: int  # BCM
     spi_hz: int
     rotation: int  # 0 | 90 | 180 | 270
+    # SPEC 18: None desactiva cada uno.
+    idle_clock_seconds: int | None = 60
+    night: tuple[time, time] | None = None  # (inicio, fin); puede cruzar la medianoche
+    off_after_stopped_minutes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -93,7 +99,33 @@ def _display(hardware: dict, pins: dict) -> DisplayConfig | None:
         used[key] = gpio[key] = pin
     hz = field("spiHz", lambda v: 1_000_000 <= v <= 62_500_000, "1000000-62500000")
     rotation = field("rotation", lambda v: v in (0, 90, 180, 270), "0, 90, 180 or 270")
-    return DisplayConfig(bus, device, gpio["dc"], gpio["rst"], hz, rotation)
+
+    # SPEC 18: opcionales; ausente = defecto, null = desactivado.
+    def optional(key, default, low, high):
+        value = section.get(key, default)
+        if value is not None and (not isinstance(value, int) or isinstance(value, bool) or not low <= value <= high):
+            raise ConfigError(f"hardware.display.{key} must be {low}-{high} or null")
+        return value
+
+    idle = optional("idleClockSeconds", 60, 1, 3600)
+    off = optional("offAfterStoppedMinutes", None, 1, 1440)
+    start, end = (_clock_time(section, key) for key in ("nightStart", "nightEnd"))
+    if (start is None) != (end is None):
+        raise ConfigError("hardware.display.nightStart and nightEnd must both be set or both be null")
+    if start is not None and start == end:
+        raise ConfigError("hardware.display.nightStart and nightEnd must differ")
+    night = (start, end) if start is not None else None
+    return DisplayConfig(bus, device, gpio["dc"], gpio["rst"], hz, rotation, idle, night, off)
+
+
+def _clock_time(section: dict, key: str) -> time | None:
+    value = section.get(key)
+    if value is None:
+        return None
+    match = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)", value) if isinstance(value, str) else None
+    if not match:
+        raise ConfigError(f"hardware.display.{key} must be HH:MM or null")
+    return time(int(match[1]), int(match[2]))
 
 
 def _get(data, section: str, key: str):

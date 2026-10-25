@@ -14,7 +14,8 @@ public static class SnapshotMessage
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    public static string Serialize(PlaybackSnapshot snapshot) => JsonSerializer.Serialize(
+    /// <param name="displayMode">Modo de la pantalla redonda (SPEC 18): "track" o "clock"; no viene de MPD.</param>
+    public static string Serialize(PlaybackSnapshot snapshot, string displayMode = "track") => JsonSerializer.Serialize(
         new Payload(
             "player.snapshot",
             snapshot.State switch
@@ -25,11 +26,14 @@ public static class SnapshotMessage
             },
             snapshot.CurrentTrack?.Title,
             snapshot.CurrentTrack?.Artist,
+            snapshot.CurrentTrack?.Album,
             WholeSeconds(snapshot.Position),
             WholeSeconds(snapshot.Duration),
             snapshot.Volume,
             snapshot.QueuePosition,
-            snapshot.QueueVersion),
+            snapshot.QueueLength,
+            snapshot.QueueVersion,
+            displayMode),
         Options);
 
     private static long? WholeSeconds(TimeSpan? value) => value is { } v ? (long)v.TotalSeconds : null;
@@ -39,9 +43,12 @@ public static class SnapshotMessage
         string State,
         string? TrackTitle,
         string? TrackArtist,
+        string? TrackAlbum,
         long? PositionSeconds,
         long? DurationSeconds,
         int? Volume,
         int? QueuePosition,
-        long? QueueVersion);
+        int? QueueLength,
+        long? QueueVersion,
+        string DisplayMode);
 }

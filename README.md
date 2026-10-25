@@ -129,7 +129,7 @@ Para correrlo en Windows sin hardware: `GPIOZERO_PIN_FACTORY=mock python src/har
 
 ### Pantalla redonda (opcional)
 
-El mismo agente dibuja la pista actual (título, artista, ícono, anillo de progreso y volumen) en una pantalla GC9A01 de 1,28" 240x240 por SPI (SPEC 17), con el estado que publica el Service (`player.subscribe`). Viene deshabilitada. Para usarla:
+El mismo agente dibuja la pista actual (título, artista, álbum, ícono y anillo de progreso) o un reloj en una pantalla GC9A01 de 1,28" 240x240 por SPI (SPEC 17), con el estado que publica el Service (`player.subscribe`). Viene deshabilitada. Para usarla:
 
 1. Cablear según [`docs/gpio-map.md`](docs/gpio-map.md) §10 (VCC a 3.3 V).
 2. Activar SPI (`sudo raspi-config nonint do_spi 0`) e instalar `sudo apt install python3-pil python3-spidev fonts-dejavu-core`.
@@ -140,6 +140,13 @@ journalctl -u openplayer-hardware -b -f   # display ready (spi0.0, 40000000 Hz) 
 ```
 
 Con el Service detenido muestra "Sin conexión"; si la pantalla falla, el log lo dice y los botones siguen. `spiHz` y `rotation` se calibran en `player.json`; montaje y problemas en [`docs/assembly.md`](docs/assembly.md) §11.
+
+Modos (SPEC 18): el botón `menu` alterna entre **pista** (ícono, título, artista, álbum, `1:23 / -2:40`, `3 / 12` y anillo de progreso) y **reloj** (HH:MM de 24 h, fecha como `sáb 24 oct` y el anillo si hay pista). El modo lo guarda el Service en memoria y vuelve a pista al reiniciarlo. Además:
+
+- En pausa o detenida durante `idleClockSeconds` (60 por defecto; `null` lo desactiva) muestra el reloj; al reproducir vuelve a la pista.
+- Cada cambio de volumen muestra 2 s un anillo azul interior y el número grande.
+- Un título que no entra se desplaza mientras suena (pausa de 1 s en cada extremo).
+- Ahorro opcional (apagado por defecto): `nightStart`/`nightEnd` (`"HH:MM"`, puede cruzar la medianoche) y `offAfterStoppedMinutes` apagan el panel (`DISPOFF`). Cualquier botón la enciende 10 s y además hace su acción; empezar a reproducir también la enciende.
 
 ## Web agent (control desde el navegador)
 

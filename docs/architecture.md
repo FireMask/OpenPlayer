@@ -287,7 +287,7 @@ Mensajes de entrada:
 Respuestas:
 
 ```json
-{"type":"player.snapshot","state":"playing","trackTitle":"Example","trackArtist":"Artist","positionSeconds":42,"durationSeconds":210,"volume":35,"queuePosition":3,"queueVersion":42}
+{"type":"player.snapshot","state":"playing","trackTitle":"Example","trackArtist":"Artist","trackAlbum":"Album","positionSeconds":42,"durationSeconds":210,"volume":35,"queuePosition":3,"queueLength":12,"queueVersion":42,"displayMode":"track"}
 {"type":"error","request":"player.get_snapshot","message":"MPD did not respond within 3000 ms"}
 ```
 
@@ -295,6 +295,7 @@ Respuestas:
 - `error` (generado por `ErrorMessage`): la consulta falló porque MPD no respondió o devolvió `ACK`, o (SPEC 10) el mensaje de biblioteca/playlists era inválido (`message`: `invalid <campo>`).
 - SPEC 10: `ok` (`OkMessage`) para mutaciones y `*.play`; `library.page` (`LibraryPageMessage`) para `library.browse`, `library.search` y `playlist.get`, con carpetas `{"uri","directory":true}` y pistas con `title`, `artist`, `album`, `durationSeconds` (`null` explícitos); `playlist.list` (`PlaylistListMessage`).
 - SPEC 11: `player.snapshot` suma `queuePosition` (0-based) y `queueVersion`, siempre presentes (`null` explícito si MPD no los da). `queue.page` (`QueuePageMessage`): `offset`, `total` y `entries` con los campos de una pista de `library.page`, sin `directory`. SPEC 12: cada entrada suma `id` (id de MPD; `null` explícito si falta). SPEC 14: sin `playlist`; cada entrada suma `source` (etiqueta de origen; `null` explícito si no tiene).
+- SPEC 18: `player.snapshot` suma `trackAlbum`, `queueLength` (MPD `playlistlength`) y `displayMode` (`track` | `clock`, nunca `null`). `displayMode` no viene de MPD: lo guarda el Service en memoria (arranca en `track`) y lo alterna `menu`.
 
 ```json
 {"type":"ok","request":"playlist.add"}
@@ -324,7 +325,7 @@ Socket:
 - `previous`: si la posición actual es mayor que `PreviousRestartThreshold` (3 s por defecto), reinicia la pista (`SeekAsync(0)`); si no, o si la posición es desconocida, va a la pista anterior. Con `consume` (SPEC 14) no queda pista anterior en la cola: medido en la Pi (MPD 0.24.4), `previous` reinicia la actual sin quitarla, así que sin historial ⏮ reinicia la canción. Con historial (SPEC 15), hasta el umbral (o sin posición) el Service saca la última escuchada y la reproduce arriba de la cola (`IQueue.RestoreAsync`: `add URI 0` + `play 0`; medido en la Pi: con `consume` la que sonaba queda segunda), con su etiqueta de origen. Un cambio causado por ⏮ no entra al historial (⏮⏮ retrocede dos canciones sin rebotar); la restaurada vuelve a entrar cuando termina. Si MPD rechaza el archivo (borrado), se descarta la entrada (warning `restore <uri> failed`) y ⏮ reinicia la actual. Mismo comportamiento en web y botón físico.
 - `next`: siguiente pista.
 - `volume_up` / `volume_down`: cambiar volumen en pasos de `VolumeStep` (5 por defecto), recortando a 0–100. Si el volumen es desconocido (MPD sin mixer), no hacer nada.
-- `menu`: reservado para navegación en pantalla futura; en el MVP no hace nada.
+- `menu` (SPEC 18): alterna `displayMode` de la pantalla redonda (`track` ↔ `clock`) y empuja el snapshot a los suscriptores; no toca MPD. Lo atiende `IpcServer`, no `ButtonCommandHandler`.
 
 Implementado en `OpenPlayer.Core.Commands.ButtonCommandHandler` (SPEC 01).
 

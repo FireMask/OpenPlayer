@@ -29,10 +29,14 @@
       "enabled": false,
       "spiBus": 0,
       "spiDevice": 0,
-      "dc": 5,
-      "rst": 6,
+      "dc": 16,
+      "rst": 26,
       "spiHz": 40000000,
-      "rotation": 180
+      "rotation": 180,
+      "idleClockSeconds": 60,
+      "nightStart": null,
+      "nightEnd": null,
+      "offAfterStoppedMinutes": null
     }
   },
   "web": {

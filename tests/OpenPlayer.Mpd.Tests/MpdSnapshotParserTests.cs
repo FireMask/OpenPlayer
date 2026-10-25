@@ -56,14 +56,16 @@ public class MpdSnapshotParserTests
         Assert.Null(s.QueuePosition);
         Assert.Null(s.QueueVersion);
         Assert.Null(s.SongId);
+        Assert.Null(s.QueueLength);
     }
 
     [Fact]
     public void Parses_queue_position_and_version()
     {
-        var s = MpdSnapshotParser.Parse(Resp("state: play", "song: 3", "playlist: 42", "songid: 17"), Resp(), Now);
+        var s = MpdSnapshotParser.Parse(Resp("state: play", "song: 3", "playlist: 42", "songid: 17", "playlistlength: 12"), Resp(), Now);
 
         Assert.Equal(3, s.QueuePosition);
+        Assert.Equal(12, s.QueueLength);
         Assert.Equal(42L, s.QueueVersion);
         Assert.Equal(17, s.SongId);
     }

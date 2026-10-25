@@ -30,10 +30,17 @@ def main(argv):
 
     sender = Sender(config.socket_path)
     sender.start()
+    display = None
+
+    def press(name):
+        if display:
+            display.wake()  # SPEC 18: cualquier botón enciende la pantalla apagada, y además hace su acción
+        sender.press(name)
+
     try:
         # gpiozero se importa aquí: un error de GPIO (paquete, permisos, pin ocupado) sale con 1 y systemd lo ve.
         from buttons import create_buttons
-        buttons = create_buttons(config, sender.press)
+        buttons = create_buttons(config, press)
     except Exception as e:
         log.error("cannot set up GPIO buttons: %s", e)
         sender.stop()
@@ -79,7 +86,9 @@ def _start_display(config):
         spi.open(d.spi_bus, d.spi_device)
         opened.append(spi)
         panel = GC9A01(spi, dc, rst, spi_hz=d.spi_hz, rotation=d.rotation)
-        display = Display(config.socket_path, panel, label=f"spi{d.spi_bus}.{d.spi_device}, {d.spi_hz} Hz")
+        display = Display(config.socket_path, panel, label=f"spi{d.spi_bus}.{d.spi_device}, {d.spi_hz} Hz",
+                          idle_clock_seconds=d.idle_clock_seconds, night=d.night,
+                          off_after_stopped_minutes=d.off_after_stopped_minutes)
     except Exception as e:
         log.error("display init failed: %s", e)
         for resource in opened:

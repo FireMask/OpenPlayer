@@ -1,4 +1,5 @@
 import json
+from datetime import time
 
 import pytest
 
@@ -124,7 +125,7 @@ def test_missing_display_section_is_none(tmp_path):
 def test_loads_enabled_display(tmp_path):
     display = load_config(write(tmp_path, with_display())).display
 
-    assert display == DisplayConfig(spi_bus=0, spi_device=0, dc=5, rst=6, spi_hz=40_000_000, rotation=180)
+    assert display == DisplayConfig(spi_bus=0, spi_device=0, dc=16, rst=26, spi_hz=40_000_000, rotation=180)
 
 
 @pytest.mark.parametrize("fields, field", [
@@ -133,7 +134,7 @@ def test_loads_enabled_display(tmp_path):
     ({"dc": 28}, "hardware.display.dc"),
     ({"dc": "5"}, "hardware.display.dc"),
     ({"rst": True}, "hardware.display.rst"),
-    ({"rst": 5}, "hardware.display.rst: pin 5 is already used"),
+    ({"rst": 16}, "hardware.display.rst: pin 16 is already used"),
     ({"dc": 17}, "hardware.display.dc: pin 17 is already used"),
     ({"spiHz": 999_999}, "hardware.display.spiHz"),
     ({"spiHz": 62_500_001}, "hardware.display.spiHz"),
@@ -159,3 +160,41 @@ def test_rejects_display_not_object(tmp_path):
 
     with pytest.raises(ConfigError, match=r"hardware\.display must be an object"):
         load_config(write(tmp_path, data))
+
+
+# Campos opcionales de la pantalla (SPEC 18)
+
+def test_display_without_new_fields_uses_defaults(tmp_path):
+    data = with_display()
+    for key in ("idleClockSeconds", "nightStart", "nightEnd", "offAfterStoppedMinutes"):
+        del data["hardware"]["display"][key]
+    display = load_config(write(tmp_path, data)).display
+
+    assert (display.idle_clock_seconds, display.night, display.off_after_stopped_minutes) == (60, None, None)
+
+
+def test_loads_display_power_fields(tmp_path):
+    data = with_display(idleClockSeconds=None, nightStart="23:00", nightEnd="07:30", offAfterStoppedMinutes=15)
+    display = load_config(write(tmp_path, data)).display
+
+    assert display.idle_clock_seconds is None
+    assert display.night == (time(23, 0), time(7, 30))
+    assert display.off_after_stopped_minutes == 15
+
+
+@pytest.mark.parametrize("fields, field", [
+    ({"idleClockSeconds": 0}, "hardware.display.idleClockSeconds"),
+    ({"idleClockSeconds": 3601}, "hardware.display.idleClockSeconds"),
+    ({"idleClockSeconds": True}, "hardware.display.idleClockSeconds"),
+    ({"offAfterStoppedMinutes": 0}, "hardware.display.offAfterStoppedMinutes"),
+    ({"offAfterStoppedMinutes": 1441}, "hardware.display.offAfterStoppedMinutes"),
+    ({"nightStart": "23:00"}, "hardware.display.nightStart and nightEnd must both be set"),
+    ({"nightEnd": "07:00"}, "hardware.display.nightStart and nightEnd must both be set"),
+    ({"nightStart": "24:00", "nightEnd": "07:00"}, "hardware.display.nightStart must be HH:MM"),
+    ({"nightStart": "23:00", "nightEnd": "7:00"}, "hardware.display.nightEnd must be HH:MM"),
+    ({"nightStart": 2300, "nightEnd": "07:00"}, "hardware.display.nightStart must be HH:MM"),
+    ({"nightStart": "07:00", "nightEnd": "07:00"}, "hardware.display.nightStart and nightEnd must differ"),
+])
+def test_rejects_invalid_display_power_fields(tmp_path, fields, field):
+    with pytest.raises(ConfigError, match=field.replace(".", r"\.")):
+        load_config(write(tmp_path, with_display(**fields)))
