@@ -32,7 +32,7 @@ try {
     ssh -o StrictHostKeyChecking=accept-new $target "mkdir -p $remote"
     if ($LASTEXITCODE) { throw 'ssh falló' }
     $deploy = Join-Path $PSScriptRoot 'deploy'
-    scp $tgz "$deploy\install.sh" "$deploy\openplayer.service" "$deploy\openplayer-hardware.service" "$deploy\openplayer-web.service" "${target}:$remote/"
+    scp $tgz "$deploy\install.sh" "$deploy\openplayer.service" "$deploy\openplayer-hardware.service" "$deploy\openplayer-web.service" "$deploy\50-openplayer-poweroff.rules" "${target}:$remote/"
     if ($LASTEXITCODE) { throw 'scp falló' }
 
     $install = "bash $remote/install.sh $remote/openplayer.tgz $remote/openplayer.service $User"

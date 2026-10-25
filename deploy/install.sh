@@ -1,7 +1,7 @@
 #!/bin/bash
 # Instala OpenPlayer.Service (SPEC 04), el hardware agent (SPEC 05, pantalla SPEC 17) y el web agent (SPEC 08) en /opt/openplayer como unidades systemd. Idempotente.
 # Uso: sudo bash install.sh <ruta.tgz> <openplayer.service> <usuario-que-despliega>
-# El .tgz trae el publish del Service, hardware-agent/ y web-agent/; las unidades de los agentes van junto a openplayer.service.
+# El .tgz trae el publish del Service, hardware-agent/ y web-agent/; las unidades de los agentes y la regla polkit (SPEC 20) van junto a openplayer.service.
 set -euo pipefail
 
 if [ $# -ne 3 ]; then
@@ -12,6 +12,7 @@ TGZ=$1
 UNIT=$2
 AGENT_UNIT=$(dirname "$UNIT")/openplayer-hardware.service
 WEB_UNIT=$(dirname "$UNIT")/openplayer-web.service
+POLKIT_RULE=$(dirname "$UNIT")/50-openplayer-poweroff.rules
 DEPLOYER=$3
 DIR=/opt/openplayer
 SOCK=/run/openplayer/hardware.sock
@@ -21,6 +22,7 @@ SOCK=/run/openplayer/hardware.sock
 [ -f "$UNIT" ] || { echo "Not found: $UNIT" >&2; exit 1; }
 [ -f "$AGENT_UNIT" ] || { echo "Not found: $AGENT_UNIT" >&2; exit 1; }
 [ -f "$WEB_UNIT" ] || { echo "Not found: $WEB_UNIT" >&2; exit 1; }
+[ -f "$POLKIT_RULE" ] || { echo "Not found: $POLKIT_RULE" >&2; exit 1; }
 id "$DEPLOYER" >/dev/null 2>&1 || { echo "Unknown user: $DEPLOYER" >&2; exit 1; }
 
 # El agente usa los paquetes del sistema (sin venv). Solo se verifican: instalarlos es decisión del administrador.
@@ -33,6 +35,9 @@ done
 # SPI apagado no es error: la pantalla puede estar deshabilitada (hardware.display.enabled).
 [ -e /dev/spidev0.0 ] ||
     echo "Warning: /dev/spidev0.0 not found; the display needs SPI: sudo raspi-config nonint do_spi 0" >&2
+# Sin polkitd la regla no se carga y power_off falla (SPEC 20); el resto funciona igual.
+dpkg-query -W -f='${Status}' polkitd 2>/dev/null | grep -q "install ok installed" ||
+    echo "Warning: polkitd not installed; power off by button needs it: sudo apt install polkitd" >&2
 
 # Usuario de sistema sin login ni home; el que despliega entra al grupo para usar el socket (socat).
 getent group openplayer >/dev/null || groupadd --system openplayer
@@ -64,6 +69,8 @@ chmod 755 "$DIR/OpenPlayer.Service"
 install -m 644 "$UNIT" /etc/systemd/system/openplayer.service
 install -m 644 "$AGENT_UNIT" /etc/systemd/system/openplayer-hardware.service
 install -m 644 "$WEB_UNIT" /etc/systemd/system/openplayer-web.service
+# polkitd relee rules.d solo; no hace falta reiniciarlo.
+install -D -m 644 -o root -g root "$POLKIT_RULE" /etc/polkit-1/rules.d/50-openplayer-poweroff.rules
 systemctl daemon-reload
 systemctl enable --quiet openplayer openplayer-hardware openplayer-web
 # Un "failed" previo por StartLimitBurst bloquearía el restart.
