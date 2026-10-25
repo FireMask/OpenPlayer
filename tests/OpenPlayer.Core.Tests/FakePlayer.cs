@@ -40,7 +40,17 @@ internal sealed class FakePlayer : IPlayer
         return SnapshotError is { } e ? Task.FromException<PlaybackSnapshot>(e) : Task.FromResult(Snapshot);
     }
 
-    private TaskCompletionSource _change = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public Cover Cover { get; set; } = new(null, null, null);
+
+    public Exception? CoverError { get; set; }
+
+    public Task<Cover> GetCoverAsync(CancellationToken ct = default)
+    {
+        Calls.Add("GetCover");
+        return CoverError is { } e ? Task.FromException<Cover>(e) : Task.FromResult(Cover);
+    }
+
+    private TaskCompletionSource _change =new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>Se completa cuando alguien queda esperando en <see cref="WaitForChangeAsync"/>.</summary>
     public TaskCompletionSource Waiting { get; private set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
