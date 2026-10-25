@@ -67,7 +67,7 @@ echo '{"type":"button.pressed","button":"play_pause"}' | socat - $S
 
 | Mensaje | Efecto |
 |---|---|
-| `{"type":"button.pressed","button":"<nombre>"}` con `play_pause`, `previous`, `next`, `volume_up`, `volume_down`, `menu` | Igual que el botón físico; sin respuesta |
+| `{"type":"button.pressed","button":"<nombre>"}` con `play_pause`, `previous`, `next`, `volume_up`, `volume_down`, `menu`, `seek_forward`, `seek_backward`, `power_off` | Igual que el botón físico (los tres últimos son sus pulsaciones largas; `power_off` apaga la Pi); sin respuesta |
 | `{"type":"player.get_snapshot"}` | Responde una línea `player.snapshot`, o `error` si MPD no responde |
 
 Un mensaje inválido o sin MPD accesible solo registra un warning; el proceso sigue. Si `socat` corta la respuesta, usar `socat -t 2`.
@@ -91,7 +91,7 @@ Publicación autocontenida (no requiere instalar .NET en la Pi). Desde Windows, 
 .\deploy.ps1 -Device openplayer.local -User <usuario> [-Password <contraseña>]
 ```
 
-`install.sh` es idempotente: verifica `python3-gpiozero` y `python3-lgpio` (no los instala), crea el usuario y grupo `openplayer` si faltan, añade `<usuario>` al grupo, instala en `/opt/openplayer` el Service, `hardware-agent/` y `web-agent/` (sin sobrescribir un `player.json` existente; solo le agrega la sección `web` si falta), instala `deploy/openplayer.service`, `deploy/openplayer-hardware.service` y `deploy/openplayer-web.service`, las habilita y las reinicia. Termina con error y muestra `journalctl` si alguna unidad no queda lista.
+`install.sh` es idempotente: verifica `python3-gpiozero` y `python3-lgpio` (no los instala), crea el usuario y grupo `openplayer` si faltan, añade `<usuario>` al grupo, instala en `/opt/openplayer` el Service, `hardware-agent/` y `web-agent/` (sin sobrescribir un `player.json` existente; solo le agrega la sección `web` si falta), instala `deploy/openplayer.service`, `deploy/openplayer-hardware.service` y `deploy/openplayer-web.service`, las habilita y las reinicia. También instala la regla polkit `deploy/50-openplayer-poweroff.rules` en `/etc/polkit-1/rules.d/` (deja al usuario `openplayer` apagar la Pi; avisa si falta `polkitd`). Termina con error y muestra `journalctl` si alguna unidad no queda lista.
 
 `-Password` sirve para ssh y sudo, pero queda en el historial de PowerShell; sin él, ssh usa tu clave (`ssh-copy-id`) y sudo pide la contraseña en la terminal.
 
@@ -100,7 +100,7 @@ Sin PowerShell, el equivalente manual:
 ```bash
 dotnet publish src/OpenPlayer.Service -c Release -r linux-arm64 --self-contained true -o publish/linux-arm64
 tar -czf openplayer.tgz --exclude=__pycache__ --exclude=requirements-dev.txt -C publish/linux-arm64 . -C "$PWD/src" hardware-agent web-agent
-scp openplayer.tgz deploy/install.sh deploy/openplayer.service deploy/openplayer-hardware.service deploy/openplayer-web.service <usuario>@openplayer.local:/tmp/
+scp openplayer.tgz deploy/install.sh deploy/openplayer.service deploy/openplayer-hardware.service deploy/openplayer-web.service deploy/50-openplayer-poweroff.rules <usuario>@openplayer.local:/tmp/
 ssh -t <usuario>@openplayer.local 'sudo bash /tmp/install.sh /tmp/openplayer.tgz /tmp/openplayer.service $USER'
 ```
 
@@ -109,6 +109,17 @@ La instalación anterior en `~/openplayer` (SPEC 02/03) ya no se usa; se puede b
 ## Hardware agent (botones GPIO)
 
 `src/hardware-agent` (Python, stdlib y `gpiozero`; Pillow y `spidev` solo con pantalla) lee los botones de `hardware.buttons` en `player.json` (BCM, pull-up interno, debounce `hardware.debounceSeconds`) y envía `button.pressed` al socket. Corre como unidad `openplayer-hardware`; si el Service no está disponible, descarta la pulsación con un warning y reconecta solo.
+
+Gestos (SPEC 20). Mantenida = apretada al menos `hardware.holdSeconds` (0,6 s por defecto, 0,2–2). Una pulsación larga nunca dispara la corta.
+
+| Botón | Corta | Mantenida |
+|---|---|---|
+| ⏭ `next` / ⏮ `previous` | Al soltar: siguiente / anterior | Seek +10 s / −10 s (`player.seekStepSeconds`), repetido cada 0,5 s, con aviso `+10 s` / `−10 s`; nunca cambia de pista |
+| vol+ / vol− | Al apretar, como siempre | El mismo paso repetido cada 0,25 s |
+| ▶︎⏸ `play_pause` | Al soltar: play/pausa | Cuenta "Apagar 3… 2… 1" y a los `hardware.shutdownHoldSeconds` (3 s, 1–10) apaga la Pi ("Apagando…"). Soltar antes cancela y no hace nada |
+| `menu` | Al soltar: cicla los modos de pantalla | Solo el aviso "Menú: próximamente" (reservado) |
+
+Los avisos son una píldora abajo en la pantalla, 1,5 s; sin pantalla, los gestos y el apagado funcionan igual. Al detenerse, el agente apaga el panel (`DISPOFF`). Tras el apagado el panel sigue alimentado (sin pin BL, la luz queda encendida): cortar con el interruptor de alimentación.
 
 ```bash
 systemctl status openplayer-hardware

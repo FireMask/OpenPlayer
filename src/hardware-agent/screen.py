@@ -23,6 +23,8 @@ TEXT_RADIUS = 96  # dentro del anillo (111–117 px), con margen
 VOLUME_RADIUS = 104  # anillo interior del indicador de volumen (SPEC 18)
 VOLUME_WIDTH = 4
 TITLE_TOP, TITLE_SIZE = 88, 22
+TOAST_BACKGROUND = (40, 40, 40)
+TOAST_CENTER, TOAST_HEIGHT, TOAST_SIZE, TOAST_PADDING = 180, 26, 16, 8
 
 MESSAGES = {"offline": "Sin conexión", "mpd_error": "MPD no responde"}
 
@@ -44,6 +46,7 @@ class View:
     volume_popup: bool = False  # anillo interior y número grande
     scroll: int = 0  # desplazamiento del título en px
     cover: Image.Image | None = None  # modo art: carátula ya preparada (cover.prepare), 228x228 circular
+    toast: str | None = None  # aviso de un gesto (SPEC 20), encima de todo
 
 
 def render(view: View) -> Image.Image:
@@ -55,17 +58,28 @@ def render(view: View) -> Image.Image:
         message = "Detenido"
     if message is not None:
         _text(draw, message, CENTER - 11, 22, WHITE, radius=WIDTH // 2 - 6)  # sin anillo: todo el ancho
-        return image
-
-    if view.mode == "clock":
+    elif view.mode == "clock":
         _clock(draw, view)
     elif view.mode == "art":
         _art(image, draw, view)
     else:
         _track(image, draw, view)
-    if view.volume_popup and view.volume is not None:
-        _volume(draw, view.volume)  # al final: tapa el centro de cualquier modo
+    if message is None and view.volume_popup and view.volume is not None:
+        _volume(draw, view.volume)  # tapa el centro de cualquier modo
+    if view.toast:
+        _toast(draw, view.toast)  # al final: encima de todo, también del indicador de volumen
     return image
+
+
+def _toast(draw, text):
+    # y=180 y no 200 (SPEC 20): a 16 px "Menú: próximamente" no entra en la cuerda más abajo.
+    font = _font(TOAST_SIZE)
+    top = TOAST_CENTER - TOAST_HEIGHT // 2
+    text = fit(text, font, _chord(top, TOAST_HEIGHT, WIDTH // 2) - 2 * TOAST_PADDING)
+    half = font.getlength(text) / 2 + TOAST_PADDING
+    draw.rounded_rectangle((CENTER - half, top, CENTER + half, top + TOAST_HEIGHT),
+                           radius=TOAST_HEIGHT // 2, fill=TOAST_BACKGROUND)
+    draw.text((CENTER, TOAST_CENTER), text, font=font, fill=WHITE, anchor="mm")
 
 
 def _track(image, draw, view):

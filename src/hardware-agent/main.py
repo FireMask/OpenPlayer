@@ -11,6 +11,7 @@ import sys
 import threading
 
 from config import ConfigError, load_config
+from gestures import Gestures
 from sender import Sender
 
 log = logging.getLogger("hardware-agent")
@@ -32,15 +33,24 @@ def main(argv):
     sender.start()
     display = None
 
-    def press(name):
+    def wake(name):
         if display:
             display.wake()  # SPEC 18: cualquier botón enciende la pantalla apagada, y además hace su acción
-        sender.press(name)
 
+    def send(name):
+        sender.press(name)
+        if name == "power_off" and display:
+            display.shutting_down()
+
+    def toast(text):
+        if display:
+            display.toast(text)
+
+    gestures = Gestures(send, toast, hold=config.hold_seconds, shutdown_hold=config.shutdown_hold_seconds)
     try:
         # gpiozero se importa aquí: un error de GPIO (paquete, permisos, pin ocupado) sale con 1 y systemd lo ve.
-        from buttons import create_buttons
-        buttons = create_buttons(config, press)
+        from buttons import Buttons
+        buttons = Buttons(config, gestures, wake)
     except Exception as e:
         log.error("cannot set up GPIO buttons: %s", e)
         sender.stop()
@@ -56,14 +66,22 @@ def main(argv):
     # wait() con timeout: en Windows un wait sin timeout no deja correr los manejadores de señal.
     while not stopping.wait(1):
         pass
+    buttons.close()  # antes que la pantalla: ningún aviso dibuja sobre el panel cerrado
     if display:
         display.stop()
+        _sleep_panel(display.panel)
         display.panel.close()
-    for button in buttons:
-        button.close()
     sender.stop()
     log.info("stopped")
     return 0
+
+
+def _sleep_panel(panel):
+    """DISPOFF (SPEC 20): tras poweroff el panel sigue alimentado y mostraría "Apagando…" para siempre."""
+    try:
+        panel.sleep_display()
+    except Exception as e:
+        log.warning("display off failed: %s", e)
 
 
 def _start_display(config):

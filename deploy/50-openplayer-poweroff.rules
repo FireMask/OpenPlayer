@@ -1,0 +1,8 @@
+// SPEC 20: el usuario openplayer puede apagar la Pi (systemctl poweroff vía logind) y nada más.
+polkit.addRule(function (action, subject) {
+  if (subject.user === "openplayer" &&
+      (action.id === "org.freedesktop.login1.power-off" ||
+       action.id === "org.freedesktop.login1.power-off-multiple-sessions")) {
+    return polkit.Result.YES;
+  }
+});

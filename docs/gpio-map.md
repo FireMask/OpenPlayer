@@ -48,9 +48,9 @@ Configurar entradas con pull-up interno. Estado en reposo: alto. Estado pulsado:
 ## 4. Debounce y comportamiento
 
 - Valor inicial sugerido: 50–100 ms (comenzar con 80 ms y probar botones reales).
-- Una pulsación debe generar exactamente un evento `button.pressed`.
-- Liberar el botón no genera una acción salvo que se implemente explícitamente un gesto.
-- No implementar pulsación larga hasta que la pulsación corta sea estable.
+- Una pulsación corta genera exactamente un evento `button.pressed`: al soltar en ⏭ ⏮ ▶︎ menu (para distinguirla de la larga), al apretar en vol±.
+- Pulsación mantenida (SPEC 20): apretada al menos `hardware.holdSeconds` (0,6 s por defecto). Una larga nunca dispara la corta. La detecta `gestures.py` (un hilo hace tick cada 50 ms y suelta un botón cuyo `is_pressed` ya es falso, por si se pierde el evento de soltar).
+- `holdSeconds` calibrado con los botones reales: 0,6 s (el valor por defecto; probado en la Pi el 2026-10-24, sin falsas pulsaciones largas).
 - Evitar bloquear el proceso de lectura de botones mientras espera respuesta del servicio C#.
 - Si el socket no está disponible, reintentar con backoff; no perder el control del loop de GPIO.
 
@@ -63,8 +63,19 @@ Configurar entradas con pull-up interno. Estado en reposo: alto. Estado pulsado:
 | `next` | Ir a siguiente pista |
 | `volume_up` | Aumentar volumen según paso configurado |
 | `volume_down` | Disminuir volumen según paso configurado |
-| `menu` | Alterna el modo de la pantalla redonda: pista ↔ reloj (SPEC 18) |
+| `menu` | Cicla el modo de la pantalla redonda: pista → reloj → carátula (SPEC 18, 19) |
 | `refresh_library` | Reescanear la biblioteca (MPD `update`); solo desde el web agent |
+| `seek_forward` / `seek_backward` | Seek ±`seekStepSeconds` (10 s), recortado a 0 y a duración − 1 s (SPEC 20) |
+| `power_off` | `systemctl poweroff` vía la regla polkit (SPEC 20) |
+
+Gestos por botón (SPEC 20):
+
+| Botón | Corta | Mantenida (≥ `holdSeconds`) |
+|---|---|---|
+| `next` / `previous` | Al soltar: `next` / `previous` | `seek_forward` / `seek_backward` enseguida y cada 0,5 s; aviso `+10 s` / `−10 s` |
+| `volume_up` / `volume_down` | Al apretar | El mismo evento cada 0,25 s |
+| `play_pause` | Al soltar: `play_pause` | Cuenta "Apagar 3… 2… 1"; a `shutdownHoldSeconds` (3 s) envía `power_off` una vez y muestra "Apagando…". Soltar antes no envía nada |
+| `menu` | Al soltar: `menu` | No envía nada; aviso "Menú: próximamente" (SPEC 21) |
 
 Los nombres de eventos son parte del contrato IPC. Si se renombran, actualizar Python, C#, pruebas y documentación en el mismo cambio.
 
