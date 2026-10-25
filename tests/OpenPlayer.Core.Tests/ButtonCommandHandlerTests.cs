@@ -82,6 +82,58 @@ public class ButtonCommandHandlerTests
         Assert.Equal(["GetSnapshot"], _player.Calls);
     }
 
+    [Theory]
+    [InlineData(ButtonName.SeekForward, 50, "00:01:00")]
+    [InlineData(ButtonName.SeekBackward, 50, "00:00:40")]
+    [InlineData(ButtonName.SeekBackward, 4, "00:00:00")]
+    [InlineData(ButtonName.SeekForward, 175, "00:02:59")]
+    [InlineData(ButtonName.SeekForward, 179.5, "00:02:59")]
+    public async Task Seek_steps_and_clamps(ButtonName button, double position, string expected)
+    {
+        _player.Snapshot = FakePlayer.SnapshotWith(
+            position: TimeSpan.FromSeconds(position), duration: TimeSpan.FromSeconds(180));
+        await Press(button);
+        Assert.Equal(["GetSnapshot", $"Seek({expected})"], _player.Calls);
+    }
+
+    [Fact]
+    public async Task Seek_forward_without_duration_is_not_clamped()
+    {
+        _player.Snapshot = FakePlayer.SnapshotWith(position: TimeSpan.FromSeconds(50));
+        await Press(ButtonName.SeekForward);
+        Assert.Equal(["GetSnapshot", "Seek(00:01:00)"], _player.Calls);
+    }
+
+    [Fact]
+    public async Task Seek_uses_configured_step()
+    {
+        _player.Snapshot = FakePlayer.SnapshotWith(
+            position: TimeSpan.FromSeconds(50), duration: TimeSpan.FromSeconds(180));
+        await new ButtonCommandHandler(_player, new PlayerSettings(seekStepSeconds: 30)).HandleAsync(ButtonName.SeekForward);
+        Assert.Equal(["GetSnapshot", "Seek(00:01:20)"], _player.Calls);
+    }
+
+    [Theory]
+    [InlineData(ButtonName.SeekForward)]
+    [InlineData(ButtonName.SeekBackward)]
+    public async Task Seek_without_position_does_nothing(ButtonName button)
+    {
+        _player.Snapshot = FakePlayer.SnapshotWith(position: null, duration: TimeSpan.FromSeconds(180));
+        await Press(button);
+        Assert.Equal(["GetSnapshot"], _player.Calls);
+    }
+
+    [Theory]
+    [InlineData(ButtonName.SeekForward)]
+    [InlineData(ButtonName.SeekBackward)]
+    public async Task Seek_when_stopped_does_nothing(ButtonName button)
+    {
+        _player.Snapshot = FakePlayer.SnapshotWith(position: TimeSpan.FromSeconds(50),
+            duration: TimeSpan.FromSeconds(180), state: PlaybackState.Stopped);
+        await Press(button);
+        Assert.Equal(["GetSnapshot"], _player.Calls);
+    }
+
     [Fact]
     public async Task Undefined_button_throws() =>
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => Press((ButtonName)99));

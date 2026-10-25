@@ -15,8 +15,9 @@ internal sealed class FakePlayer : IPlayer
 
     public Exception? SeekError { get; set; }
 
-    public static PlaybackSnapshot SnapshotWith(TimeSpan? position = null, int? volume = null) =>
-        new(PlaybackState.Playing, null, position, null, volume, DateTimeOffset.UnixEpoch);
+    public static PlaybackSnapshot SnapshotWith(TimeSpan? position = null, int? volume = null,
+        TimeSpan? duration = null, PlaybackState state = PlaybackState.Playing) =>
+        new(state, null, position, duration, volume, DateTimeOffset.UnixEpoch);
 
     public Task PlayAsync(CancellationToken ct = default) => Record("Play");
     public Task PauseAsync(CancellationToken ct = default) => Record("Pause");

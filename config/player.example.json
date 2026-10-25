@@ -12,6 +12,7 @@
     "initialVolume": 35,
     "volumeStep": 5,
     "previousRestartThresholdSeconds": 3,
+    "seekStepSeconds": 10,
     "preferredOutput": "usb-dac",
     "resumePlaybackOnBoot": false
   },

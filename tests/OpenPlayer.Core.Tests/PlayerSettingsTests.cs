@@ -12,14 +12,21 @@ public class PlayerSettingsTests
         Assert.Equal(5, settings.VolumeStep);
         Assert.Equal(35, settings.InitialVolume);
         Assert.Equal(TimeSpan.FromSeconds(3), settings.PreviousRestartThreshold);
+        Assert.Equal(10, settings.SeekStepSeconds);
     }
 
     [Fact]
     public void Accepts_bounds()
     {
-        _ = new PlayerSettings(volumeStep: 1, initialVolume: 0, previousRestartThreshold: TimeSpan.Zero);
-        _ = new PlayerSettings(volumeStep: 100, initialVolume: 100);
+        _ = new PlayerSettings(volumeStep: 1, initialVolume: 0, previousRestartThreshold: TimeSpan.Zero, seekStepSeconds: 1);
+        _ = new PlayerSettings(volumeStep: 100, initialVolume: 100, seekStepSeconds: 60);
     }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(61)]
+    public void Rejects_invalid_seek_step(int step) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => new PlayerSettings(seekStepSeconds: step));
 
     [Theory]
     [InlineData(0)]

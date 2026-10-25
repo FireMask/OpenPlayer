@@ -24,9 +24,10 @@ public sealed class PlayerConfig
         public int InitialVolume { get; set; }
         public int VolumeStep { get; set; }
         public double PreviousRestartThresholdSeconds { get; set; }
+        public int SeekStepSeconds { get; set; } = 10;
 
         public PlayerSettings ToSettings() =>
-            new(VolumeStep, InitialVolume, TimeSpan.FromSeconds(PreviousRestartThresholdSeconds));
+            new(VolumeStep, InitialVolume, TimeSpan.FromSeconds(PreviousRestartThresholdSeconds), SeekStepSeconds);
     }
 
     public sealed class IpcSection

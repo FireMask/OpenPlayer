@@ -17,6 +17,8 @@ public sealed class ButtonCommandHandler(IPlayer player, PlayerSettings settings
         ButtonName.VolumeDown => ChangeVolumeAsync(-_settings.VolumeStep, ct),
         ButtonName.Menu => Task.CompletedTask,
         ButtonName.RefreshLibrary => _player.UpdateLibraryAsync(ct),
+        ButtonName.SeekForward => SeekRelativeAsync(_settings.SeekStepSeconds, ct),
+        ButtonName.SeekBackward => SeekRelativeAsync(-_settings.SeekStepSeconds, ct),
         _ => throw new ArgumentOutOfRangeException(nameof(button), button, null),
     };
 
@@ -26,6 +28,18 @@ public sealed class ButtonCommandHandler(IPlayer player, PlayerSettings settings
         var snapshot = await _player.GetSnapshotAsync(ct);
         if (snapshot.Volume is int current)
             await _player.SetVolumeAsync(Math.Clamp(current + delta, Volume.Min, Volume.Max), ct);
+    }
+
+    // Recorta a [0, duración − 1 s] para no cambiar de pista. Sin posición o detenido = no hacer nada.
+    private async Task SeekRelativeAsync(int deltaSeconds, CancellationToken ct)
+    {
+        var snapshot = await _player.GetSnapshotAsync(ct);
+        if (snapshot.State == PlaybackState.Stopped || snapshot.Position is not TimeSpan position)
+            return;
+        var target = position + TimeSpan.FromSeconds(deltaSeconds);
+        if (snapshot.Duration is TimeSpan duration)
+            target = TimeSpan.FromTicks(Math.Min(target.Ticks, (duration - TimeSpan.FromSeconds(1)).Ticks));
+        await _player.SeekAsync(target < TimeSpan.Zero ? TimeSpan.Zero : target, ct);
     }
 
     // Pasado el umbral reinicia la pista; antes (o sin posición conocida) va a la anterior.
