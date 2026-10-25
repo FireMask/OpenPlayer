@@ -14,6 +14,9 @@ public sealed record SnapshotRequested : IpcMessage;
 // Suscripción (SPEC 16): la conexión queda dedicada; responde con player.snapshot ahora y en cada cambio, no con ok.
 public sealed record SubscribeRequested : IpcMessage;
 
+/// <summary>SPEC 19: carátula de la pista actual; responde <c>player.cover</c> o <c>error</c>.</summary>
+public sealed record CoverRequested : IpcMessage;
+
 public sealed record SeekRequested(TimeSpan Position) : IpcMessage;
 
 // Biblioteca y playlists (SPEC 10): todos responden una línea (ok, página, lista o error).
@@ -65,6 +68,7 @@ public static class IpcMessageParser
     /// <summary>Tipos que siempre responden; si son inválidos, el Service responde <c>error</c> con su nombre.</summary>
     private static readonly HashSet<string> ReplyingTypes =
     [
+        "player.get_cover",
         "library.browse", "library.search", "library.play",
         "playlist.list", "playlist.get", "playlist.create", "playlist.rename", "playlist.delete",
         "playlist.add", "playlist.remove", "playlist.move", "playlist.play",
@@ -111,6 +115,9 @@ public static class IpcMessageParser
                     break;
                 case "player.subscribe":
                     message = new SubscribeRequested();
+                    break;
+                case "player.get_cover":
+                    message = new CoverRequested();
                     break;
                 case "player.seek":
                     // Cota de 24 h para no desbordar TimeSpan con valores absurdos.

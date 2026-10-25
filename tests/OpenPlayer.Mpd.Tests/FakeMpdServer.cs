@@ -21,6 +21,9 @@ internal sealed class FakeMpdServer : IAsyncDisposable
     /// <summary>Cuerpo de respuesta por comando, incluido el <c>OK</c>/<c>ACK</c> final.</summary>
     public Func<string, string> Respond { get; set; } = _ => "OK\n";
 
+    /// <summary>Respuesta en bytes crudos (binary: N de SPEC 19); si no es null, reemplaza a <see cref="Respond"/>.</summary>
+    public Func<string, byte[]>? RespondBytes { get; set; }
+
     public FakeMpdServer()
     {
         _listener.Start();
@@ -74,7 +77,10 @@ internal sealed class FakeMpdServer : IAsyncDisposable
                 while (await reader.ReadLineAsync() is { } command)
                 {
                     lock (_connections) commands.Add(command);
-                    await writer.WriteAsync(Respond(command));
+                    if (RespondBytes is { } raw)
+                        await stream.WriteAsync(raw(command));
+                    else
+                        await writer.WriteAsync(Respond(command));
                 }
             }
             catch (IOException)

@@ -775,7 +775,7 @@ public sealed class IpcServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Menu_toggles_display_mode_and_pushes_without_touching_mpd()
+    public async Task Menu_cycles_track_clock_art_and_pushes_without_touching_mpd()
     {
         _player.Snapshot = Song("a.flac", 1);
         await StartAsync();
@@ -792,9 +792,52 @@ public sealed class IpcServerTests : IAsyncLifetime
         Assert.Equal(clock, await b.ReadLineAsync());
 
         await buttons.SendAsync(Menu + "\n");
+        Assert.Equal(SnapshotMessage.Serialize(_player.Snapshot, "art"), await a.ReadLineAsync());
+        await buttons.SendAsync(Menu + "\n");
         Assert.Equal(SnapshotMessage.Serialize(_player.Snapshot, "track"), await a.ReadLineAsync());
-        Assert.Equal(["GetSnapshot", "GetSnapshot"], _player.Calls);
+        Assert.Equal(["GetSnapshot", "GetSnapshot", "GetSnapshot"], _player.Calls);
         Assert.Contains("Display mode clock", _logger.Messages);
+    }
+
+    private const string GetCover = """{"type":"player.get_cover"}""";
+
+    [Fact]
+    public async Task Get_cover_replies_cover_in_base64()
+    {
+        _player.Cover = new Cover(17, "image/jpeg", [1, 2, 3, 255]);
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync(GetCover + "\n");
+
+        Assert.Equal("""{"type":"player.cover","songId":17,"mime":"image/jpeg","data":"AQID/w=="}""", await client.ReadLineAsync());
+        Assert.Equal(["GetCover"], _player.Calls);
+    }
+
+    [Fact]
+    public async Task Get_cover_too_large_replies_error()
+    {
+        _player.CoverError = new CoverTooLargeException(Cover.MaxBytes + 1);
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync(GetCover + "\n");
+
+        Assert.Equal("""{"type":"error","request":"player.get_cover","message":"cover too large"}""", await client.ReadLineAsync());
+    }
+
+    [Fact]
+    public async Task Get_cover_with_mpd_down_replies_error_and_keeps_connection()
+    {
+        _player.CoverError = new MpdUnavailableException("MPD down", new IOException());
+        await StartAsync();
+        await using var client = await Client.ConnectAsync(SocketPath);
+
+        await client.SendAsync(GetCover + "\n");
+        Assert.Equal("""{"type":"error","request":"player.get_cover","message":"MPD down"}""", await client.ReadLineAsync());
+
+        await client.SendAsync(GetSnapshot + "\n");
+        Assert.StartsWith("""{"type":"player.snapshot",""", await client.ReadLineAsync());
     }
 
     [Fact]

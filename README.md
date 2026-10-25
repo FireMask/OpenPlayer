@@ -141,7 +141,7 @@ journalctl -u openplayer-hardware -b -f   # display ready (spi0.0, 40000000 Hz) 
 
 Con el Service detenido muestra "Sin conexión"; si la pantalla falla, el log lo dice y los botones siguen. `spiHz` y `rotation` se calibran en `player.json`; montaje y problemas en [`docs/assembly.md`](docs/assembly.md) §11.
 
-Modos (SPEC 18): el botón `menu` alterna entre **pista** (ícono, título, artista, álbum, `1:23 / -2:40`, `3 / 12` y anillo de progreso) y **reloj** (HH:MM de 24 h, fecha como `sáb 24 oct` y el anillo si hay pista). El modo lo guarda el Service en memoria y vuelve a pista al reiniciarlo. Además:
+Modos (SPEC 18, 19): el botón `menu` cicla entre **pista** (ícono, título, artista, álbum, `1:23 / -2:40`, `3 / 12` y anillo de progreso) , **reloj** (HH:MM de 24 h, fecha como `sáb 24 oct` y el anillo si hay pista) y **carátula** (la imagen del álbum en círculo dentro del anillo, sin texto; la incrustada en el archivo o, si no hay, `cover.jpg`/`.png` de la carpeta; sin carátula, ♪ y el título). El modo lo guarda el Service en memoria y vuelve a pista al reiniciarlo. Además:
 
 - En pausa o detenida durante `idleClockSeconds` (60 por defecto; `null` lo desactiva) muestra el reloj; al reproducir vuelve a la pista.
 - Cada cambio de volumen muestra 2 s un anillo azul interior y el número grande.

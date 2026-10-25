@@ -1,4 +1,4 @@
-"""Dibujo de la pantalla redonda (SPEC 17, modos SPEC 18): View → imagen RGB 240x240, sin hardware."""
+"""Dibujo de la pantalla redonda (SPEC 17, modos SPEC 18, carátula SPEC 19): View → imagen RGB 240x240, sin hardware."""
 
 import math
 from dataclasses import dataclass
@@ -38,11 +38,12 @@ class View:
     volume: int | None = None
     queue_position: int | None = None  # 0-based; se muestra +1
     queue_length: int | None = None
-    mode: str = "track"  # "track" | "clock", ya con el reloj automático aplicado
+    mode: str = "track"  # "track" | "clock" | "art", ya con el reloj automático aplicado
     clock: str | None = None  # "HH:MM", solo en modo reloj
     date: str | None = None  # "vie 24 oct", solo en modo reloj
     volume_popup: bool = False  # anillo interior y número grande
     scroll: int = 0  # desplazamiento del título en px
+    cover: Image.Image | None = None  # modo art: carátula ya preparada (cover.prepare), 228x228 circular
 
 
 def render(view: View) -> Image.Image:
@@ -58,6 +59,8 @@ def render(view: View) -> Image.Image:
 
     if view.mode == "clock":
         _clock(draw, view)
+    elif view.mode == "art":
+        _art(image, draw, view)
     else:
         _track(image, draw, view)
     if view.volume_popup and view.volume is not None:
@@ -81,6 +84,18 @@ def _track(image, draw, view):
         _text(draw, f"{view.queue_position + 1} / {view.queue_length}", 186, 12, GRAY)
 
 
+def _art(image, draw, view):
+    if view.cover is not None:
+        size = view.cover.width
+        image.paste(view.cover, (CENTER - size // 2, CENTER - size // 2))
+    else:
+        # Placeholder: mientras carga, sin carátula o si falló.
+        draw.text((CENTER, 96), "♪", font=_font(64), fill=GRAY, anchor="mm")
+        _text(draw, view.title or "", 140, TITLE_SIZE, WHITE)
+    if view.duration and view.position is not None:
+        _ring(draw, _fraction(view))  # después de la carátula: queda encima del borde
+
+
 def _clock(draw, view):
     if view.status in ("playing", "paused") and view.duration and view.position is not None:
         _ring(draw, _fraction(view))
@@ -89,8 +104,10 @@ def _clock(draw, view):
 
 
 def _volume(draw, volume):
+    # Fondo negro hasta el borde interior del anillo de progreso: en modo art no se ve la carátula entre los anillos.
+    inner = RING_RADIUS + RING_WIDTH // 2 - RING_WIDTH + 1  # +1: tapa el borde suavizado del círculo
+    draw.ellipse((CENTER - inner, CENTER - inner, CENTER + inner, CENTER + inner), fill=BACKGROUND)
     r = VOLUME_RADIUS + VOLUME_WIDTH // 2
-    draw.ellipse((CENTER - r, CENTER - r, CENTER + r, CENTER + r), fill=BACKGROUND)
     _arc(draw, r, VOLUME_WIDTH, min(max(volume / 100, 0), 1), VOLUME)
     draw.text((CENTER, CENTER), str(volume), font=_font(64), fill=WHITE, anchor="mm")
 

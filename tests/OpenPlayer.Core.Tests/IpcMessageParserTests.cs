@@ -37,6 +37,14 @@ public class IpcMessageParserTests
         Assert.Null(request);
     }
 
+    [Fact]
+    public void Parses_cover_request_as_replying()
+    {
+        Assert.True(IpcMessageParser.TryParse("""{"type":"player.get_cover"}""", out var message, out _, out var request));
+        Assert.IsType<CoverRequested>(message);
+        Assert.Equal("player.get_cover", request);
+    }
+
     [Theory]
     [InlineData(83)]
     [InlineData(0)]

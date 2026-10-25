@@ -43,7 +43,7 @@ public sealed class IpcServer(
     private readonly List<NetworkStream> _subscribers = [];
     private static readonly TimeSpan PushTimeout = TimeSpan.FromSeconds(2);
 
-    // Modo de la pantalla (SPEC 18): lo alterna menu. Solo en memoria, bajo _commandLock; arranca en "track".
+    // Modo de la pantalla (SPEC 18, "art" en SPEC 19): lo cicla menu. Solo en memoria, bajo _commandLock; arranca en "track".
     private string _displayMode = "track";
 
     internal int SubscriberCount
@@ -178,8 +178,17 @@ public sealed class IpcServer(
             try
             {
                 string? result = null;
-                await LockedAsync(async () => result = await ReplyAsync(message!, request, ct), ct);
+                // La carátula no toca la cola ni el volumen: sin el lock global, una imagen grande no frena los botones.
+                if (message is CoverRequested)
+                    result = CoverMessage.Serialize(await player.GetCoverAsync(ct));
+                else
+                    await LockedAsync(async () => result = await ReplyAsync(message!, request, ct), ct);
                 reply = result!;
+            }
+            catch (CoverTooLargeException e)
+            {
+                logger.LogWarning("{Request} failed: {Error}", request, e.Message);
+                reply = ErrorMessage.Serialize(request, "cover too large");
             }
             catch (Exception e) when (e is MpdException or MpdUnavailableException or ArgumentException)
             {
@@ -271,7 +280,7 @@ public sealed class IpcServer(
         List<NetworkStream> targets = [];
         await LockedAsync(async () =>
         {
-            mode = _displayMode = _displayMode == "track" ? "clock" : "track";
+            mode = _displayMode = _displayMode switch { "track" => "clock", "clock" => "art", _ => "track" };
             line = await SnapshotLineAsync(ct);
             targets = Subscribers();
         }, ct);

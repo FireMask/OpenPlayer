@@ -19,6 +19,9 @@ public interface IPlayer
 
     Task<PlaybackSnapshot> GetSnapshotAsync(CancellationToken ct = default);
 
+    /// <summary>Carátula de la pista actual (SPEC 19). Lanza <see cref="CoverTooLargeException"/> si pasa de <see cref="Cover.MaxBytes"/>.</summary>
+    Task<Cover> GetCoverAsync(CancellationToken ct = default);
+
     /// <summary>Espera hasta que cambie el reproductor, el volumen, la cola o las opciones. MPD: <c>idle player mixer playlist options</c>.</summary>
     Task WaitForChangeAsync(CancellationToken ct = default);
 }

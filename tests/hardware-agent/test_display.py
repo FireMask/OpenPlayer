@@ -1,3 +1,5 @@
+import base64
+import io
 import json
 import logging
 import socket
@@ -7,6 +9,7 @@ from dataclasses import replace
 from datetime import datetime, time as clock_time, timedelta
 
 import pytest
+from PIL import Image
 
 from display import SCROLL_PAUSE, SCROLL_SPEED, WAKE_SECONDS, Display, in_range, parse, scroll_offset
 from screen import View, render, title_overflow
@@ -21,9 +24,10 @@ def wait_until(condition, timeout=5.0):
     raise AssertionError("condition not met within timeout")
 
 
-def snapshot(state="playing", title="Song", artist="Artist", position=10, duration=100, volume=35, mode="track"):
+def snapshot(state="playing", title="Song", artist="Artist", position=10, duration=100, volume=35, mode="track",
+             album=None):
     return {"type": "player.snapshot", "state": state, "trackTitle": title, "trackArtist": artist,
-            "positionSeconds": position, "durationSeconds": duration, "volume": volume,
+            "trackAlbum": album, "positionSeconds": position, "durationSeconds": duration, "volume": volume,
             "queuePosition": 0, "queueVersion": 1, "displayMode": mode}
 
 
@@ -46,11 +50,17 @@ class FakeClock:
 
 
 class FakeService:
-    """Service falso por TCP: acepta suscripciones y empuja líneas a la conexión activa."""
+    """Service falso por TCP: acepta suscripciones y empuja líneas a la conexión activa.
+    player.get_cover (SPEC 19) responde la carátula de covers[álbum del último snapshot empujado]."""
 
     def __init__(self):
         self.available = True
-        self.subscriptions = []  # primera línea de cada conexión
+        self.subscriptions = []  # primera línea de cada conexión de suscripción
+        self.covers = {}  # álbum → bytes de la imagen; ausente = sin carátula
+        self.cover_requests = []  # álbum vigente en cada player.get_cover
+        self.cover_gate = threading.Event()  # se responde cuando está puesto
+        self.cover_gate.set()
+        self._album = None
         self._conns = []
         self._listener = socket.create_server(("127.0.0.1", 0))
         self._port = self._listener.getsockname()[1]
@@ -62,6 +72,7 @@ class FakeService:
         return socket.create_connection(("127.0.0.1", self._port), timeout=1)
 
     def push(self, message):
+        self._album = message.get("trackAlbum", self._album)
         self._conns[-1].sendall((json.dumps(message) + "\n").encode("utf-8"))
 
     def drop(self):
@@ -82,9 +93,22 @@ class FakeService:
                 conn, _ = self._listener.accept()
             except OSError:
                 return
-            line = conn.makefile("rb").readline()
-            self.subscriptions.append(json.loads(line))
+            line = json.loads(conn.makefile("rb").readline())
+            if line.get("type") == "player.get_cover":
+                threading.Thread(target=self._reply_cover, args=(conn,), daemon=True).start()
+                continue
+            self.subscriptions.append(line)
             self._conns.append(conn)
+
+    def _reply_cover(self, conn):
+        album = self._album
+        self.cover_requests.append(album)
+        self.cover_gate.wait(5)
+        data = self.covers.get(album)
+        reply = {"type": "player.cover", "songId": 1, "mime": "image/png",
+                 "data": base64.b64encode(data).decode() if data is not None else None}
+        with conn:
+            conn.sendall((json.dumps(reply) + "\n").encode())
 
 
 class FakePanel:
@@ -575,3 +599,136 @@ def test_without_power_fields_never_turns_off(service, display, clock):
     clock.advance(86400)
     time.sleep(0.2)
     assert panel.power == []
+
+
+# Modo carátula (SPEC 19)
+
+def png(color):
+    buffer = io.BytesIO()
+    Image.new("RGB", (300, 300), color).save(buffer, "PNG")
+    return buffer.getvalue()
+
+
+def center_of_last(panel):
+    image = Image.frombytes("RGB", (240, 240), panel.images[-1])
+    return image.getpixel((120, 60))  # arriba del centro: carátula, o negro en el placeholder
+
+
+RED, BLUE = (200, 0, 0), (0, 0, 200)
+
+
+def test_art_mode_fetches_and_shows_cover(service, display):
+    service.covers["A"] = png(RED)
+    _, panel = display()
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(mode="art", album="A"))
+
+    wait_until(lambda: panel.images and center_of_last(panel) == RED)
+    assert service.cover_requests == ["A"]
+
+
+def test_placeholder_while_loading_then_cover(service, display):
+    service.covers["A"] = png(RED)
+    service.cover_gate.clear()
+    _, panel = display()
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(mode="art", album="A"))
+
+    placeholder = View("playing", "Song", "Artist", album="A", position=10, duration=100, volume=35,
+                       queue_position=0, mode="art")
+    wait_until(lambda: last_view_is(panel, placeholder))
+    service.cover_gate.set()
+    wait_until(lambda: center_of_last(panel) == RED)
+
+
+@pytest.mark.parametrize("cover", [None, b"not an image"])
+def test_no_cover_or_undecodable_shows_placeholder(service, display, cover):
+    if cover is not None:
+        service.covers["A"] = cover
+    _, panel = display()
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(mode="art", album="A"))
+    wait_until(lambda: service.cover_requests == ["A"])
+    time.sleep(0.3)
+
+    assert last_view_is(panel, View("playing", "Song", "Artist", album="A", position=10, duration=100, volume=35,
+                                    queue_position=0, mode="art"))
+
+
+def test_same_album_is_fetched_once_and_new_album_fetches_again(service, display):
+    service.covers.update(A=png(RED), B=png(BLUE))
+    _, panel = display()
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(mode="art", album="A", title="One"))
+    wait_until(lambda: center_of_last(panel) == RED)
+
+    service.push(snapshot(mode="art", album="A", title="Two"))
+    time.sleep(0.3)
+    assert service.cover_requests == ["A"]
+
+    service.push(snapshot(mode="art", album="B"))
+    wait_until(lambda: center_of_last(panel) == BLUE)
+    assert service.cover_requests == ["A", "B"]
+
+
+def test_track_and_clock_modes_never_fetch(service, display):
+    service.covers["A"] = png(RED)
+    _, panel = display()
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(mode="track", album="A"))
+    service.push(snapshot(mode="clock", album="A"))
+    wait_until(lambda: len(panel.images) >= 3)
+    time.sleep(0.3)
+
+    assert service.cover_requests == []
+
+
+def test_reentering_art_reuses_cover_but_retries_missing_one(service, display):
+    service.covers["A"] = png(RED)
+    _, panel = display()
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(mode="art", album="A"))
+    wait_until(lambda: center_of_last(panel) == RED)
+    service.push(snapshot(mode="track", album="A"))
+    service.push(snapshot(mode="art", album="A"))
+    wait_until(lambda: center_of_last(panel) == RED)
+    time.sleep(0.2)
+    assert service.cover_requests == ["A"]  # en caché
+
+    service.push(snapshot(mode="art", album="B"))  # B sin carátula
+    wait_until(lambda: service.cover_requests == ["A", "B"])
+    service.push(snapshot(mode="track", album="B"))
+    service.push(snapshot(mode="art", album="B"))
+    wait_until(lambda: service.cover_requests == ["A", "B", "B"])  # al volver a entrar, reintenta
+
+
+def test_cover_of_previous_album_arriving_late_is_discarded(service, display):
+    service.covers.update(A=png(RED), B=png(BLUE))
+    service.cover_gate.clear()
+    _, panel = display()
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(mode="art", album="A"))
+    wait_until(lambda: service.cover_requests == ["A"])
+    service.push(snapshot(mode="art", album="B"))
+    wait_until(lambda: service.cover_requests == ["A", "B"])
+
+    service.cover_gate.set()
+    wait_until(lambda: center_of_last(panel) == BLUE)
+    time.sleep(0.3)
+    assert center_of_last(panel) == BLUE
+
+
+def test_idle_clock_overrides_art_without_fetching_again(service, display, clock):
+    service.covers["A"] = png(RED)
+    _, panel = display(idle_clock_seconds=60)
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(state="paused", mode="art", album="A"))
+    wait_until(lambda: panel.images and center_of_last(panel) == RED)
+
+    clock.advance(60)
+    wait_until(lambda: last_view_is(panel, View("paused", "Song", "Artist", album="A", position=10, duration=100,
+                                                volume=35, queue_position=0, mode="clock", clock="21:48",
+                                                date="sáb 24 oct")))
+    service.push(snapshot(mode="art", album="A"))  # play: vuelve a art con la carátula en caché
+    wait_until(lambda: center_of_last(panel) == RED)
+    assert service.cover_requests == ["A"]

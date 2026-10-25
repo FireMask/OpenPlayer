@@ -14,7 +14,7 @@ public static class SnapshotMessage
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    /// <param name="displayMode">Modo de la pantalla redonda (SPEC 18): "track" o "clock"; no viene de MPD.</param>
+    /// <param name="displayMode">Modo de la pantalla redonda (SPEC 18/19): "track", "clock" o "art"; no viene de MPD.</param>
     public static string Serialize(PlaybackSnapshot snapshot, string displayMode = "track") => JsonSerializer.Serialize(
         new Payload(
             "player.snapshot",

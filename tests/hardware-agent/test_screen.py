@@ -167,3 +167,56 @@ def test_long_title_scrolls_while_playing_and_clamps():
 
 def test_short_title_ignores_scroll():
     assert title_band(FULL) == title_band(replace(FULL, scroll=10))
+
+
+# Modo carátula (SPEC 19)
+
+def red_cover():
+    from cover import SIZE
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (SIZE, SIZE))
+    ImageDraw.Draw(image).ellipse((0, 0, SIZE - 1, SIZE - 1), fill=(200, 0, 0))
+    return image
+
+
+ART = replace(FULL, mode="art")
+
+
+def test_art_mode_fills_circle_with_cover_and_keeps_ring():
+    image = render(replace(ART, cover=red_cover()))
+
+    assert image.getpixel((CENTER, CENTER)) == (200, 0, 0)
+    assert image.getpixel((CENTER, 20)) == (200, 0, 0)  # cerca del borde, dentro del anillo
+    assert accent_pixels(image, "right") > 0  # el anillo de progreso queda encima
+    assert image.getpixel((0, 0)) == (0, 0, 0)
+
+
+def test_art_mode_without_cover_shows_placeholder_with_title():
+    placeholder = render(ART)
+
+    assert placeholder.tobytes() != render(FULL).tobytes()
+    assert band(placeholder, 140, 22)  # título
+    assert band(placeholder, 64, 64)  # ♪
+    assert placeholder.tobytes() != render(replace(ART, title="Other")).tobytes()
+
+
+def test_art_mode_has_no_text_over_cover():
+    with_cover = render(replace(ART, cover=red_cover()))
+
+    # Cambiar título, artista o álbum no cambia nada: no hay texto.
+    assert with_cover.tobytes() == render(replace(ART, cover=red_cover(), title="X", artist="Y", album="Z")).tobytes()
+
+
+def test_volume_popup_over_art():
+    popup = render(replace(ART, cover=red_cover(), volume_popup=True))
+
+    assert volume_pixels(popup) > 0
+    assert popup.getpixel((CENTER, CENTER)) != (200, 0, 0)  # el número tapa el centro
+    # Nada de la carátula entre el anillo de volumen y el de progreso.
+    red = [(x, y) for x in range(WIDTH) for y in range(HEIGHT) if popup.getpixel((x, y)) == (200, 0, 0)]
+    assert red == []
+
+
+def test_art_mode_stopped_without_track_shows_stopped_message():
+    assert render(View("stopped", mode="art")).tobytes() == render(View("stopped")).tobytes()
