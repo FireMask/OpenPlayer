@@ -104,8 +104,10 @@ def _clock(draw, view):
 
 
 def _volume(draw, volume):
+    # Fondo negro hasta el borde interior del anillo de progreso: en modo art no se ve la carátula entre los anillos.
+    inner = RING_RADIUS + RING_WIDTH // 2 - RING_WIDTH + 1  # +1: tapa el borde suavizado del círculo
+    draw.ellipse((CENTER - inner, CENTER - inner, CENTER + inner, CENTER + inner), fill=BACKGROUND)
     r = VOLUME_RADIUS + VOLUME_WIDTH // 2
-    draw.ellipse((CENTER - r, CENTER - r, CENTER + r, CENTER + r), fill=BACKGROUND)
     _arc(draw, r, VOLUME_WIDTH, min(max(volume / 100, 0), 1), VOLUME)
     draw.text((CENTER, CENTER), str(volume), font=_font(64), fill=WHITE, anchor="mm")
 

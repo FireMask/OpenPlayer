@@ -213,6 +213,9 @@ def test_volume_popup_over_art():
 
     assert volume_pixels(popup) > 0
     assert popup.getpixel((CENTER, CENTER)) != (200, 0, 0)  # el número tapa el centro
+    # Nada de la carátula entre el anillo de volumen y el de progreso.
+    red = [(x, y) for x in range(WIDTH) for y in range(HEIGHT) if popup.getpixel((x, y)) == (200, 0, 0)]
+    assert red == []
 
 
 def test_art_mode_stopped_without_track_shows_stopped_message():
