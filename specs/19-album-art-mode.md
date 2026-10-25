@@ -1,6 +1,6 @@
 # SPEC 19 — Modo carátula en la pantalla redonda
 
-**Estado:** Approved
+**Estado:** Implemented
 **Depende de:** SPEC 16 (player.subscribe), SPEC 17 (pantalla GC9A01), SPEC 18 (modos de pantalla)
 **Fecha:** 2026-10-24
 
@@ -124,29 +124,29 @@ Respuestas, una línea cada una:
 ## Criterios de aceptación
 
 ### Service
-- [ ] `player.get_cover` devuelve la imagen incrustada completa, igual byte a byte a la de `readpicture`, aunque MPD la mande en varios trozos.
-- [ ] Sin imagen incrustada pero con `cover.jpg`/`.png` en la carpeta, devuelve esa.
-- [ ] Sin ninguna de las dos devuelve `data: null`, y sin pista actual devuelve `songId: null`.
-- [ ] Una imagen de más de 2 MB responde `error` con `cover too large`, sin leerla entera.
-- [ ] Si MPD falla responde `error` y la conexión sigue viva; el resto de las peticiones funciona igual.
-- [ ] `menu` cicla track → clock → art → track y empuja cada cambio a los suscriptores.
-- [ ] Las pruebas .NET existentes y las de la web pasan sin cambios.
+- [x] `player.get_cover` devuelve la imagen incrustada completa, igual byte a byte a la de `readpicture`, aunque MPD la mande en varios trozos.
+- [x] Sin imagen incrustada pero con `cover.jpg`/`.png` en la carpeta, devuelve esa.
+- [x] Sin ninguna de las dos devuelve `data: null`, y sin pista actual devuelve `songId: null`.
+- [x] Una imagen de más de 2 MB responde `error` con `cover too large`, sin leerla entera.
+- [x] Si MPD falla responde `error` y la conexión sigue viva; el resto de las peticiones funciona igual.
+- [x] `menu` cicla track → clock → art → track y empuja cada cambio a los suscriptores.
+- [x] Las pruebas .NET existentes y las de la web pasan sin cambios.
 
 ### Agente
-- [ ] En modo `art`, con carátula, la imagen llena el círculo dentro del anillo de progreso, sin texto y sin deformarse (recorte centrado).
-- [ ] Mientras carga, sin carátula, con un `error` o con datos que no se pueden decodificar, se ve el placeholder (♪ con el título); nada falla ni se corta la suscripción.
-- [ ] Con dos pistas seguidas del mismo álbum y artista, la carátula se pide una sola vez.
-- [ ] En los modos track y clock no se pide ninguna carátula.
-- [ ] El indicador de volumen, el reloj automático y el ahorro de pantalla funcionan en modo `art` igual que en los otros.
-- [ ] Todas las pruebas del hardware-agent pasan, también con las advertencias de obsolescencia tratadas como errores.
+- [x] En modo `art`, con carátula, la imagen llena el círculo dentro del anillo de progreso, sin texto y sin deformarse (recorte centrado).
+- [x] Mientras carga, sin carátula, con un `error` o con datos que no se pueden decodificar, se ve el placeholder (♪ con el título); nada falla ni se corta la suscripción.
+- [x] Con dos pistas seguidas del mismo álbum y artista, la carátula se pide una sola vez.
+- [x] En los modos track y clock no se pide ninguna carátula.
+- [x] El indicador de volumen, el reloj automático y el ahorro de pantalla funcionan en modo `art` igual que en los otros.
+- [x] Todas las pruebas del hardware-agent pasan, también con las advertencias de obsolescencia tratadas como errores.
 
 ### En la Pi Zero 2 W
-- [ ] Al pasar a `art` con la carátula de 565 KB (Bad Bunny), la imagen aparece en menos de 1,5 s.
-- [ ] El modo `art` en reproducción, sin desplazamiento de título, usa menos del 10 % de un núcleo.
-- [ ] Los álbumes de la biblioteca se ven con su carátula, y las 5 pistas de Adele sin carátula muestran el placeholder.
+- [x] Al pasar a `art` con la carátula de 565 KB (Bad Bunny), la imagen aparece en menos de 1,5 s. Medido (2026-10-24): MPD 0,07 s + decodificar 0,26 s (551 KB).
+- [x] El modo `art` en reproducción, sin desplazamiento de título, usa menos del 10 % de un núcleo. Medido: 8 %.
+- [x] Los álbumes de la biblioteca se ven con su carátula, y las 5 pistas de Adele sin carátula muestran el placeholder.
 
 ### General
-- [ ] La documentación (README, `architecture.md` §7 y `assembly.md` §11) describe la petición y el modo nuevos.
+- [x] La documentación (README, `architecture.md` §7 y `assembly.md` §11) describe la petición y el modo nuevos.
 
 ## Decisiones tomadas y descartadas
 
