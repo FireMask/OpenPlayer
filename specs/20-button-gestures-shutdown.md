@@ -1,6 +1,6 @@
 # SPEC 20 — Gestos de botones, apagado seguro y avisos en pantalla
 
-**Estado:** Approved
+**Estado:** Implemented
 **Depende de:** SPEC 04 (systemd), SPEC 05 (botones GPIO), SPEC 17 y 18 (pantalla y modos)
 **Fecha:** 2026-10-24
 
@@ -150,31 +150,31 @@ polkit.addRule(function (action, subject) {
 ## Criterios de aceptación
 
 ### Service
-- [ ] `seek_forward` / `seek_backward` mueven la posición ±`SeekStepSeconds` (10 por defecto); no bajan de 0 ni pasan de duración − 1, y no cambian de pista.
-- [ ] Sin posición conocida, o detenido, `seek_*` no llama a MPD y no falla.
-- [ ] `power_off` registra `Power off requested (button)` y llama a `IPowerControl`; si falla, registra `Power off failed: …` y el Service sigue respondiendo.
-- [ ] `SeekStepSeconds` fuera de 1–60 se rechaza al arrancar con un error claro, como `VolumeStep`.
-- [ ] Las pruebas .NET y las de la web pasan.
+- [x] `seek_forward` / `seek_backward` mueven la posición ±`SeekStepSeconds` (10 por defecto); no bajan de 0 ni pasan de duración − 1, y no cambian de pista.
+- [x] Sin posición conocida, o detenido, `seek_*` no llama a MPD y no falla.
+- [x] `power_off` registra `Power off requested (button)` y llama a `IPowerControl`; si falla, registra `Power off failed: …` y el Service sigue respondiendo.
+- [x] `SeekStepSeconds` fuera de 1–60 se rechaza al arrancar con un error claro, como `VolumeStep`.
+- [x] Las pruebas .NET y las de la web pasan.
 
 ### Agente
-- [ ] Una pulsación corta de ⏭ ⏮ ▶︎ menu se envía una sola vez, al soltar; vol± se envía al apretar, como hoy.
-- [ ] ⏭/⏮ mantenido ≥ `holdSeconds` envía `seek_forward`/`seek_backward` enseguida y luego cada 0,5 s mientras siga apretado, con el aviso `+10 s`/`−10 s`; al soltar no envía `next`/`previous`.
-- [ ] vol± mantenido repite el comando cada 0,25 s mientras siga apretado.
-- [ ] ▶︎ mantenido muestra "Apagar 3… 2… 1". Soltar antes de `shutdownHoldSeconds` no envía nada (ni `play_pause`). Al llegar envía `power_off` una sola vez y muestra "Apagando…".
-- [ ] menu mantenido muestra "Menú: próximamente" y no envía nada.
-- [ ] Sin pantalla habilitada, los gestos y el apagado funcionan igual.
-- [ ] Al detenerse el agente, el panel recibe `DISPOFF` antes de cerrarse.
-- [ ] `holdSeconds` fuera de 0,2–2 y `shutdownHoldSeconds` fuera de 1–10 se rechazan; si faltan, se usan los valores por defecto.
-- [ ] Todas las pruebas del hardware-agent pasan, también con las advertencias de obsolescencia tratadas como errores.
+- [x] Una pulsación corta de ⏭ ⏮ ▶︎ menu se envía una sola vez, al soltar; vol± se envía al apretar, como hoy.
+- [x] ⏭/⏮ mantenido ≥ `holdSeconds` envía `seek_forward`/`seek_backward` enseguida y luego cada 0,5 s mientras siga apretado, con el aviso `+10 s`/`−10 s`; al soltar no envía `next`/`previous`.
+- [x] vol± mantenido repite el comando cada 0,25 s mientras siga apretado.
+- [x] ▶︎ mantenido muestra "Apagar 3… 2… 1". Soltar antes de `shutdownHoldSeconds` no envía nada (ni `play_pause`). Al llegar envía `power_off` una sola vez y muestra "Apagando…".
+- [x] menu mantenido muestra "Menú: próximamente" y no envía nada.
+- [x] Sin pantalla habilitada, los gestos y el apagado funcionan igual.
+- [x] Al detenerse el agente, el panel recibe `DISPOFF` antes de cerrarse.
+- [x] `holdSeconds` fuera de 0,2–2 y `shutdownHoldSeconds` fuera de 1–10 se rechazan; si faltan, se usan los valores por defecto.
+- [x] Todas las pruebas del hardware-agent pasan, también con las advertencias de obsolescencia tratadas como errores.
 
 ### En la Pi
 - [x] `install.sh` instala la regla polkit, y `sudo -u openplayer busctl call org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager CanPowerOff` responde `s "yes"`. (Cambiado al implementar: `systemctl poweroff --dry-run` termina antes de consultar a logind y polkit, así que no prueba la regla.)
-- [ ] Mantener ▶︎ 3 s apaga la Pi. En el arranque siguiente, `journalctl -b -1` termina con `Reached target poweroff` / `System Power Off`, sin cortes (requiere journal persistente: `sudo mkdir -p /var/log/journal`, ver `assembly.md` §8).
-- [ ] Mantener ⏭ durante una canción avanza de 10 en 10 s y nunca salta a la siguiente pista.
+- [x] Mantener ▶︎ 3 s apaga la Pi. En el arranque siguiente, `journalctl -b -1` termina con `Reached target poweroff` / `System Power Off`, sin cortes (requiere journal persistente: `sudo mkdir -p /var/log/journal`, ver `assembly.md` §8).
+- [x] Mantener ⏭ durante una canción avanza de 10 en 10 s y nunca salta a la siguiente pista.
 - [x] Con los botones reales no hay falsas pulsaciones largas, con `holdSeconds` calibrado y el valor anotado en `gpio-map.md`.
 
 ### General
-- [ ] README (tabla de gestos), `architecture.md` §7/§8, `gpio-map.md` y `assembly.md` describen los gestos, el apagado y la regla polkit.
+- [x] README (tabla de gestos), `architecture.md` §7/§8, `gpio-map.md` y `assembly.md` describen los gestos, el apagado y la regla polkit.
 
 ## Decisiones tomadas y descartadas
 
