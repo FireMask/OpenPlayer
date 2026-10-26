@@ -334,6 +334,8 @@ Implementado en `OpenPlayer.Core.Commands.ButtonCommandHandler` (SPEC 01).
 
 Pulsaciones largas (SPEC 20): las detecta el hardware agent (`gestures.py`) y las traduce en los nombres de arriba; el Service no ve tiempos de pulsación. ⏭/⏮ mantenidos → `seek_forward`/`seek_backward` repetido; vol± mantenido → el mismo comando repetido; ▶︎ mantenido `shutdownHoldSeconds` → `power_off`. Una pulsación larga nunca dispara la corta. Combinaciones y doble clic siguen fuera.
 
+Menú en pantalla (SPEC 21): `menu` mantenido abre un menú que vive solo en el hardware agent (`menu.py`), y solo con pantalla. Con el menú abierto, `gestures.py` produce nombres locales (`menu_up`/`menu_down` con ⏮/⏭, repetidos cada 0,15 s mantenidos; `menu_select` con ▶︎ corto; `menu_back` con `menu` corto; `menu_close` con `menu` mantenido) que `main.py` entrega al menú y nunca llegan al socket; vol± y ▶︎ mantenido (apagar) siguen igual. El menú usa mensajes existentes en conexiones cortas (`sender.request`, como `player.get_cover`): `library.browse`, `playlist.list`, `playlist.get` y `queue.get` (páginas de 100, la siguiente al quedar ≤ 10 filas debajo del cursor) y `library.play`, `queue.add`, `playlist.play`, `queue.play`; "Apagar" (con confirmación) envía `power_off` por el `Sender`. Los pedidos corren en un hilo aparte (un MPD lento no frena la cuenta de apagado) y una respuesta se aplica solo si su nivel sigue a la vista. Se cierra solo a los 30 s sin botones; mientras está abierto, la pantalla queda encendida. Sin cambios en el Service.
+
 ## 9. Biblioteca, cola y listas
 
 En v1, usar la base de biblioteca y las playlists de MPD. Implementar:
@@ -353,7 +355,7 @@ Estado (SPEC 10, desde la web):
 - Hecho (SPEC 14): cola independiente de su origen: `consume` (lo escuchado sale de la cola), etiqueta de origen por fila, ⏮ reinicia la actual.
 - Hecho (SPEC 15): historial real para ⏮ (observador `idle player`, últimas 50 en memoria, la anterior vuelve arriba de la cola).
 - Hecho (SPEC 16): actualización instantánea (observador `idle player mixer playlist options` → push `player.subscribe` → SSE `/api/events`); el sondeo de 2 s queda solo de respaldo.
-- Pendiente: reproducir una lista sin borrar lo agregado (modelo tipo Spotify), arrastrar para reordenar en la cola y en Listas (asa ⠿ a la izquierda, Pointer Events sin librería, animación del lugar de destino antes de soltar), agregar a la cola desde Listas, refresco automático de la pestaña Listas (`idle stored_playlist`), navegación artista → álbum, menú en pantalla con botones (spec futura).
+- Pendiente: reproducir una lista sin borrar lo agregado (modelo tipo Spotify), arrastrar para reordenar en la cola y en Listas (asa ⠿ a la izquierda, Pointer Events sin librería, animación del lugar de destino antes de soltar), agregar a la cola desde Listas, refresco automático de la pestaña Listas (`idle stored_playlist`), navegación artista → álbum. (Menú en pantalla con botones: SPEC 21.)
 - Sin botón de reescaneo: `auto_update` de MPD (SPEC 07) indexa lo copiado por Samba.
 
 Una base SQLite propia queda pospuesta para preferencias, historial de reproducción, ratings o datos que MPD no cubra.
@@ -415,10 +417,10 @@ Integración en Pi:
 2. Crear solución .NET, Core e interfaz `IPlayer`. *(Hecho: SPEC 01.)*
 3. Implementar adaptador MPD y snapshot de estado. *(Hecho: SPEC 02.)*
 4. Implementar socket Unix y agente Python con dos botones. *(Hecho: socket SPEC 03, agente SPEC 05 con los 6 botones; validado con cable de puente, botones físicos pendientes.)*
-5. Añadir biblioteca y playlists. *(Web: SPEC 10 a 14; menú en pantalla + botones: spec futura.)*
+5. Añadir biblioteca y playlists. *(Web: SPEC 10 a 14; menú en pantalla con los botones: SPEC 21.)*
 6. Instalar servicios systemd y validar arranque automático. *(Hecho: SPEC 04 `deploy/openplayer.service`, SPEC 05 `deploy/openplayer-hardware.service`.)*
 7. Configurar Bluetooth A2DP y selector de salida.
-8. Añadir pantalla. *(SPEC 17: GC9A01 redonda por SPI, solo pista actual; carátula y menú pendientes.)*
+8. Añadir pantalla. *(Hecho: SPEC 17 GC9A01 redonda por SPI; SPEC 18 modos y ahorro; SPEC 19 carátula; SPEC 20 gestos y avisos; SPEC 21 menú.)*
 9. Medir consumo y desarrollar alimentación portátil segura.
 10. Diseñar carcasa 3D y consolidar cableado en PCB/perfboard.
 

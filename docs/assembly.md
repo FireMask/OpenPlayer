@@ -334,6 +334,7 @@ Módulo de 1,28" 240x240 ("1.28 TFT ver 1.0", 7 pines, sin BL). La dibuja el har
 5. `sudo systemctl restart openplayer-hardware` y `journalctl -u openplayer-hardware -b -f`: debe aparecer `display ready (spi0.0, 40000000 Hz)`.
 6. Prueba: con música, la pantalla muestra ícono de estado, título, artista, álbum, `m:ss / -m:ss`, `n / total` y anillo de progreso. `mpc next`, `mpc volume 40` (anillo azul y número 2 s) y play/pausa se reflejan en menos de 1 s. `sudo systemctl stop openplayer` → "Sin conexión"; al volver, la pista.
 7. Modos (SPEC 18, 19): `menu` cicla pista → reloj → carátula en menos de 1 s; la carátula aparece en menos de 1,5 s (antes, ♪ y el título). En pausa 60 s (`idleClockSeconds`) aparece el reloj solo. Para probar el ahorro, poner `nightStart`/`nightEnd` alrededor de la hora actual o `offAfterStoppedMinutes: 1` con `mpc stop`: el panel queda negro y un botón lo enciende 10 s.
+8. Menú (SPEC 21): mantener `menu` abre Biblioteca · Listas · Cola · Apagar. Probar: ⏭/⏮ mueven la píldora (mantenidos, rápido) sin cambiar de pista; ▶︎ elige; `menu` vuelve y, mantenido, cierra. Recorrer: reproducir una carpeta ("▶ Reproducir todo" → Reproducir), agregar una pista (Agregar a la cola → aviso "Agregado"), reproducir una lista desde la pista 3 y saltar en la Cola. En una carpeta con más de 100 entradas, bajar con ⏭ mantenido hasta la última sin cortes. Apagar → Sí apaga; No vuelve. A los 30 s sin botones se cierra solo. Si un pedido falla, aviso "Error" y `journalctl -u openplayer-hardware` muestra `<pedido>: …`.
 
 La Pi no tiene RTC: sin red, la hora del reloj (y el horario nocturno) es incorrecta hasta que NTP sincroniza. Se corrige sola, sin reiniciar el agente. Comprobar con `timedatectl` (`System clock synchronized: yes`).
 
@@ -371,6 +372,7 @@ Seguir `battery-design.md`. No imprimir la carcasa definitiva antes de medir DAC
 - [ ] Los botones generan un solo evento por pulsación.
 - [ ] La pantalla (si está montada) muestra la pista actual y "Sin conexión" con el Service detenido.
 - [ ] `menu` alterna pista ↔ reloj; el ahorro nocturno o por inactividad apaga y un botón enciende (si se configuró).
+- [ ] `menu` mantenido abre el menú; desde ahí se reproduce una carpeta, se encola una pista, se reproduce una lista y se apaga con confirmación.
 - [ ] El servicio se recupera tras reiniciar MPD.
 - [ ] El agente reconecta después de reiniciar C#.
 - [ ] Los logs son accesibles por journalctl.

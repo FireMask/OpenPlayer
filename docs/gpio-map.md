@@ -75,7 +75,16 @@ Gestos por botón (SPEC 20):
 | `next` / `previous` | Al soltar: `next` / `previous` | `seek_forward` / `seek_backward` enseguida y cada 0,5 s; aviso `+10 s` / `−10 s` |
 | `volume_up` / `volume_down` | Al apretar | El mismo evento cada 0,25 s |
 | `play_pause` | Al soltar: `play_pause` | Cuenta "Apagar 3… 2… 1"; a `shutdownHoldSeconds` (3 s) envía `power_off` una vez y muestra "Apagando…". Soltar antes no envía nada |
-| `menu` | Al soltar: `menu` | No envía nada; aviso "Menú: próximamente" (SPEC 21) |
+| `menu` | Al soltar: `menu` | Abre el menú en pantalla (SPEC 21); no envía nada al Service |
+
+Con el menú abierto (SPEC 21), ⏮⏭▶︎`menu` producen nombres locales del agente (`menu_up`, `menu_down`, `menu_select`, `menu_back`, `menu_open`, `menu_close`) que nunca llegan al socket:
+
+| Botón | Corta | Mantenida |
+|---|---|---|
+| `next` / `previous` | `menu_down` / `menu_up` | `menu_down` / `menu_up` enseguida y cada 0,15 s, sin aviso |
+| `play_pause` | `menu_select` | Igual que afuera: cuenta y `power_off` |
+| `menu` | `menu_back` | `menu_close` |
+| `volume_up` / `volume_down` | Igual que afuera | Igual que afuera |
 
 Los nombres de eventos son parte del contrato IPC. Si se renombran, actualizar Python, C#, pruebas y documentación en el mismo cambio.
 
