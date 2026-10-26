@@ -160,3 +160,36 @@ RST  -------- GPIO26        (37)
 Validado (2026-10-24, Pi Zero 2 W, Pi OS trixie, cables dupont): con `rotation` 0 la imagen salía al revés; el valor por defecto quedó en 180. `spiHz` 40000000 sin problemas a la vista.
 
 Cambio de pines (2026-10-24): DC y RST pasaron de GPIO5/GPIO6 (pines 29/31) a GPIO16/GPIO26 (36/37) y GND del 20 al 34 tras un cortocircuito entre los pines 29, 30 y 31 (RST unido a DC y GND: pantalla encendida pero negra). Si la pantalla queda negra o se desvanece a blanco, medir continuidad entre pines vecinos del header antes de tocar el código.
+
+## 11. PCB portadora (SPEC 22)
+
+La PCB Rev A (`hardware/pcb/`) solo puentea: mismos GPIO que `player.json`, sin cambios de software. La Pi va al lado, unida por un cable plano IDC de 40 pines (J1, pin N = pin físico N). La Pi se alimenta por los pines 2 y 4 (5 V); **no** enchufar el micro-USB de alimentación de la Pi con el cable plano conectado.
+
+J4 `BUTTONS` (JST-XH 8 pines, a la placa de botones):
+
+| J4 | Señal | BCM GPIO | Pin físico |
+|---:|---|---:|---:|
+| 1 | GND | — | GND |
+| 2 | Play/Pause | GPIO17 | 11 |
+| 3 | Anterior | GPIO27 | 13 |
+| 4 | Siguiente | GPIO22 | 15 |
+| 5 | Volumen + | GPIO23 | 16 |
+| 6 | Volumen − | GPIO24 | 18 |
+| 7 | Menú | GPIO25 | 22 |
+| 8 | `PWR_KEY` | — | — |
+
+`PWR_KEY` **no** es un GPIO: va solo a J3 y de ahí al pad `K` del módulo de carga (encendido con la Pi apagada).
+
+J5 `DISPLAY` (hembra 1×7, 2,54 mm; la pantalla se enchufa directo), en el orden serigrafiado del módulo:
+
+| J5 | Módulo | BCM GPIO | Pin físico |
+|---:|---|---:|---:|
+| 1 | VCC | 3.3 V | 1, 17 |
+| 2 | GND | — | GND |
+| 3 | SCL | GPIO11 / SCLK | 23 |
+| 4 | SDA | GPIO10 / MOSI | 19 |
+| 5 | DC | GPIO16 | 36 |
+| 6 | CS | GPIO8 / CE0 | 24 |
+| 7 | RST | GPIO26 | 37 |
+
+Si se cambia un pin por defecto en `config/player.example.json`, actualizar `hardware/pcb/scripts/netlist.py` (su autocomprobación falla si no coinciden).
