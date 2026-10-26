@@ -1,8 +1,10 @@
+import math
 from dataclasses import replace
 
 import pytest
 
-from screen import ACCENT, CENTER, HEIGHT, VOLUME, WIDTH, View, _font, _mmss, fit, render, title_overflow
+from screen import (ACCENT, CENTER, GRAY, HEIGHT, RING_RADIUS, VOLUME, WHITE, WIDTH, MenuView, View, _font, _mmss, fit,
+                    render, title_overflow)
 
 PLAYING = View("playing", "Song", "Artist", position=60, duration=120, volume=35)
 
@@ -254,3 +256,94 @@ def test_long_toast_fits_inside_circle():
 
 def test_no_toast_draws_nothing_extra():
     assert render(replace(FULL, toast=None)).tobytes() == render(FULL).tobytes()
+
+
+# Menú (SPEC 21)
+
+PILL = (CENTER, 108)  # dentro de la píldora seleccionada, sobre el texto
+
+ROOT_MENU = MenuView("Menú", ("Biblioteca", "Listas", "Cola", "Apagar"), cursor=1)
+
+
+def menu_view(menu, **fields):
+    return replace(FULL, menu=menu, **fields)
+
+
+def row_has_text(image, center, color=None):
+    """¿Hay texto (o del color dado) en la fila de 30 px centrada en center? x 30–210."""
+    pixels = [image.getpixel((x, y)) for x in range(30, WIDTH - 30) for y in range(center - 12, center + 12)]
+    return any(p != (0, 0, 0) for p in pixels) if color is None else color in pixels
+
+
+def test_menu_replaces_mode_and_ring():
+    image = render(menu_view(ROOT_MENU))
+
+    assert image.tobytes() != render(FULL).tobytes()
+    assert image.getpixel((CENTER + RING_RADIUS, CENTER)) == (0, 0, 0)  # sin anillo
+    assert image.getpixel((CENTER, 3)) == (0, 0, 0)
+    # El mismo menú sobre cualquier modo o estado se ve igual.
+    for base in (ART, replace(FULL, mode="clock", clock="21:47"), View("offline"), View("stopped")):
+        assert render(replace(base, menu=ROOT_MENU)).tobytes() == image.tobytes()
+
+
+def test_selected_row_is_centered_in_accent_pill():
+    image = render(menu_view(ROOT_MENU))
+
+    assert image.getpixel(PILL) == ACCENT
+    assert row_has_text(image, CENTER, WHITE)
+    for center in (60, 90, 150):  # Biblioteca arriba; Cola y Apagar abajo
+        assert ACCENT not in [image.getpixel((x, center)) for x in range(WIDTH)]
+    assert row_has_text(image, 90) and row_has_text(image, 150) and row_has_text(image, 180)
+    assert not row_has_text(image, 60)  # sobre la primera fila no hay nada
+
+
+def test_title_is_drawn_on_top():
+    a = render(menu_view(ROOT_MENU))
+    b = render(menu_view(replace(ROOT_MENU, title="Biblioteca")))
+
+    assert a.crop((0, 18, WIDTH, 42)).tobytes() != b.crop((0, 18, WIDTH, 42)).tobytes()
+    assert a.crop((0, 45, WIDTH, HEIGHT)).tobytes() == b.crop((0, 45, WIDTH, HEIGHT)).tobytes()
+
+
+@pytest.mark.parametrize("cursor, empty", [(0, (60, 90)), (3, (150, 180))])
+def test_cursor_at_ends_leaves_missing_rows_empty(cursor, empty):
+    image = render(menu_view(replace(ROOT_MENU, cursor=cursor)))
+
+    assert image.getpixel(PILL) == ACCENT
+    for center in empty:
+        assert not row_has_text(image, center)
+
+
+def test_long_label_is_cut_inside_circle():
+    long = "A very long folder name that never ends at all and keeps going"
+    image = render(menu_view(MenuView("Biblioteca", (long, long, long), cursor=1)))
+
+    for center in (90, 120, 150):
+        row = [x for x in range(WIDTH) if image.getpixel((x, center)) != (0, 0, 0)]
+        half = math.sqrt((WIDTH // 2 - 6) ** 2 - (abs(center - CENTER) + 14) ** 2)
+        assert CENTER - half <= row[0] and row[-1] <= CENTER + half
+
+
+def test_loading_shows_loading_text():
+    loading = render(menu_view(MenuView("Biblioteca", (), 0, loading=True)))
+    empty = render(menu_view(MenuView("Biblioteca", (), 0)))
+
+    assert row_has_text(loading, CENTER, GRAY)
+    assert not row_has_text(empty, CENTER)
+
+
+def test_volume_and_toast_over_menu():
+    plain = render(menu_view(ROOT_MENU))
+    popup = render(menu_view(ROOT_MENU, volume_popup=True))
+
+    assert volume_pixels(popup) > 0
+    assert volume_pixels(plain) == 0
+    toast = render(menu_view(ROOT_MENU, toast="Agregado"))
+    assert toast.getpixel(TOAST_PILL) == (40, 40, 40)
+    # Sin conexión, el volumen del menú también se ve.
+    assert volume_pixels(render(View("offline", volume=40, volume_popup=True, menu=ROOT_MENU))) > 0
+
+
+def test_no_menu_draws_the_same_as_before():
+    for view in (FULL, ART, View("offline"), replace(FULL, toast="+10 s")):
+        assert render(replace(view, menu=None)).tobytes() == render(view).tobytes()

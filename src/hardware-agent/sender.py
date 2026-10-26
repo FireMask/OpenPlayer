@@ -28,6 +28,41 @@ def connect_unix(path):
     return sock
 
 
+def request(connect, message, *, max_bytes=1024 * 1024, timeout=5.0):
+    """Pedido de una línea y respuesta de una línea, en una conexión propia (SPEC 21; carátula, SPEC 19).
+    None si no conecta, se corta, tarda más de timeout, pasa de max_bytes, no es un objeto JSON o es type error."""
+    kind = message.get("type")
+    try:
+        sock = connect()
+    except OSError as e:
+        log.warning("%s: cannot connect: %s", kind, e)
+        return None
+    try:
+        sock.settimeout(timeout)
+        sock.sendall((json.dumps(message, separators=(",", ":")) + "\n").encode("utf-8"))
+        data = bytearray()
+        while b"\n" not in data:
+            chunk = sock.recv(65536)
+            if not chunk:
+                raise OSError("connection closed")
+            data += chunk
+            if len(data) > max_bytes:
+                raise OSError("reply line too long")
+        reply = json.loads(data[:data.index(b"\n")])
+    except (OSError, ValueError) as e:
+        log.warning("%s: request failed: %s", kind, e)
+        return None
+    finally:
+        sock.close()
+    if not isinstance(reply, dict):
+        log.warning("%s: unexpected reply", kind)
+        return None
+    if reply.get("type") == "error":
+        log.warning("%s: %s", kind, reply.get("message"))
+        return None
+    return reply
+
+
 class Sender:
     def __init__(self, socket_path, *, connect=None, min_backoff=0.5, max_backoff=10.0):
         self._path = socket_path

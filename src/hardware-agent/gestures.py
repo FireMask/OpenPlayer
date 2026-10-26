@@ -1,4 +1,5 @@
 """Gestos de los botones (SPEC 20): pulsación corta, mantenida y apagado manteniendo ▶︎.
+SPEC 21: con el menú abierto (menu_open()), ⏮⏭▶︎menu producen los nombres locales menu_*.
 
 Máquina de estados pura, sin GPIO ni hilos: el tiempo lo pasa quien llama (time.monotonic() en buttons.py).
 Una pulsación larga nunca dispara la acción corta.
@@ -7,27 +8,32 @@ Una pulsación larga nunca dispara la acción corta.
 import math
 
 SEEK = {"next": ("seek_forward", "+10 s"), "previous": ("seek_backward", "−10 s")}
+SCROLL = {"next": "menu_down", "previous": "menu_up"}
+# Pulsación corta con el menú abierto.
+MENU_SHORT = {**SCROLL, "play_pause": "menu_select", "menu": "menu_back"}
 VOLUME = ("volume_up", "volume_down")
-MENU_TOAST = "Menú: próximamente"
 
 
 class _Press:
     def __init__(self, start):
         self.start = start
         self.held = False  # ya pasó a mantenida
-        self.next = None  # próxima repetición (seek/volumen)
+        self.next = None  # próxima repetición (seek/scroll/volumen)
         self.shown = None  # último número de la cuenta de apagado
         self.done = False  # power_off ya enviado
 
 
 class Gestures:
-    def __init__(self, send, toast, *, hold, shutdown_hold, seek_repeat=0.5, volume_repeat=0.25):
+    def __init__(self, send, toast, *, hold, shutdown_hold, seek_repeat=0.5, volume_repeat=0.25,
+                 scroll_repeat=0.15, menu_open=lambda: False):
         self._send = send
         self._toast = toast
         self._hold = hold
         self._shutdown_hold = shutdown_hold
         self._seek_repeat = seek_repeat
         self._volume_repeat = volume_repeat
+        self._scroll_repeat = scroll_repeat
+        self._menu_open = menu_open  # se consulta cada vez que se dispara una acción
         self._down = {}  # nombre → _Press; uno por botón, independientes
 
     def press(self, name, t):
@@ -45,7 +51,7 @@ class Gestures:
         del self._down[name]
         if not state.held:
             if name not in VOLUME:
-                self._send(name)
+                self._send(MENU_SHORT[name] if self._menu_open() else name)
         elif name == "play_pause" and not state.done:
             self._toast(None)  # cuenta cancelada
 
@@ -63,12 +69,15 @@ class Gestures:
                 return
             state.held = True
             if name == "menu":
-                self._toast(MENU_TOAST)
+                self._send("menu_close" if self._menu_open() else "menu_open")
                 return
             state.next = t  # la primera repetición sale enseguida
         if name == "menu" or t < state.next:
             return
-        if name in SEEK:
+        if name in SEEK and self._menu_open():
+            self._send(SCROLL[name])
+            repeat = self._scroll_repeat
+        elif name in SEEK:
             command, text = SEEK[name]
             self._send(command)
             self._toast(text)

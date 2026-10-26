@@ -2,10 +2,11 @@
 
 import base64
 import io
-import json
 import logging
 
 from PIL import Image, ImageDraw, ImageOps
+
+from sender import request
 
 log = logging.getLogger(__name__)
 
@@ -16,31 +17,8 @@ TIMEOUT_SECONDS = 5.0
 
 def fetch_cover(connect) -> bytes | None:
     """Pide la carátula de la pista actual en una conexión propia; None si no hay o algo falla."""
-    try:
-        sock = connect()
-    except OSError as e:
-        log.warning("cover: cannot connect: %s", e)
-        return None
-    try:
-        sock.settimeout(TIMEOUT_SECONDS)
-        sock.sendall(b'{"type":"player.get_cover"}\n')
-        data = bytearray()
-        while b"\n" not in data:
-            chunk = sock.recv(65536)
-            if not chunk:
-                raise OSError("connection closed")
-            data += chunk
-            if len(data) > MAX_LINE_BYTES:
-                raise OSError("cover line too long")
-        message = json.loads(data[:data.index(b"\n")])
-    except (OSError, ValueError) as e:
-        log.warning("cover: request failed: %s", e)
-        return None
-    finally:
-        sock.close()
-    if not isinstance(message, dict) or message.get("type") != "player.cover":
-        if isinstance(message, dict) and message.get("type") == "error":
-            log.warning("cover: %s", message.get("message"))
+    message = request(connect, {"type": "player.get_cover"}, max_bytes=MAX_LINE_BYTES, timeout=TIMEOUT_SECONDS)
+    if message is None or message.get("type") != "player.cover":
         return None
     encoded = message.get("data")
     if not isinstance(encoded, str):

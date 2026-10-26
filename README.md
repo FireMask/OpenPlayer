@@ -117,9 +117,18 @@ Gestos (SPEC 20). Mantenida = apretada al menos `hardware.holdSeconds` (0,6 s po
 | ⏭ `next` / ⏮ `previous` | Al soltar: siguiente / anterior | Seek +10 s / −10 s (`player.seekStepSeconds`), repetido cada 0,5 s, con aviso `+10 s` / `−10 s`; nunca cambia de pista |
 | vol+ / vol− | Al apretar, como siempre | El mismo paso repetido cada 0,25 s |
 | ▶︎⏸ `play_pause` | Al soltar: play/pausa | Cuenta "Apagar 3… 2… 1" y a los `hardware.shutdownHoldSeconds` (3 s, 1–10) apaga la Pi ("Apagando…"). Soltar antes cancela y no hace nada |
-| `menu` | Al soltar: cicla los modos de pantalla | Solo el aviso "Menú: próximamente" (reservado) |
+| `menu` | Al soltar: cicla los modos de pantalla | Abre el menú en pantalla (SPEC 21) |
 
-Los avisos son una píldora abajo en la pantalla, 1,5 s; sin pantalla, los gestos y el apagado funcionan igual. Al detenerse, el agente apaga el panel (`DISPOFF`). Tras el apagado el panel sigue alimentado (sin pin BL, la luz queda encendida): cortar con el interruptor de alimentación.
+Los avisos son una píldora abajo en la pantalla, 1,5 s; sin pantalla, los gestos y el apagado funcionan igual.
+
+Menú en pantalla (SPEC 21, solo con pantalla). Raíz: Biblioteca · Listas · Cola · Apagar. Biblioteca navega carpetas; una pista o "▶ Reproducir todo" ofrece Reproducir (reemplaza la cola), Siguiente y Agregar a la cola. Listas reproduce una lista entera o desde una pista; Cola salta a una pista (♪ = la actual); Apagar pide confirmación (No por defecto). Las listas largas cargan de a 100 solas. Se cierra solo a los 30 s sin botones. Usa la IPC existente: no cambia el Service.
+
+| Botón | Con el menú abierto |
+|---|---|
+| ⏮ / ⏭ | Subir / bajar (mantenido: rápido, cada 0,15 s); no da vuelta en los extremos |
+| ▶︎⏸ | Corta: elegir. Mantenida: apaga igual que afuera |
+| `menu` | Corta: volver un nivel (en la raíz, cerrar). Mantenida: cerrar |
+| vol± | Volumen, como siempre | Al detenerse, el agente apaga el panel (`DISPOFF`). Tras el apagado el panel sigue alimentado (sin pin BL, la luz queda encendida): cortar con el interruptor de alimentación.
 
 ```bash
 systemctl status openplayer-hardware

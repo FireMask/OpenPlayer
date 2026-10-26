@@ -136,3 +136,23 @@ def test_held_play_pause_powers_off(factory, make):
     time.sleep(0.1)
 
     assert sent == ["power_off"]
+
+
+def test_menu_gestures_never_reach_the_service(factory, make):
+    # SPEC 21: menu mantenido abre; con el menú abierto ⏭ y ▶︎ dan nombres locales, no next ni play_pause.
+    sent, menu = [], {"open": False}
+
+    def send(name):
+        sent.append(name)
+        if name == "menu_open":
+            menu["open"] = True
+
+    make(Gestures(send, lambda text: None, hold=0.1, shutdown_hold=3, menu_open=lambda: menu["open"]))
+    factory.pin(25).drive_low()
+    wait_until(lambda: sent)
+    factory.pin(25).drive_high()
+    press(factory, 22)
+    press(factory, 17)
+    time.sleep(0.1)
+
+    assert sent == ["menu_open", "menu_down", "menu_select"]

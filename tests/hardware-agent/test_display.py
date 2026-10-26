@@ -12,7 +12,7 @@ import pytest
 from PIL import Image
 
 from display import SCROLL_PAUSE, SCROLL_SPEED, WAKE_SECONDS, Display, in_range, parse, scroll_offset
-from screen import View, render, title_overflow
+from screen import MenuView, View, render, title_overflow
 
 
 def wait_until(condition, timeout=5.0):
@@ -793,4 +793,94 @@ def test_toast_before_panel_init_does_not_draw(service, clock):
     d = Display("/x.sock", panel, connect=service.connect, monotonic=clock.monotonic, now=clock.now)
 
     d.toast("+10 s")
+    assert panel.images == []
+
+
+# Menú (SPEC 21)
+
+def open_menu(service, clock, **power):
+    """Display con un Menu real (sin IPC: solo la raíz) cuyo changed es refresh()."""
+    from menu import Menu
+    holder = {}
+    menu = Menu(lambda message: None, power_off=lambda: None, toast=lambda text: None,
+                changed=lambda: holder["d"].refresh() if "d" in holder else None,
+                run=lambda job: job(), monotonic=clock.monotonic)
+    panel = FakePanel()
+    d = Display("/x.sock", panel, connect=service.connect, tick_seconds=0.05, retry_seconds=0.1,
+                monotonic=clock.monotonic, now=clock.now, menu=menu, **power)
+    holder["d"] = d
+    d.start()
+    return d, panel, menu
+
+
+ROOT = MenuView("Menú", ("Biblioteca", "Listas", "Cola", "Apagar"), 0)
+
+
+@pytest.fixture
+def stop_after():
+    created = []
+    yield created.append
+    for d in created:
+        d.stop()
+
+
+def test_menu_is_drawn_at_once_on_change_and_closes(service, clock, stop_after):
+    d, panel, menu = open_menu(service, clock)
+    stop_after(d)
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(state="paused"))
+    wait_until(lambda: last_view_is(panel, PAUSED))
+
+    menu.open()
+    assert last_view_is(panel, replace(PAUSED, menu=ROOT))  # dibujado en la llamada, sin esperar al tick
+    menu.down()
+    assert last_view_is(panel, replace(PAUSED, menu=replace(ROOT, cursor=1)))
+    menu.close()
+    assert last_view_is(panel, PAUSED)
+
+
+def test_menu_closes_after_timeout_on_tick(service, clock, stop_after):
+    d, panel, menu = open_menu(service, clock)
+    stop_after(d)
+    wait_until(lambda: service.subscriptions)
+    service.push(snapshot(state="paused"))
+    wait_until(lambda: last_view_is(panel, PAUSED))
+    menu.open()
+
+    clock.advance(29.9)
+    time.sleep(0.2)
+    assert last_view_is(panel, replace(PAUSED, menu=ROOT))
+    clock.advance(0.1)
+    wait_until(lambda: last_view_is(panel, PAUSED))
+    assert not menu.is_open
+
+
+def test_menu_keeps_panel_on_at_night_until_closed(service, clock, stop_after):
+    d, panel, menu = open_menu(service, clock, night=(at("21:00"), at("07:00")))
+    stop_after(d)
+    wait_until(lambda: panel.power == ["off"])
+
+    menu.open()  # abrirlo es un botón: en el agente, wake() también
+    wait_until(lambda: panel.power == ["off", "on"])
+    clock.advance(WAKE_SECONDS + 5)  # más que el encendido de un botón, menos que el timeout
+    time.sleep(0.2)
+    assert panel.power == ["off", "on"]
+    menu.close()
+    wait_until(lambda: panel.power == ["off", "on", "off"])
+
+
+def test_queue_position_comes_from_last_snapshot(service, display):
+    d, panel = display()
+    assert d.queue_position() is None
+    wait_until(lambda: service.subscriptions)
+    service.push({**snapshot(), "queuePosition": 4})
+
+    wait_until(lambda: d.queue_position() == 4)
+
+
+def test_refresh_before_panel_init_does_not_draw(service, clock):
+    panel = FakePanel()
+    d = Display("/x.sock", panel, connect=service.connect, monotonic=clock.monotonic, now=clock.now)
+
+    d.refresh()
     assert panel.images == []

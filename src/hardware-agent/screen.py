@@ -25,8 +25,21 @@ VOLUME_WIDTH = 4
 TITLE_TOP, TITLE_SIZE = 88, 22
 TOAST_BACKGROUND = (40, 40, 40)
 TOAST_CENTER, TOAST_HEIGHT, TOAST_SIZE, TOAST_PADDING = 180, 26, 16, 8
+# Menú (SPEC 21): 5 filas de 30 px con la seleccionada centrada; sin anillo, así que usa casi todo el círculo.
+MENU_ROW, MENU_ROWS_AROUND, MENU_RADIUS = 30, 2, WIDTH // 2 - 6
+MENU_SIZE, MENU_SELECTED_SIZE, MENU_PILL_HEIGHT, MENU_PILL_PADDING = 16, 18, 28, 12
+MENU_TITLE_TOP, MENU_TITLE_SIZE = 23, 14
 
 MESSAGES = {"offline": "Sin conexión", "mpd_error": "MPD no responde"}
+
+
+@dataclass(frozen=True)
+class MenuView:
+    """Lo que se ve del menú (SPEC 21); lo arma menu.Menu.view()."""
+    title: str  # "Menú", "Biblioteca", "Rock", "¿Apagar?"…
+    rows: tuple[str, ...]  # etiquetas ya cargadas
+    cursor: int
+    loading: bool = False  # sin filas aún: "Cargando…"
 
 
 @dataclass(frozen=True)
@@ -47,6 +60,7 @@ class View:
     scroll: int = 0  # desplazamiento del título en px
     cover: Image.Image | None = None  # modo art: carátula ya preparada (cover.prepare), 228x228 circular
     toast: str | None = None  # aviso de un gesto (SPEC 20), encima de todo
+    menu: MenuView | None = None  # menú abierto (SPEC 21): se dibuja en lugar del modo
 
 
 def render(view: View) -> Image.Image:
@@ -56,7 +70,10 @@ def render(view: View) -> Image.Image:
     message = MESSAGES.get(view.status)
     if message is None and view.status == "stopped" and not view.title and view.mode != "clock":
         message = "Detenido"
-    if message is not None:
+    if view.menu is not None:
+        _menu(draw, view.menu)
+        message = None  # el indicador de volumen se dibuja encima del menú aunque no haya conexión
+    elif message is not None:
         _text(draw, message, CENTER - 11, 22, WHITE, radius=WIDTH // 2 - 6)  # sin anillo: todo el ancho
     elif view.mode == "clock":
         _clock(draw, view)
@@ -69,6 +86,37 @@ def render(view: View) -> Image.Image:
     if view.toast:
         _toast(draw, view.toast)  # al final: encima de todo, también del indicador de volumen
     return image
+
+
+def _menu(draw, menu):
+    _text(draw, menu.title, MENU_TITLE_TOP, MENU_TITLE_SIZE, GRAY, radius=MENU_RADIUS)
+    if menu.loading:
+        _menu_row(draw, "Cargando…", CENTER, MENU_SIZE, GRAY)
+        return
+    for i in range(menu.cursor - MENU_ROWS_AROUND, menu.cursor + MENU_ROWS_AROUND + 1):
+        if not 0 <= i < len(menu.rows):
+            continue  # en los extremos, las filas que no existen quedan vacías
+        center = CENTER + (i - menu.cursor) * MENU_ROW
+        if i == menu.cursor:
+            _menu_pill(draw, menu.rows[i], center)
+        else:
+            _menu_row(draw, menu.rows[i], center, MENU_SIZE, GRAY)
+
+
+def _menu_row(draw, text, center, size, color):
+    font = _font(size)
+    text = fit(text, font, _chord(center - size // 2, size, MENU_RADIUS))
+    draw.text((CENTER, center), text, font=font, fill=color, anchor="mm")
+
+
+def _menu_pill(draw, text, center):
+    font = _font(MENU_SELECTED_SIZE)
+    top = center - MENU_PILL_HEIGHT // 2
+    text = fit(text, font, _chord(top, MENU_PILL_HEIGHT, MENU_RADIUS) - 2 * MENU_PILL_PADDING)
+    half = font.getlength(text) / 2 + MENU_PILL_PADDING
+    draw.rounded_rectangle((CENTER - half, top, CENTER + half, top + MENU_PILL_HEIGHT),
+                           radius=MENU_PILL_HEIGHT // 2, fill=ACCENT)
+    draw.text((CENTER, center), text, font=font, fill=WHITE, anchor="mm")
 
 
 def _toast(draw, text):
