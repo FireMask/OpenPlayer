@@ -30,6 +30,15 @@ MESSAGES = {"offline": "Sin conexión", "mpd_error": "MPD no responde"}
 
 
 @dataclass(frozen=True)
+class MenuView:
+    """Lo que se ve del menú (SPEC 21); lo arma menu.Menu.view()."""
+    title: str  # "Menú", "Biblioteca", "Rock", "¿Apagar?"…
+    rows: tuple[str, ...]  # etiquetas ya cargadas
+    cursor: int
+    loading: bool = False  # sin filas aún: "Cargando…"
+
+
+@dataclass(frozen=True)
 class View:
     status: str  # "playing" | "paused" | "stopped" | "offline" | "mpd_error"
     title: str | None = None
