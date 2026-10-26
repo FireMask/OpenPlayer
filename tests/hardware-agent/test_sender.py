@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from sender import Sender
+from sender import Sender, request
 
 
 def wait_until(condition, timeout=5.0):
@@ -213,3 +213,68 @@ def test_stop_ends_thread_even_during_long_backoff(server, make_sender):
 
     assert not sender._thread.is_alive()
     assert time.monotonic() - start < 1
+
+
+# request (SPEC 21)
+
+def serve(reply, received=None):
+    """connect() falso: un socketpair cuyo otro extremo lee el pedido y responde reply (None: no responde)."""
+    def connect():
+        client, server = socket.socketpair()
+
+        def answer():
+            line = server.makefile("rb").readline()
+            if received is not None:
+                received.append(line)
+            if reply is None:
+                time.sleep(1)
+            else:
+                server.sendall(reply)
+            server.close()
+        threading.Thread(target=answer, daemon=True).start()
+        return client
+    return connect
+
+
+def test_request_sends_one_line_and_returns_reply():
+    received = []
+    reply = request(serve(b'{"type":"ok","request":"queue.play"}\n', received), {"type": "queue.play", "position": 3})
+
+    assert reply == {"type": "ok", "request": "queue.play"}
+    assert received == [b'{"type":"queue.play","position":3}\n']
+
+
+def test_request_reads_reply_split_in_chunks():
+    entries = [{"uri": f"song {i}.flac", "directory": False} for i in range(100)]
+    line = json.dumps({"type": "library.page", "offset": 0, "total": 100, "entries": entries}) + "\n"
+
+    assert request(serve(line.encode()), {"type": "library.browse", "path": ""})["entries"] == entries
+
+
+@pytest.mark.parametrize("reply", [
+    b'{"type":"error","request":"queue.add","message":"invalid uri"}\n',
+    b"not json\n",
+    b"[1]\n",
+    b'{"type":"ok"',  # se corta sin \n
+])
+def test_request_returns_none_on_error_or_bad_reply(reply, caplog):
+    assert request(serve(reply), {"type": "queue.add", "uri": "x"}) is None
+    assert "queue.add" in caplog.text
+
+
+def test_request_returns_none_when_line_is_too_long():
+    assert request(serve(b'{"type":"ok","x":"' + b"a" * 2000 + b'"}\n'), {"type": "queue.get"}, max_bytes=1000) is None
+
+
+def test_request_returns_none_on_timeout():
+    started = time.monotonic()
+
+    assert request(serve(None), {"type": "queue.get"}, timeout=0.2) is None
+    assert time.monotonic() - started < 0.9
+
+
+def test_request_returns_none_when_service_is_down():
+    def refused():
+        raise ConnectionRefusedError("down")
+
+    assert request(refused, {"type": "playlist.list"}) is None
