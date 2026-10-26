@@ -129,6 +129,18 @@ Button behavior:
 - OLED is not part of this revision; the current screen target is the GC9A01 TFT.
 - Do not add an audio DAC to this PCB; the current prototype uses an existing USB DAC.
 
+### 4.7 Button board (SPEC 23)
+
+A separate 14 mm-wide strip that lies flat against the side wall of the case (Walkman-style). Files and regeneration: `hardware/buttons/README.md`.
+
+- SW1–SW7: 6 × 6 mm THT tactile switches (`SW_PUSH_6mm`) on the front, in one row. Top to bottom: POWER | VOL+ VOL− | PREV PLAY NEXT MENU, with a larger gap between the three groups so they can be found by touch. Actuator height is picked at purchase; all heights share the footprint.
+- J1 `CARRIER`: JST-XH 8 on the back at the top end, lying along the strip. Same pinout as carrier J4 (1 GND, 2 PLAY, 3 PREV, 4 NEXT, 5 VOL+, 6 VOL−, 7 MENU, 8 KEY); `hardware/buttons/scripts/netlist.py` checks this against the carrier's netlist.
+- **Cable:** XH-8 to XH-8, **straight**: pin 1 to pin 1 … pin 8 to pin 8. Pin 1 is marked on both boards; check continuity before connecting.
+- H1–H2: M2 holes, one at each end.
+- Each switch shorts its signal to GND; no pull-ups, debounce parts, LEDs or ESD parts on the board (pull-ups and debounce are in the Pi/software).
+- Size: `BOARD_W` 14 mm; length follows from `BTN_PITCH` (10 mm), `GROUP_GAP` (4 mm) and `END_MARGIN` (5.5 mm): 116 mm by default.
+- Two layers: signals on F.Cu, GND pour on B.Cu with F.Cu stitching.
+
 ## 5. Connector list
 
 | Ref. | Function | Pins | Footprint |
@@ -178,7 +190,7 @@ Electrical constraints:
 
 ## 8. KiCad project and fabrication workflow
 
-See `hardware/pcb/README.md`. In short: `netlist.py` (single source of truth) → `build_sch.py` → `build_pcb.py` → `export-fab.ps1`, with ERC and DRC (schematic parity) through `kicad-cli`. Do not treat a clean ERC/DRC report as proof that the power circuit is safe.
+See `hardware/pcb/README.md` (button board: `hardware/buttons/README.md`, same flow with `-Board buttons`). Both boards share `hardware/common/pcbgen.py`. In short: `netlist.py` (single source of truth) → `build_sch.py` → `build_pcb.py` → `hardware/common/export-fab.ps1 -Board pcb`, with ERC and DRC (schematic parity) through `kicad-cli`. Do not treat a clean ERC/DRC report as proof that the power circuit is safe.
 
 ## 9. Validation and bring-up checklist
 
@@ -218,7 +230,6 @@ See `hardware/pcb/README.md`. In short: `netlist.py` (single source of truth) �
 - Adding the OLED display; the GC9A01 TFT is the target for this revision.
 - Designing a charger or boost circuit on the PCB.
 - Battery voltage sense / low-battery signal to the Pi.
-- The button board PCB.
 - Fabricating a production batch before electrical, mechanical, and thermal validation.
 
 **Safety note:** This is a requirements brief, not a verified circuit design. The charging module's behavior must be validated against its datasheet and tested before connecting the Raspberry Pi or enclosing the battery.

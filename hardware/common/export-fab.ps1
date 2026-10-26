@@ -33,7 +33,7 @@ Invoke-KiCad 'Drill export' pcb export drill --format excellon --excellon-units 
 Compress-Archive -Path (Join-Path $gerbers '*') -DestinationPath (Join-Path $fab "$name-gerbers.zip")
 
 Invoke-KiCad 'BOM export' sch export bom -o (Join-Path $fab "$name-bom.csv") `
-    --fields 'Reference,Value,Footprint,${QUANTITY}' --labels 'Refs,Value,Footprint,Qty' --group-by 'Value,Footprint' $sch
+    --fields 'Reference,Value,Footprint,Description,${QUANTITY}' --labels 'Refs,Value,Footprint,Description,Qty' --group-by 'Value,Footprint' $sch
 
 Invoke-KiCad 'Top render' pcb render --side top --quality high --background opaque --width 1600 --height 1200 -o (Join-Path $fab 'render-top.png') $pcb
 Invoke-KiCad 'Bottom render' pcb render --side bottom --quality high --background opaque --width 1600 --height 1200 -o (Join-Path $fab 'render-bottom.png') $pcb

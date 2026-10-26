@@ -10,7 +10,7 @@ from pathlib import Path
 BOARD_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BOARD_DIR.parent / "common"))
 import pcbgen  # noqa: E402
-from netlist import NETS, PARTS, pin_net  # noqa: E402
+from netlist import DESCRIPTIONS, NETS, PARTS, pin_net  # noqa: E402
 
 NAME = "openplayer-buttons"
 
@@ -26,7 +26,7 @@ TEXT_Y = {ref: (y - 5.08, y + 3.81) for ref, (_, y) in POSITIONS.items() if ref.
 
 def build():
     pcbgen.write_schematic(BOARD_DIR, NAME, "OpenPlayer buttons", "hardware/buttons/scripts/build_sch.py",
-                           PARTS, pin_net(), POSITIONS, text_y=TEXT_Y)
+                           PARTS, pin_net(), POSITIONS, text_y=TEXT_Y, descriptions=DESCRIPTIONS)
 
 
 if __name__ == "__main__":

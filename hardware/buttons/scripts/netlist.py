@@ -24,6 +24,8 @@ PARTS = {
     "H2": ("M2", *HOLE),
 }
 
+DESCRIPTIONS = {ref: "6x6 THT tactile, height per enclosure" for ref in PARTS if ref.startswith("SW")}  # BOM
+
 # net → [(ref, pin)]. Net names and J1 pins are the carrier's J4: J1 pin N = J4 pin N.
 NETS = {
     "GND": [("J1", "1")] + [(f"SW{i}", "2") for i in range(1, 8)],

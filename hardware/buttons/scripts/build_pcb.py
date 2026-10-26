@@ -15,7 +15,7 @@ from pcbnew import FromMM
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_sch import BOARD_DIR, NAME  # noqa: E402  (also puts hardware/common on sys.path)
 import pcbgen  # noqa: E402
-from netlist import PARTS, pin_net  # noqa: E402
+from netlist import DESCRIPTIONS, PARTS, pin_net  # noqa: E402
 from pcbgen import box, text  # noqa: E402
 
 BTN_PITCH = 10.0   # mm, switch center to center within a group
@@ -88,7 +88,7 @@ def build():
             nets[name] = pcbnew.NETINFO_ITEM(board, f"/{name}")  # local labels → /NAME
             board.Add(nets[name])
     pcbgen.outline(board, W, H)
-    footprints = pcbgen.place(board, nets, NAME, PARTS, owner, PLACEMENT)
+    footprints = pcbgen.place(board, nets, NAME, PARTS, owner, PLACEMENT, descriptions=DESCRIPTIONS)
     silkscreen(board, footprints)
     ds.m_CopperEdgeClearance = FromMM(pcbgen.EDGE_CLEARANCE)
     router = pcbgen.Router(footprints, W, H, ("J1", "1"), SIGNAL_TRACK)

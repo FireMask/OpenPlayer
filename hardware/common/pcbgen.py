@@ -72,9 +72,10 @@ def prop(key, value, x, y, hide=False):
     return f'(property "{key}" "{value}" (at {x:.2f} {y:.2f} 0){hidden} (effects (font (size 1.27 1.27))))'
 
 
-def write_schematic(board_dir, name, title, script, parts, owner, positions, text_y=None):
+def write_schematic(board_dir, name, title, script, parts, owner, positions, text_y=None, descriptions=None):
     """Write <name>.kicad_sch (and a stub .kicad_pro if missing). Every pin gets a net label at its
-    tip; pins without a net get a no-connect flag. text_y: ref → (reference y, value y) overrides."""
+    tip; pins without a net get a no-connect flag. text_y: ref → (reference y, value y) overrides;
+    descriptions: ref → Description field (shows in the BOM)."""
     sheet_uuid = uid("sheet")
     lib_ids = sorted({sym for _, sym, _ in parts.values()})
     symbols = {lib_id: load_symbol(lib_id) for lib_id in lib_ids}
@@ -109,7 +110,7 @@ def write_schematic(board_dir, name, title, script, parts, owner, positions, tex
             prop("Value", value, x, value_y),
             prop("Footprint", footprint, x, y, hide=True),
             prop("Datasheet", "", x, y, hide=True),
-            prop("Description", "", x, y, hide=True),
+            prop("Description", (descriptions or {}).get(ref, ""), x, y, hide=True),
             *(f'(pin "{n}" (uuid "{uid("pin", ref, n)}"))' for n in pins),
             f'(instances (project "{name}" (path "/{sheet_uuid}" (reference "{ref}") (unit 1))))',
             ")",
@@ -171,9 +172,10 @@ def outline(board, w, h):
         board.Add(seg)
 
 
-def place(board, nets, name, parts, owner, placement, unconnected=lambda ref, n: None):
+def place(board, nets, name, parts, owner, placement, unconnected=lambda ref, n: None, descriptions=None):
     """Load, flip, rotate and move each footprint so its courtyard center lands on placement[ref].
-    unconnected(ref, pad) names the net of a pad that is in no net (None leaves it netless)."""
+    unconnected(ref, pad) names the net of a pad that is in no net (None leaves it netless).
+    descriptions: same as write_schematic's, so schematic parity matches."""
     footprints = {}
     for ref, (value, _, fp_id) in parts.items():
         lib, fp_name = fp_id.split(":")
@@ -181,6 +183,8 @@ def place(board, nets, name, parts, owner, placement, unconnected=lambda ref, n:
         fp.SetFPID(pcbnew.LIB_ID(lib, fp_name))
         fp.SetReference(ref)
         fp.SetValue(value)
+        if descriptions and ref in descriptions:
+            next(f for f in fp.GetFields() if f.GetName() == "Description").SetText(descriptions[ref])
         fp.SetPath(pcbnew.KIID_PATH(f"/{uid('sym', ref)}"))  # links the footprint to its schematic symbol
         fp.SetSheetname("Root")
         fp.SetSheetfile(f"{name}.kicad_sch")
