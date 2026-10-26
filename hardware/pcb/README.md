@@ -15,7 +15,7 @@ Every KiCad file is generated. Do not edit `.kicad_sch` / `.kicad_pcb` by hand: 
 python hardware\pcb\scripts\netlist.py        # self-check against config/player.example.json → OK
 python hardware\pcb\scripts\build_sch.py      # → openplayer-carrier.kicad_sch
 & "C:\Program Files\KiCad\10.0\bin\python.exe" hardware\pcb\scripts\build_pcb.py   # → .kicad_pcb (placed + routed)
-.\hardware\pcb\scripts\export-fab.ps1         # ERC + DRC, then Gerbers, drill, BOM, renders → fabrication/
+.\hardware\common\export-fab.ps1 -Board pcb   # ERC + DRC, then Gerbers, drill, BOM, renders → fabrication/
 ```
 
 | File | Role |
@@ -23,7 +23,8 @@ python hardware\pcb\scripts\build_sch.py      # → openplayer-carrier.kicad_sch
 | `scripts/netlist.py` | Single source of truth: parts, footprints and nets |
 | `scripts/build_sch.py` | Writes the schematic (stock KiCad 10 symbols, net labels per pin) |
 | `scripts/build_pcb.py` | Outline, placement, silkscreen, routing (grid router), GND pours |
-| `scripts/export-fab.ps1` | Fabrication package; refuses to export on any ERC/DRC finding |
+| `../common/pcbgen.py` | Generator code shared with the button board: schematic writer, placement, grid router, GND pour |
+| `../common/export-fab.ps1` | Fabrication package for any board (`-Board pcb`); refuses to export on any ERC/DRC finding |
 
 - **Change a pin:** edit `NETS` in `netlist.py`. If it is a GPIO, change `config/player.example.json` too; the self-check fails until both agree.
 - **Resize the board:** change `BOARD_W` / `BOARD_H` in `build_pcb.py` and rerun. Placement is anchored to the edges and the center. 60 mm is the minimum width (the 2×20 header is ~56 mm). Tested at 60 × 45 and 70 × 52.
