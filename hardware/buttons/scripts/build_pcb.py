@@ -1,4 +1,4 @@
-"""Write openplayer-buttons.kicad_pcb from netlist.py: outline, placement, silkscreen, nets.
+"""Write openplayer-buttons.kicad_pcb from netlist.py: outline, placement, silkscreen, nets, routing.
 
 Needs KiCad's bundled Python (pcbnew):
   "C:/Program Files/KiCad/10.0/bin/python.exe" hardware/buttons/scripts/build_pcb.py
@@ -27,6 +27,10 @@ END_MARGIN = 5.5   # mm, from the last switch / connector to the board end (hole
 # Courtyard lengths along the strip, from the footprints as placed below.
 J1_LEN = 23.5      # XH-8, pins along the strip
 SW_LEN = 9.59      # SW_PUSH_6mm turned 90°: pin 1 pads on the left, GND pads on the right
+
+SIGNAL_TRACK = 0.25  # mm, all signals; GND is the pour
+# Signals on F.Cu (B.Cu only for short hops), GND pour on B.Cu plus F.Cu stitching.
+ROUTE_ORDER = ["BTN_MENU", "BTN_NEXT", "BTN_PLAY", "BTN_PREV", "BTN_VOLDN", "BTN_VOLUP", "PWR_KEY"]  # longest first
 
 TEXT = 1.0   # mm, button and board names
 SMALL = 0.8  # mm, pin labels; JLCPCB / KiCad minimum
@@ -87,6 +91,10 @@ def build():
     footprints = pcbgen.place(board, nets, NAME, PARTS, owner, PLACEMENT)
     silkscreen(board, footprints)
     ds.m_CopperEdgeClearance = FromMM(pcbgen.EDGE_CLEARANCE)
+    router = pcbgen.Router(footprints, W, H, ("J1", "1"), SIGNAL_TRACK)
+    for net in ROUTE_ORDER:
+        router.route_net(board, net, nets[net])
+    pcbgen.pour(board, nets["GND"], router.stitch(board, nets["GND"]), W, H)
     path = BOARD_DIR / f"{NAME}.kicad_pcb"
     pcbgen.save(board, nets, footprints, path)
     return path
