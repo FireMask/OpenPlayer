@@ -6,9 +6,10 @@ from gestures import Gestures
 class Recorder:
     def __init__(self):
         self.events = []  # ("send", nombre) | ("toast", texto)
+        self.menu = False  # menú abierto (SPEC 21)
         self.gestures = Gestures(lambda name: self.events.append(("send", name)),
                                  lambda text: self.events.append(("toast", text)),
-                                 hold=0.6, shutdown_hold=3)
+                                 hold=0.6, shutdown_hold=3, menu_open=lambda: self.menu)
 
     def sent(self):
         return [value for kind, value in self.events if kind == "send"]
@@ -117,11 +118,11 @@ def test_releasing_play_pause_early_cancels_without_play_pause(rec):
     assert rec.toasts() == ["Apagar 3…", "Apagar 2…", None]
 
 
-def test_held_menu_only_toasts(rec):
+def test_held_menu_opens_menu_once_without_toast(rec):
     rec.run("menu", until=2.0)
 
-    assert rec.sent() == []
-    assert rec.toasts() == ["Menú: próximamente"]
+    assert rec.sent() == ["menu_open"]
+    assert rec.toasts() == []
 
 
 def test_two_buttons_held_at_once_are_independent(rec):
@@ -164,3 +165,63 @@ def test_custom_hold_times():
     g.tick(2)
 
     assert sent == ["seek_forward", "power_off"]
+
+
+# Con el menú abierto (SPEC 21)
+
+@pytest.fixture
+def menu(rec):
+    rec.menu = True
+    return rec
+
+
+@pytest.mark.parametrize("name, local", [("next", "menu_down"), ("previous", "menu_up"),
+                                         ("play_pause", "menu_select"), ("menu", "menu_back")])
+def test_short_press_in_menu_sends_local_name_on_release(menu, name, local):
+    menu.gestures.press(name, 0)
+    assert menu.events == []
+
+    menu.gestures.release(name, 0.3)
+    assert menu.events == [("send", local)]
+
+
+@pytest.mark.parametrize("name, local", [("next", "menu_down"), ("previous", "menu_up")])
+def test_held_scroll_in_menu_repeats_fast_without_toast(menu, name, local):
+    menu.run(name, until=1.0)  # a 0.6, 0.75 y 0.9
+
+    assert menu.sent() == [local] * 3
+    assert menu.toasts() == []
+
+
+def test_held_menu_in_menu_closes(menu):
+    menu.run("menu", until=2.0)
+
+    assert menu.sent() == ["menu_close"]
+
+
+def test_held_play_pause_in_menu_still_powers_off(menu):
+    menu.run("play_pause", until=4.0)
+
+    assert menu.sent() == ["power_off"]
+    assert menu.toasts() == ["Apagar 3…", "Apagar 2…", "Apagar 1…"]
+
+
+def test_volume_in_menu_is_unchanged(menu):
+    menu.run("volume_down", until=0.9)  # al apretar, y luego a 0.6 y 0.85
+
+    assert menu.sent() == ["volume_down"] * 3
+
+
+def test_menu_state_is_read_when_each_action_fires(rec):
+    g = rec.gestures
+    g.press("menu", 0)
+    g.tick(0.6)  # abre el menú
+    rec.menu = True
+    g.release("menu", 0.7)
+    g.press("next", 1)
+    g.release("next", 1.1)
+    g.press("menu", 2)
+    rec.menu = False  # se cerró (timeout) mientras estaba apretado
+    g.release("menu", 2.1)
+
+    assert rec.sent() == ["menu_open", "menu_down", "menu"]
