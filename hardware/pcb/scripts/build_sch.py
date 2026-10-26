@@ -103,7 +103,7 @@ def build():
             ref_y, value_y = y - 5.08, y + 12.7
         out += [
             f'(symbol (lib_id "{lib_id}") (at {x:.2f} {y:.2f} 0) (unit 1)',
-            "(exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)",
+            f"(exclude_from_sim no) (in_bom {'no' if ref[0] in 'TH' else 'yes'}) (on_board yes) (dnp no)",  # test points and holes stay out of the BOM
             f'(uuid "{uid("sym", ref)}")',
             prop("Reference", ref, x, ref_y),
             prop("Value", value, x, value_y),
