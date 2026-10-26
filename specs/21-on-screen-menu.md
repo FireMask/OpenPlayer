@@ -1,6 +1,6 @@
 # SPEC 21 — Menú en pantalla con los seis botones
 
-**Estado:** Approved
+**Estado:** Implemented
 **Depende de:** SPEC 10–14 (biblioteca, listas y cola por IPC), SPEC 17–19 (pantalla redonda), SPEC 20 (gestos, avisos y `power_off`)
 **Fecha:** 2026-10-25
 
@@ -121,6 +121,7 @@ Menu(request, *, power_off, toast, changed, queue_position=lambda: None,
   - `load(offset)` pide la página siguiente cuando el cursor queda a ≤ 10 filas del final de lo cargado y `len(rows) < total`;
   - un nivel con un pedido en curso está `loading`;
   - una respuesta que llega para un nivel que ya no está arriba de la pila se descarta.
+  - Precisado al implementar: si falla la página siguiente, se reintenta en el próximo movimiento del cursor (otro aviso "Error"); nunca dos pedidos a la vez.
 - `_Row(label, action)` con `action` interno, por ejemplo:
   - `("browse", path)`, `("track_actions", uri)`, `("play_uri", uri)`, `("add", uri, next)`;
   - `("playlist", name)`, `("play_playlist", name, pos)`, `("queue_play", pos)`;
@@ -166,6 +167,7 @@ class MenuView:
 - El tick de 1 s también vence el timeout.
 - `refresh()` (público) redibuja enseguida si el panel está listo. Es el `changed` del menú.
 - `wake()` también se llama al abrir el menú (ya pasa: es un botón).
+- Agregado al implementar: con el menú abierto el panel queda encendido (de noche, el encendido de un botón dura 10 s y el menú, hasta 30 s).
 
 ## Plan de implementación
 
@@ -219,42 +221,42 @@ class MenuView:
 ## Criterios de aceptación
 
 ### Gestos
-- [ ] Con el menú cerrado, todos los gestos de SPEC 20 siguen iguales, salvo que `menu` mantenido abre el menú en lugar de mostrar el aviso.
-- [ ] Con el menú abierto, ⏭/⏮ cortos mueven el cursor una fila y mantenidos repiten cada 0,15 s. Ninguno envía `next`, `previous` ni `seek_*` al Service.
-- [ ] Con el menú abierto, ▶︎ corto elige sin enviar `play_pause`; ▶︎ mantenido muestra la cuenta y apaga como en SPEC 20.
-- [ ] Con el menú abierto, `menu` corto vuelve un nivel (en la raíz cierra) y mantenido cierra desde cualquier nivel; vol± cambian el volumen.
-- [ ] Sin pantalla habilitada, `menu` mantenido no hace nada, y el resto de los gestos funciona como en SPEC 20.
+- [x] Con el menú cerrado, todos los gestos de SPEC 20 siguen iguales, salvo que `menu` mantenido abre el menú en lugar de mostrar el aviso.
+- [x] Con el menú abierto, ⏭/⏮ cortos mueven el cursor una fila y mantenidos repiten cada 0,15 s. Ninguno envía `next`, `previous` ni `seek_*` al Service.
+- [x] Con el menú abierto, ▶︎ corto elige sin enviar `play_pause`; ▶︎ mantenido muestra la cuenta y apaga como en SPEC 20.
+- [x] Con el menú abierto, `menu` corto vuelve un nivel (en la raíz cierra) y mantenido cierra desde cualquier nivel; vol± cambian el volumen.
+- [x] Sin pantalla habilitada, `menu` mantenido no hace nada, y el resto de los gestos funciona como en SPEC 20.
 
 ### Menú
-- [ ] La raíz muestra Biblioteca, Listas, Cola y Apagar.
-- [ ] Biblioteca:
+- [x] La raíz muestra Biblioteca, Listas, Cola y Apagar.
+- [x] Biblioteca:
   - navega carpetas;
   - "▶ Reproducir todo" aparece en toda carpeta excepto la raíz;
   - en una pista o en "Reproducir todo", "Reproducir" envía `library.play` y cierra; "Siguiente" envía `queue.add` con `next: true` y muestra "Agregado"; "Agregar a la cola" envía `queue.add` y muestra "Agregado".
-- [ ] Listas:
+- [x] Listas:
   - muestra los nombres;
   - "▶ Reproducir lista" envía `playlist.play` con posición 0;
   - "Reproducir desde aquí" en la pista N envía `playlist.play` con posición N.
-- [ ] Cola: muestra la cola con "♪ " en la actual, y elegir la pista N envía `queue.play` con posición N.
-- [ ] "Apagar" pide "¿Apagar?" con el cursor en No. No vuelve; Sí envía `power_off` una vez y muestra "Apagando…".
-- [ ] El cursor no da vuelta: ⏮ en la primera fila y ⏭ en la última no hacen nada.
-- [ ] En una carpeta con más de 100 entradas, al acercarse al final se pide la página siguiente una sola vez y se puede llegar a la última entrada.
-- [ ] Un pedido que falla muestra el aviso "Error" y deja el menú en el mismo nivel y la misma fila. Una respuesta de un nivel que ya se dejó no cambia nada.
-- [ ] El menú se cierra solo tras 30 s sin botones.
-- [ ] Mientras un nivel carga se ve "Cargando…", y los botones (y la cuenta de apagado) siguen respondiendo.
+- [x] Cola: muestra la cola con "♪ " en la actual, y elegir la pista N envía `queue.play` con posición N.
+- [x] "Apagar" pide "¿Apagar?" con el cursor en No. No vuelve; Sí envía `power_off` una vez y muestra "Apagando…".
+- [x] El cursor no da vuelta: ⏮ en la primera fila y ⏭ en la última no hacen nada.
+- [x] En una carpeta con más de 100 entradas, al acercarse al final se pide la página siguiente una sola vez y se puede llegar a la última entrada.
+- [x] Un pedido que falla muestra el aviso "Error" y deja el menú en el mismo nivel y la misma fila. Una respuesta de un nivel que ya se dejó no cambia nada.
+- [x] El menú se cierra solo tras 30 s sin botones.
+- [x] Mientras un nivel carga se ve "Cargando…", y los botones (y la cuenta de apagado) siguen respondiendo.
 
 ### Pantalla
-- [ ] La fila seleccionada se dibuja centrada en una píldora de acento, con 2 filas arriba y 2 abajo cuando existen, y el encabezado del nivel arriba.
-- [ ] Una etiqueta larga se corta con "…" dentro del círculo, sin salirse.
-- [ ] El indicador de volumen y los avisos se dibujan encima del menú.
-- [ ] Abrir el menú enciende la pantalla apagada (noche o detenida).
-- [ ] Sin menú, `render` produce exactamente las mismas imágenes que antes.
+- [x] La fila seleccionada se dibuja centrada en una píldora de acento, con 2 filas arriba y 2 abajo cuando existen, y el encabezado del nivel arriba.
+- [x] Una etiqueta larga se corta con "…" dentro del círculo, sin salirse.
+- [x] El indicador de volumen y los avisos se dibujan encima del menú.
+- [x] Abrir el menú enciende la pantalla apagada (noche o detenida).
+- [x] Sin menú, `render` produce exactamente las mismas imágenes que antes.
 
 ### General
-- [ ] No hay cambios en el Service ni en la IPC; las pruebas .NET y las de la web pasan sin tocarlas.
-- [ ] Todas las pruebas del hardware-agent pasan, también con las advertencias de obsolescencia tratadas como errores.
-- [ ] En la Pi, con los botones reales: se reproduce una carpeta, se agrega una pista, se reproduce una lista desde la pista 3, se salta en la cola y se apaga desde el menú.
-- [ ] README, `architecture.md` §8 y §13 (fase 8 al día), `gpio-map.md` y `assembly.md` describen el menú y sus gestos.
+- [x] No hay cambios en el Service ni en la IPC; las pruebas .NET y las de la web pasan sin tocarlas.
+- [x] Todas las pruebas del hardware-agent pasan, también con las advertencias de obsolescencia tratadas como errores.
+- [x] En la Pi, con los botones reales: se reproduce una carpeta, se agrega una pista, se reproduce una lista desde la pista 3, se salta en la cola y se apaga desde el menú.
+- [x] README, `architecture.md` §8 y §13 (fase 8 al día), `gpio-map.md` y `assembly.md` describen el menú y sus gestos.
 
 ## Decisiones tomadas y descartadas
 
