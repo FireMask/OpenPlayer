@@ -1,6 +1,7 @@
 """Hilo de la pantalla (SPEC 17): player.subscribe → View → render → panel.show.
 SPEC 18: modo del Service (displayMode), reloj automático, indicador de volumen y título con desplazamiento,
-calculados en cada tick. También apaga el panel (DISPOFF) de noche o tras un rato detenida."""
+calculados en cada tick. También apaga el panel (DISPOFF) de noche o tras un rato detenida.
+SPEC 21: con el menú abierto lo dibuja encima de todo y deja el panel encendido."""
 
 import json
 import logging
@@ -38,11 +39,12 @@ COVER_TICK = 0.1  # mientras carga la carátula: se ve apenas llega
 class Display:
     def __init__(self, socket_path, panel, *, connect=None, tick_seconds=1.0, retry_seconds=2.0, label="",
                  idle_clock_seconds=60, night=None, off_after_stopped_minutes=None,
-                 now=datetime.now, monotonic=time.monotonic, fetch=None):
+                 now=datetime.now, monotonic=time.monotonic, fetch=None, menu=None):
         """panel: algo con init(), show(image), sleep_display() y wake_display().
         connect inyectable igual que Sender (TCP en pruebas). night: (inicio, fin) como datetime.time, o None.
         now (hora local, para el reloj) y monotonic (temporizadores) son inyectables para las pruebas.
-        fetch: bytes de la carátula actual o None (SPEC 19); por defecto player.get_cover por connect."""
+        fetch: bytes de la carátula actual o None (SPEC 19); por defecto player.get_cover por connect.
+        menu: algo con view(t) → MenuView | None (menu.Menu, SPEC 21); su changed es refresh()."""
         self._path = socket_path
         self.panel = panel
         self._connect = connect or (lambda: connect_unix(socket_path))
@@ -77,6 +79,7 @@ class Display:
         self._toast_until = 0.0
         self._lock = threading.Lock()
         self._ready = False  # panel iniciado: recién ahí toast() puede dibujar
+        self._menu = menu
         self._thread =threading.Thread(target=self._run, name="display", daemon=True)
 
     def start(self):
@@ -92,6 +95,15 @@ class Display:
         self._toast_until = self._monotonic() + seconds
         if self._ready:
             self._draw()
+
+    def refresh(self):
+        """Redibuja enseguida (el menú cambió). Desde cualquier hilo; sin efecto antes de iniciar el panel."""
+        if self._ready:
+            self._draw()
+
+    def queue_position(self):
+        """Posición en la cola del último snapshot: el menú marca la pista que suena."""
+        return self._base.queue_position
 
     def shutting_down(self):
         """"Apagando…" fijo: el Service ya pidió el apagado."""
@@ -200,7 +212,8 @@ class Display:
 
     def _draw_locked(self):
         now = self._monotonic()
-        if not self._power(now):
+        menu = self._menu.view(now) if self._menu else None  # también vence el timeout del menú
+        if not self._power(now, menu is not None):
             return
         view = self._base
         changes = {}
@@ -229,6 +242,8 @@ class Display:
         self._was_art = art
         if self._toast and now < self._toast_until:
             changes["toast"] = self._toast
+        if menu is not None:
+            changes["menu"] = menu
         view = replace(view, **changes)
         if view != self._shown:
             self.panel.show(render(view))
@@ -252,12 +267,13 @@ class Display:
         if self._cover_key == key:  # si la pista cambió mientras tanto, se descarta
             self._cover, self._cover_state = image, "ok" if image is not None else "none"
 
-    def _power(self, now) -> bool:
-        """Enciende o apaga el panel según el horario y la inactividad; True si está encendido."""
+    def _power(self, now, menu_open=False) -> bool:
+        """Enciende o apaga el panel según el horario y la inactividad; True si está encendido.
+        Con el menú abierto queda encendida (hasta que se cierre o venza)."""
         night = self._night is not None and in_range(self._now().time(), *self._night)
         stopped = (self._off_after is not None and self._stopped_since is not None
                    and now - self._stopped_since >= self._off_after)
-        on = not (night or stopped) or now < self._wake_until
+        on = not (night or stopped) or now < self._wake_until or menu_open
         if on != self._panel_on:
             if on:
                 self.panel.wake_display()
