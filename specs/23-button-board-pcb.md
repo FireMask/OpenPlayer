@@ -68,7 +68,7 @@ BTN_PITCH = 10.0   # mm, switch center to center within a group
 GROUP_GAP = 4.0    # mm, extra space between groups
 GROUPS = [["SW1"], ["SW2", "SW3"], ["SW4", "SW5", "SW6", "SW7"]]  # top to bottom
 BOARD_W = 14.0     # mm, strip width
-END_MARGIN = 4.0   # mm, from the last switch / connector to the board end (holes sit here)
+END_MARGIN = 5.5   # mm, from the last switch / connector to the board end (holes sit here; the M2 hole courtyard is 5 mm)
 ```
 
 Board length = connector zone + switches + gaps + margins, computed by the script and printed when it runs.
