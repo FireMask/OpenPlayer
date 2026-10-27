@@ -1,6 +1,6 @@
 # SPEC 25 — Carrier PCB Rev C (Pi sandwich, display on board) + 6-key button strip
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 24 (carrier Rev B, generator scripts), SPEC 23 (button board)
 > **Date:** 2026-10-27
 > **Objective:** Rework the carrier into a Pi Zero "HAT": the Pi plugs into a 2×20 socket on the carrier's back, and the GC9A01 module is soldered on its front. This fits a portrait, Walkman-size case (80 × 110 × ~33 mm) with a 4000 mAh cell and frees the bottom of the case for the USB OTG / DAC. The button strip loses the POWER key so it fits the case height.
@@ -22,8 +22,8 @@
 | **Total** | **~28.3** |
 
 - **Front view:**
-  - Top of the case: carrier + Pi (≈ 45 mm tall).
-  - Bottom zone (≈ 55 mm): charger, USB OTG adapter, DAC. Headphone jack and charger USB-C exit the bottom wall.
+  - Top of the case: carrier + Pi (53 mm tall).
+  - Bottom zone (≈ 51 mm): charger, USB OTG adapter, DAC. Headphone jack and charger USB-C exit the bottom wall.
   - Right wall: the button strip.
   - Top edge: the POWER key.
 
@@ -47,8 +47,8 @@
 - **Carrier back parts:** J2, J3, J4, J6, J7, C1, C2 and TP1–3 stay on the back, in the 11 mm gap between the boards.
   - Height rule: part height + Pi part height under it ≤ 10.5 mm (0.5 mm air).
   - J4's mouth sits on the right edge (toward the button strip). J2/J3/J6 sit on the left edge, J7 on the top edge.
-- **Copper keep-out** (both layers, no pour) over the Pi's Wi-Fi/BT antenna area.
-- **Board size:** `BOARD_W` 65 (Pi width). `BOARD_H` ≈ 45, set by the display: its pin row is 2 mm from the module's bottom edge, which is aligned to the carrier's bottom edge.
+- **Copper keep-out** (both layers, no pour) over the Pi's Wi-Fi/BT antenna area: x 18–37, bottom 7 mm (between its mini-HDMI and USB OTG ports). The display's pads and tracks may cross it.
+- **Board size:** `BOARD_W` 65 (Pi width). `BOARD_H` 53: the Pi (30) flush with the bottom edge plus the 23 mm band above it that J4 (23.5 mm long) needs on the right edge (the Pi's holes leave only 17 mm of edge between them). The display's pin row is 2 mm from the module's bottom edge, which is aligned to the carrier's bottom edge.
 - **Button board (SPEC 23 files):** remove SW1 (POWER).
   - `GROUPS = [["SW2", "SW3"], ["SW4", "SW5", "SW6", "SW7"]]`, `BTN_PITCH = 9.6`, giving ≈ 100.5 mm (fits 104 mm inside).
   - Its J1 pin 8 (`KEY`) stays in the connector, unconnected on the board.
@@ -90,16 +90,24 @@
 
 | Item | Position |
 |---|---|
-| Board | 65 × 45 |
-| Display pin row (J5) | y = 43, pins centered on x = 32.5, pin 1 (VCC) at x = 40.12 |
-| Display M2 holes | (22.9, 39.5), (42.1, 39.5) |
-| Screen center | (32.5, 18) |
-| Pi outline (back) | x 0–65, y 15–45 |
-| Pi M2.5 holes | (3.5, 18.5), (61.5, 18.5), (3.5, 41.5), (61.5, 41.5) |
-| J1 socket | centered x = 32.5, row centers 3.5 mm below the Pi's top edge (y ≈ 18.5). Pin 1 at the left end (Pi SD-card side) |
+| Board | 65 × 53 |
+| Display pin row (J5) | y = 51, pins centered on x = 32.5, pin 1 (VCC) at x = 40.12 |
+| Display M2 holes | (22.9, 47.5), (42.1, 47.5) |
+| Screen center | (32.5, 26) |
+| Pi outline (back) | x 0–65, y 23–53 |
+| Pi M2.5 holes | (3.5, 26.5), (61.5, 26.5), (3.5, 49.5), (61.5, 49.5) |
+| J1 socket | centered x = 32.5, row centers 3.5 mm below the Pi's top edge (y = 26.5). Pin 1 at (8.37, 27.77): left end, inner row; pin 2 on the edge row |
 | Pi ports (bottom edge, from left) | mini-HDMI 12.4, **USB OTG 41.4**, PWR 54.0 |
 
-Step 1 checks these against the official Pi Zero 2 W mechanical drawing. Pin 1 orientation is the critical item.
+Step 1 checked these against the official Pi Zero 2 W mechanical drawing (RP-008358): holes, header center (x 32.5, 3.5 mm from the top edge), ports and pin 1 match, unmirrored in front view. `build_pcb.py` asserts all 40 J1 pads against that pattern.
+
+| Other placement (back) | Position |
+|---|---|
+| J2, J6 | left edge, top band |
+| J3 | left edge, between H1 and H3 |
+| J4 | right edge, top band (y 0–23.4) |
+| J7 | top edge, x = 18 |
+| C1 (flat), C2, TP1–3 | top band, outside the Pi area; TPs at x = 43, inside the display outline |
 
 ### Parts changes (`netlist.py` `PARTS`)
 
@@ -110,6 +118,8 @@ Step 1 checks these against the official Pi Zero 2 W mechanical drawing. Pin 1 o
 | J7 | — | `Connector_JST:JST_XH_S2B-XH-A_1x02_P2.50mm_Horizontal` | back | 6.1 mm |
 | H1–H4 | M2.5 inboard | M2.5 on the Pi pattern | — | — |
 | H5–H6 | — | `MountingHole_2.2mm_M2` (display tab) | — | — |
+
+H5/H6 sit 3.5 mm from J5's pin row, under the module's own tab, so their stock courtyards overlap J5's. `build_pcb.py` writes `openplayer-carrier.kicad_dru` with one rule that waives courtyard clearance for that pair only. J5's 3D model is hidden: the module brings its own header.
 
 All other parts are unchanged.
 
@@ -132,18 +142,18 @@ All other parts are unchanged.
 
 ## Acceptance criteria
 
-- [ ] Both `netlist.py` print `OK`. `NETS` diff vs Rev B = J7 only (plus SW1 removal on the button board).
-- [ ] ERC 0 and DRC + parity 0/0/0 on both boards.
-- [ ] Carrier is 65 × ~45. J1 is a 2×20 vertical socket on the back. J1 pin 1 matches Pi pin 1 with the Pi component side facing the carrier.
-- [ ] The Pi M2.5 holes match the 58 × 23 pattern. With the Pi outline flush to the carrier's bottom edge, the ports are at that edge.
-- [ ] J5 is on the front at y = 43, VCC rightmost from the front. The M2 holes are 19.2 c-c, 3.5 mm above the pin row.
-- [ ] J7 PWR_BTN carries `PWR_KEY` / `GND`. J4 pinout is unchanged.
-- [ ] Every back part + the Pi part under it ≤ 10.5 mm (README table).
-- [ ] No copper pour over the antenna keep-out.
-- [ ] Button board has 6 keys, length ≤ 101 mm, J1 pinout unchanged.
-- [ ] Silkscreen shows "Rev C". "Rev B" appears nowhere on the carrier.
-- [ ] Fab outputs are regenerated for both boards. The docs describe the Rev C stack and the portrait case.
-- [ ] No change under `src/` or `config/`.
+- [x] Both `netlist.py` print `OK`. `NETS` diff vs Rev B = J7 only (plus SW1 removal on the button board).
+- [x] ERC 0 and DRC + parity 0/0/0 on both boards.
+- [x] Carrier is 65 × 53. J1 is a 2×20 vertical socket on the back. J1 pin 1 matches Pi pin 1 with the Pi component side facing the carrier.
+- [x] The Pi M2.5 holes match the 58 × 23 pattern. With the Pi outline flush to the carrier's bottom edge, the ports are at that edge.
+- [x] J5 is on the front at y = 51, VCC rightmost from the front. The M2 holes are 19.2 c-c, 3.5 mm above the pin row.
+- [x] J7 PWR_BTN carries `PWR_KEY` / `GND`. J4 pinout is unchanged.
+- [x] Every back part + the Pi part under it ≤ 10.5 mm (README table).
+- [x] No copper pour over the antenna keep-out.
+- [x] Button board has 6 keys, length ≤ 101 mm, J1 pinout unchanged.
+- [x] Silkscreen shows "Rev C". "Rev B" appears nowhere on the carrier.
+- [x] Fab outputs are regenerated for both boards. The docs describe the Rev C stack and the portrait case.
+- [x] No change under `src/` or `config/`.
 
 ## Decisions
 
@@ -153,6 +163,9 @@ All other parts are unchanged.
 - **Yes:** Pi ports flush with the carrier's bottom edge, with OTG into the open bottom zone. **No:** test-pad USB soldering (not needed with that room).
 - **Yes:** POWER key moved to the top edge via new J7, with the 6-key strip at 9.6 mm pitch. **No:** a PH connector or shrinking gaps to keep 7 keys (still ~105 mm).
 - **Yes:** J4 pinout frozen (pin 8 stays), so the existing XH-8 cable still works.
+- **Yes (at implementation):** board 65 × 53 instead of ≈ 45, so J4 keeps its right-edge mouth above the Pi's holes and J2/J6/J3 fit the left edge. Cost: the case's bottom zone shrinks from ≈ 55 to ≈ 51 mm. **No:** J4 / J6 moved to the top edge to keep 65 × 45.
+- **Yes (at implementation):** antenna keep-out blocks only the pour; J5's pads and display tracks cross it. **No:** routing around it.
+- **Yes (at implementation):** button board silkscreen bumped to Rev B (6 keys).
 
 ## Risks
 
