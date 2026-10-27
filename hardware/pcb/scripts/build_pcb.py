@@ -208,6 +208,9 @@ def build():
     footprints = pcbgen.place(board, nets, NAME, PARTS, pin_net(), PLACEMENT,
                               lambda ref, n: f"unconnected-({ref}-Pin_{n}-Pad{n})" if ref == "J1" else None)
     pi_overlay(board, footprints["J1"])
+    models = footprints["J5"].Models()  # holes only: the display module brings its own pre-soldered header
+    for i in range(len(models)):
+        models[i].m_Show = False
     silkscreen(board, footprints)
     display_outline(board)
     c1_body(board, footprints["C1"])
