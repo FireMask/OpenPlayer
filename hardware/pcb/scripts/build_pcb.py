@@ -56,7 +56,7 @@ PLACEMENT = {
     "J4": (W + MOUTH - 6.3, PI_TOP + 0.42 - J4_LEN / 2, 270, "back"),  # right edge, above H2 / J1
     "J7": (18.0, -MOUTH + 6.3, 0, "back"),            # power key, wires leave upward
     "C1": (20.0, 18.0, 90, "back"),                   # leads on the left, body lies to the right
-    "C2": (36.5, 18.0, 90, "back"),
+    "C2": (35.5, 18.0, 90, "back"),
     "TP1": (43.0, 14.0, 0, "back"),                   # inside the display outline, clear of its silkscreen
     "TP2": (43.0, 17.5, 0, "back"),
     "TP3": (43.0, 21.0, 0, "back"),
@@ -65,7 +65,7 @@ PLACEMENT = {
     "H6": (*LCD_HOLES[1], 0, "front"),
 }
 NAMES = {"J1": "PI", "J2": "PWR_IN", "J3": "KEY", "J4": "BUTTONS", "J5": "DISPLAY", "J6": "SWITCH",
-         "TP1": "GND", "TP2": "5V", "TP3": "3V3"}
+         "J7": "PWR_BTN", "TP1": "GND", "TP2": "5V", "TP3": "3V3"}
 PIN_LABELS = {
     "J4": ["GND", "PLAY", "PREV", "NEXT", "VOL+", "VOL-", "MENU", "KEY"],
     "J5": ["VCC", "GND", "SCL", "SDA", "DC", "CS", "RST"],
@@ -81,29 +81,31 @@ def pads(fp):
 
 
 def silkscreen(board, footprints):
-    """Names on B.SilkS (the parts' side), never under a connector body (it would be hidden). J4/J5 pin
-    labels and the micro-USB warning go on the bare front: no room on the back at pin height."""
+    """Names on B.SilkS (the parts' side), never under a connector body (it would be hidden). On the
+    front, nothing under the display: J4 pin labels right of it, the micro-USB warning below-right."""
     for fp in footprints.values():
         fp.Reference().SetVisible(fp.GetReference().startswith("C"))  # our own labels replace the rest
-    for ref in ("J2", "J6", "J3"):  # vertical, in the strip right of the column
+    for ref in ("J2", "J6", "J3", "J7"):  # vertical, in the strip right of the connector
         left, top, right, bottom = box(footprints[ref])
         text(board, f"{ref} {NAMES[ref]}", right + 1.0, (top + bottom) / 2, True, SMALL, angle=90)
     left, top, right, bottom = box(footprints["J4"])
     for i, x, y in pads(footprints["J4"]):
         text(board, PIN_LABELS["J4"][i], x + 5.0, y, False, SMALL)
-    text(board, "J4 BUTTONS", (left + right) / 2, bottom + 1.4, True, TEXT)
-    left, top, right, bottom = box(footprints["J5"])
-    for i, x, y in pads(footprints["J5"]):
-        text(board, PIN_LABELS["J5"][i], x, y - 5.5, False, SMALL, angle=90)
-    text(board, "J5 DISPLAY", (left + right) / 2, bottom + 1.0, True, TEXT)
+    text(board, "J4 BUTTONS", left - 1.0, (top + bottom) / 2, True, TEXT, angle=90)
+    for i, x, y in pads(footprints["J5"]):  # back, where the module's header is soldered
+        text(board, PIN_LABELS["J5"][i], x, y - 5.5, True, SMALL, angle=90)
+    text(board, "J5 DISPLAY  (VCC ◂)", W / 2, LCD_ROW - 8.6, True, TEXT)
     for ref in ("TP1", "TP2", "TP3"):  # names to the left
         left, top, right, bottom = box(footprints[ref])
         text(board, NAMES[ref], left - 1.6, (top + bottom) / 2, True, SMALL)
-    top = box(footprints["J1"])[1]  # strip between H3 and H4, above J1's pins
-    text(board, "OpenPlayer carrier Rev B", W / 2, top - 2.6, True, 1.0)
-    text(board, "J1 PI  (pin 1 ▸)", W / 2, top - 1.0, True, TEXT)
-    text(board, "OpenPlayer Rev B", W / 2, top + 7.5, False, 1.0)  # front, behind J1's body
-    text(board, "DO NOT USE PI MICRO-USB POWER WHILE CONNECTED", W / 2, top + 10.5, False, SMALL)
+    text(board, "OpenPlayer carrier Rev C", 37.0, 3.0, True, 1.0)
+    bottom = box(footprints["J1"])[3]
+    text(board, "J1 PI  (pin 1 ▸)", W / 2, bottom + 1.2, True, TEXT)
+    text(board, "1", PI_PIN1[0], PI_PIN1[1] + 2.0, False, SMALL)  # J1 pin 1 on the front, left of the display
+    shape(board, pcbnew.SHAPE_T_SEGMENT, pcbnew.B_SilkS, (0.5, PI_TOP), (box(footprints["J4"])[0] - 2.0, PI_TOP))
+    text(board, "PI ZERO ▾", 6.5, PI_TOP - 1.0, True, SMALL)  # the Pi's top edge; its outline below
+    for i, line in enumerate(("DO NOT USE PI", "MICRO-USB POWER", "WHILE CONNECTED")):  # front, over the Pi's PWR port
+        text(board, line, 52.0, H - 7.0 + i * 1.6, False, SMALL)
 
 
 def c1_body(board, fp):
