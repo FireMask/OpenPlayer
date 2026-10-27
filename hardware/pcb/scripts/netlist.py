@@ -1,4 +1,4 @@
-"""OpenPlayer carrier PCB (SPEC 22): parts and nets, single source of truth.
+"""OpenPlayer carrier PCB (SPEC 22, Rev B: SPEC 24): parts and nets, single source of truth.
 
 build_sch.py and build_pcb.py import this module. Run it directly to check it
 against config/player.example.json:  python hardware/pcb/scripts/netlist.py
@@ -9,13 +9,13 @@ from pathlib import Path
 
 # ref → (value, symbol lib_id, footprint lib_id)
 PARTS = {
-    "J1": ("Pi_40pin_IDC", "Connector_Generic:Conn_02x20_Odd_Even", "Connector_IDC:IDC-Header_2x20_P2.54mm_Vertical"),
-    "J2": ("PWR_IN", "Connector_Generic:Conn_01x02", "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"),
-    "J3": ("KEY", "Connector_Generic:Conn_01x02", "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"),
-    "J4": ("BUTTONS", "Connector_Generic:Conn_01x08", "Connector_JST:JST_XH_B8B-XH-A_1x08_P2.50mm_Vertical"),
-    "J5": ("DISPLAY", "Connector_Generic:Conn_01x07", "Connector_PinSocket_2.54mm:PinSocket_1x07_P2.54mm_Vertical"),
-    "J6": ("SWITCH", "Connector_Generic:Conn_01x02", "Connector_JST:JST_XH_B2B-XH-A_1x02_P2.50mm_Vertical"),
-    "C1": ("1000uF 10V", "Device:C_Polarized", "Capacitor_THT:CP_Radial_D10.0mm_P5.00mm"),
+    "J1": ("Pi_40pin_IDC", "Connector_Generic:Conn_02x20_Odd_Even", "Connector_IDC:IDC-Header_2x20_P2.54mm_Horizontal"),
+    "J2": ("PWR_IN", "Connector_Generic:Conn_01x02", "Connector_JST:JST_XH_S2B-XH-A_1x02_P2.50mm_Horizontal"),
+    "J3": ("KEY", "Connector_Generic:Conn_01x02", "Connector_JST:JST_XH_S2B-XH-A_1x02_P2.50mm_Horizontal"),
+    "J4": ("BUTTONS", "Connector_Generic:Conn_01x08", "Connector_JST:JST_XH_S8B-XH-A_1x08_P2.50mm_Horizontal"),
+    "J5": ("DISPLAY", "Connector_Generic:Conn_01x07", "Connector_JST:JST_XH_S7B-XH-A_1x07_P2.50mm_Horizontal"),
+    "J6": ("SWITCH", "Connector_Generic:Conn_01x02", "Connector_JST:JST_XH_S2B-XH-A_1x02_P2.50mm_Horizontal"),
+    "C1": ("470uF 10V", "Device:C_Polarized", "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm"),
     "C2": ("100nF", "Device:C", "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm"),
     "TP1": ("GND", "Connector:TestPoint", "TestPoint:TestPoint_THTPad_D2.0mm_Drill1.0mm"),
     "TP2": ("5V_SYS", "Connector:TestPoint", "TestPoint:TestPoint_THTPad_D2.0mm_Drill1.0mm"),
