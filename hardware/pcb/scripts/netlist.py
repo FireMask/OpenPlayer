@@ -1,4 +1,4 @@
-"""OpenPlayer carrier PCB (SPEC 22, Rev B: SPEC 24): parts and nets, single source of truth.
+"""OpenPlayer carrier PCB (SPEC 22, Rev B: SPEC 24, Rev C: SPEC 25): parts and nets, single source of truth.
 
 build_sch.py and build_pcb.py import this module. Run it directly to check it
 against config/player.example.json:  python hardware/pcb/scripts/netlist.py
@@ -9,12 +9,13 @@ from pathlib import Path
 
 # ref → (value, symbol lib_id, footprint lib_id)
 PARTS = {
-    "J1": ("Pi_40pin_IDC", "Connector_Generic:Conn_02x20_Odd_Even", "Connector_IDC:IDC-Header_2x20_P2.54mm_Horizontal"),
+    "J1": ("Pi_40pin_socket", "Connector_Generic:Conn_02x20_Odd_Even", "Connector_PinSocket_2.54mm:PinSocket_2x20_P2.54mm_Vertical"),
     "J2": ("PWR_IN", "Connector_Generic:Conn_01x02", "Connector_JST:JST_XH_S2B-XH-A_1x02_P2.50mm_Horizontal"),
     "J3": ("KEY", "Connector_Generic:Conn_01x02", "Connector_JST:JST_XH_S2B-XH-A_1x02_P2.50mm_Horizontal"),
     "J4": ("BUTTONS", "Connector_Generic:Conn_01x08", "Connector_JST:JST_XH_S8B-XH-A_1x08_P2.50mm_Horizontal"),
-    "J5": ("DISPLAY", "Connector_Generic:Conn_01x07", "Connector_JST:JST_XH_S7B-XH-A_1x07_P2.50mm_Horizontal"),
+    "J5": ("DISPLAY", "Connector_Generic:Conn_01x07", "Connector_PinHeader_2.54mm:PinHeader_1x07_P2.54mm_Vertical"),  # holes for the module's own header
     "J6": ("SWITCH", "Connector_Generic:Conn_01x02", "Connector_JST:JST_XH_S2B-XH-A_1x02_P2.50mm_Horizontal"),
+    "J7": ("PWR_BTN", "Connector_Generic:Conn_01x02", "Connector_JST:JST_XH_S2B-XH-A_1x02_P2.50mm_Horizontal"),
     "C1": ("470uF 10V", "Device:C_Polarized", "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm"),
     "C2": ("100nF", "Device:C", "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm"),
     "TP1": ("GND", "Connector:TestPoint", "TestPoint:TestPoint_THTPad_D2.0mm_Drill1.0mm"),
@@ -24,16 +25,18 @@ PARTS = {
     "H2": ("M2.5", "Mechanical:MountingHole", "MountingHole:MountingHole_2.7mm_M2.5"),
     "H3": ("M2.5", "Mechanical:MountingHole", "MountingHole:MountingHole_2.7mm_M2.5"),
     "H4": ("M2.5", "Mechanical:MountingHole", "MountingHole:MountingHole_2.7mm_M2.5"),
+    "H5": ("M2", "Mechanical:MountingHole", "MountingHole:MountingHole_2.2mm_M2"),  # display tab
+    "H6": ("M2", "Mechanical:MountingHole", "MountingHole:MountingHole_2.2mm_M2"),
 }
 
 PI_GND_PINS = [6, 9, 14, 20, 25, 30, 34, 39]
 
-# net → [(ref, pin)]. J1 pin N = Pi physical pin N (straight-through ribbon).
+# net → [(ref, pin)]. J1 pin N = Pi physical pin N (the Pi plugs into J1).
 NETS = {
     "5V_IN": [("J2", "1"), ("J6", "1")],
     "5V_SYS": [("J6", "2"), ("J1", "2"), ("J1", "4"), ("C1", "1"), ("C2", "1"), ("TP2", "1")],
     "GND": [("J1", str(p)) for p in PI_GND_PINS]
-    + [("J2", "2"), ("J3", "2"), ("J4", "1"), ("J5", "2"), ("C1", "2"), ("C2", "2"), ("TP1", "1")],
+    + [("J2", "2"), ("J3", "2"), ("J4", "1"), ("J5", "2"), ("J7", "2"), ("C1", "2"), ("C2", "2"), ("TP1", "1")],
     "3V3": [("J1", "1"), ("J1", "17"), ("J5", "1"), ("TP3", "1")],
     "SPI_SCLK": [("J1", "23"), ("J5", "3")],
     "SPI_MOSI": [("J1", "19"), ("J5", "4")],
@@ -46,7 +49,7 @@ NETS = {
     "BTN_VOLUP": [("J1", "16"), ("J4", "5")],
     "BTN_VOLDN": [("J1", "18"), ("J4", "6")],
     "BTN_MENU": [("J1", "22"), ("J4", "7")],
-    "PWR_KEY": [("J4", "8"), ("J3", "1")],
+    "PWR_KEY": [("J4", "8"), ("J3", "1"), ("J7", "1")],
 }
 
 # Pi 40-pin header: BCM GPIO → physical pin.

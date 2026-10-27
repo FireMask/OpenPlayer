@@ -1,14 +1,14 @@
-# OpenPlayer PCB Rev B — Project Requirements
+# OpenPlayer PCB Rev C — Project Requirements
 
 **Document type:** Hardware requirements and design brief  
-**Status:** Rev A designed in SPEC 22 (`specs/22-carrier-pcb.md`), reworked into the thin, single-sided Rev B in SPEC 24 (`specs/24-carrier-pcb-rev-b.md`); sources in `hardware/pcb/`  
+**Status:** Rev A designed in SPEC 22 (`specs/22-carrier-pcb.md`), reworked into the thin, single-sided Rev B in SPEC 24 (`specs/24-carrier-pcb-rev-b.md`), then into the Rev C Pi sandwich in SPEC 25 (`specs/25-carrier-pcb-rev-c.md`); sources in `hardware/pcb/`  
 **Target CAD:** KiCad 10  
 **Target manufacturer:** JLCPCB  
 **Main controller:** Raspberry Pi Zero 2 W  
 **Display:** 1.28-inch round TFT, GC9A01, 240 × 240, SPI  
-**Battery concept:** Single-cell Li-ion/LiPo, nominal 3.7 V, planned capacity 5000 mAh  
+**Battery concept:** Single-cell LiPo, nominal 3.7 V, 4000 mAh, 6 × 60 × 91.5 mm  
 **Charging module:** FM5324GA USB-C charge/boost board (DWEII, Amazon MX B09YD5C9QC), 5 V / 2 A output  
-**Revision:** B (Rev A only in git history)
+**Revision:** C (Rev A and Rev B only in git history)
 
 ---
 
@@ -16,13 +16,16 @@
 
 Design a custom printed circuit board (PCB) for a portable, modular DIY MP3 player named **OpenPlayer**. The current prototype works at a basic level on a Raspberry Pi Zero 2 W. The PCB is a **bridge board**: it contains no active circuitry, only reliable, labeled, serviceable connectors for:
 
-- Raspberry Pi Zero 2 W, mounted beside the board and connected with a 40-pin IDC ribbon.
-- Six physical control buttons plus a power-on key, on a separate button board.
-- A 1.28-inch round GC9A01 240 × 240 SPI TFT display ("1.28 TFT ver 1.0", 7-pin header, no backlight pin), plugged directly into the PCB.
+- Raspberry Pi Zero 2 W, plugged into a 2 × 20 socket on the back of the board (HAT style, 11 mm standoffs).
+- A 1.28-inch round GC9A01 240 × 240 SPI TFT display ("1.28 TFT ver 1.0", 7-pin header, no backlight pin), soldered on the front of the board by its own header.
+- Six physical control buttons on a separate button board.
+- A power-on key on the case's top edge.
 - The 5 V output and `K` (key) pad of the charging module, connected by short wires.
 - A panel-mount power switch, connected by short wires.
 
 The battery connects straight to the charging module and never touches this PCB.
+
+**Case target:** portrait, Walkman size, ≈ 80 W × 110 H × 33 D mm (inside ≈ 74 × 104 × 29), held in the right hand. Front to back: display, carrier, Pi, insulating sheet, battery (~28.3 mm in all). The carrier and Pi take the top ≈ 53 mm; the bottom zone holds the charging module, USB OTG adapter and DAC, with the headphone jack and charging USB-C in the bottom wall. Button strip on the right wall, POWER key on the top edge.
 
 ## 2. Existing software and system architecture
 
@@ -55,14 +58,19 @@ Do not move the project to an ESP32 as part of this PCB revision.
 
 ### 4.1 Raspberry Pi connection — J1
 
-- J1: 2 × 20, 2.54 mm shrouded (keyed) **right-angle** box header on the bottom edge, so the ribbon leaves flat along the board. Connected to the Pi's header with a straight-through 40-pin IDC ribbon (≤ 10 cm). J1 pin N = Pi physical pin N.
+- J1: 2 × 20, 2.54 mm female socket, vertical, 8.5 mm tall, on the **back**. The Pi plugs in component side toward the carrier, like a HAT. J1 pin N = Pi physical pin N.
+- The Pi's outline is flush with the carrier's bottom edge, so its ports (mini-HDMI, USB OTG, PWR) face the bottom of the case. Four M2.5 holes on the Pi's 58 × 23 pattern carry 11 mm standoffs (socket 8.5 + Pi header plastic 2.5).
+- `build_pcb.py` checks every J1 pad against the official Pi Zero 2 W drawing (pin 1 at the left end, inner row, seen from the front). A mirrored J1 would put 5 V on GPIO.
+- No copper pour over the Pi's Wi-Fi/BT antenna (between its mini-HDMI and USB OTG ports).
 - The Pi is powered through header pins 2 and 4 (5 V) with all 8 GND pins (6, 9, 14, 20, 25, 30, 34, 39).
-- **Never plug power into the Pi's micro-USB port while the ribbon is connected** (dual feed). The silkscreen carries this warning.
+- **Never plug power into the Pi's micro-USB PWR port while it is on the carrier** (dual feed). The silkscreen carries this warning; block the port in the enclosure.
 - Measure 5 V at the Pi under load at bring-up; it must stay ≥ 4.75 V.
 
 ### 4.2 Display connector — J5
 
-Display: GC9A01, 1.28-inch round TFT, 240 × 240, SPI. J5 is a JST-XH 7 side-entry header (S7B-XH-A) on the top edge; the display sits off the board on a cable: **XH-7 to a 1 × 7 Dupont female housing** on the module's male pins, straight (J5 pin N → module pin N in the table below). Pin 1 is marked on the board; check continuity before connecting. Keep the cable short (SPI); lower the SPI clock in `player.json` if the image shows artifacts.
+Display: GC9A01, 1.28-inch round TFT, 240 × 240, SPI. J5 is a row of 7 plated holes (2.54 mm) for the module's own pre-soldered 1 × 7 header: the module sits on the **front**, its header goes through the board and is soldered on the back (pins trimmed to ≤ 2 mm). No cable. **Pin 1 (VCC, square pad) is the rightmost pin seen from the front.** Swapping the display means desoldering it.
+
+Measured module ("1.28" TFT VER1.0"): 36 W × 45 H × 4 mm (round Ø36 + 23 mm-wide bottom tab); pin row 2 mm above the module's bottom edge (= the carrier's bottom edge) and 25 mm below the screen center; two M2 tab holes 19.2 mm apart, 3.5 mm above the pin row, carried on 2.5 mm standoffs (H5/H6).
 
 7-position interface, in the module's silkscreen order. Matches the validated prototype wiring (`docs/gpio-map.md` §10) and `player.json` defaults (`hardware.display.dc` = 16, `rst` = 26):
 
@@ -85,7 +93,7 @@ Important:
 
 ### 4.3 Button board connector — J4
 
-One 8-pin JST-XH connector to a separate button board with six normally-open momentary buttons, the power-on key, and a shared ground.
+One 8-pin JST-XH connector (right edge) to a separate button board with six normally-open momentary buttons and a shared ground. Pin 8 keeps `PWR_KEY` so the existing XH-8 cable still works; the 6-key button board leaves it unconnected.
 
 | J4 pin | Signal | Raspberry Pi BCM GPIO | Pi physical pin |
 |---:|---|---:|---:|
@@ -104,22 +112,23 @@ Button behavior:
 - Each normally-open button connects its signal line to GND while pressed.
 - GPIO inputs use the internal pull-up in software; no external resistors.
 - `PWR_KEY` is **not** a Pi GPIO. It goes only to the charging module's `K` pad (via J3), so power-on works with the Pi off.
+- The POWER key is a panel momentary key on the case's top edge, on **J7 `PWR_BTN`** (JST-XH 2 side entry, top edge): pin 1 `PWR_KEY`, pin 2 `GND`.
 
 ### 4.4 Battery and charging module
 
-- Battery: one Li-ion/LiPo cell, 3.7 V nominal, planned 5000 mAh, with built-in protection. It connects straight to the module's `+` / `−` battery pads.
+- Battery: one LiPo cell, 3.7 V nominal, 4000 mAh, 6 × 60 × 91.5 mm, with built-in protection, flat against the back wall behind the Pi (1 mm gap / insulating sheet; keep it off the Pi's antenna end if possible). It connects straight to the module's `+` / `−` battery pads. The 5000 mAh 4 × 59 × 134 cell was dropped: it needs a ~145 mm case.
 - Charging module: FM5324GA USB-C board. Per seller listings (unverified against a datasheet):
   - USB-C input 5 V, charge current up to 2.4 A, cut-off 4.2 V.
   - Integrated boost: 5 V regulated output, up to 2 A, ~92.5 % efficiency at 3.6 V in.
   - A short press on `K` turns the output on; the output turns off when the load stays below ~50 mA.
   - 4 battery-level LEDs. A USB-A output on the back is not used.
-- Pads used: `5V +` / `−` (output) → J2; `K` → J3. Wires are short; the module sits wherever the enclosure allows.
+- Pads used: `5V +` / `−` (output) → J2; `K` → J3. Wires are short; the module sits in the bottom zone of the case.
 - The Steren ARD-343 (TP4056 type) was rejected: battery-voltage output only, no power-path, 2 A trip limit.
 
 ### 4.5 Power entry and switch — J2, J6
 
-- J2 `PWR_IN` (JST-XH 2-pin): module 5V / GND → `5V_IN`.
-- J6 `SWITCH` (JST-XH 2-pin): panel-mount rocker/toggle rated ≥ 3 A, in series between `5V_IN` and `5V_SYS`.
+- J2 `PWR_IN` (JST-XH 2-pin, left edge): module 5V / GND → `5V_IN`.
+- J6 `SWITCH` (JST-XH 2-pin, left edge): panel-mount rocker/toggle rated ≥ 3 A, in series between `5V_IN` and `5V_SYS`.
 - `5V_SYS` feeds J1 pins 2 and 4, C1 (470 µF / 10 V, Ø8 mm, mounted lying flat, optional populate) and C2 (100 nF).
 - Power tracks (`5V_IN`, `5V_SYS`, `GND`) are ≥ 1.0 mm.
 
@@ -129,34 +138,36 @@ Button behavior:
 - OLED is not part of this revision; the current screen target is the GC9A01 TFT.
 - Do not add an audio DAC to this PCB; the current prototype uses an existing USB DAC.
 
-### 4.7 Button board (SPEC 23)
+### 4.7 Button board (SPEC 23, 6 keys since SPEC 25)
 
-A separate 14 mm-wide strip that lies flat against the side wall of the case (Walkman-style). Files and regeneration: `hardware/buttons/README.md`.
+A separate 14 mm-wide strip that lies flat against the right side wall of the case (Walkman-style). Files and regeneration: `hardware/buttons/README.md`.
 
-- SW1–SW7: 6 × 6 mm THT tactile switches (`SW_PUSH_6mm`) on the front, in one row. Top to bottom: POWER | VOL+ VOL− | PREV PLAY NEXT MENU, with a larger gap between the three groups so they can be found by touch. Actuator height is picked at purchase; all heights share the footprint.
-- J1 `CARRIER`: JST-XH 8 on the back at the top end, lying along the strip. Same pinout as carrier J4 (1 GND, 2 PLAY, 3 PREV, 4 NEXT, 5 VOL+, 6 VOL−, 7 MENU, 8 KEY); `hardware/buttons/scripts/netlist.py` checks this against the carrier's netlist.
+- SW2–SW7: 6 × 6 mm THT tactile switches (`SW_PUSH_6mm`) on the front, in one row. Top to bottom: VOL+ VOL− | PREV PLAY NEXT MENU, with a larger gap between the two groups so they can be found by touch. Actuator height is picked at purchase; all heights share the footprint. SW1 (POWER) was removed: the POWER key is on the carrier's J7.
+- J1 `CARRIER`: JST-XH 8 on the back at the top end, lying along the strip. Same pinout as carrier J4 (1 GND, 2 PLAY, 3 PREV, 4 NEXT, 5 VOL+, 6 VOL−, 7 MENU, 8 KEY); pin 8 is unconnected on this board. `hardware/buttons/scripts/netlist.py` checks this against the carrier's netlist.
 - **Cable:** XH-8 to XH-8, **straight**: pin 1 to pin 1 … pin 8 to pin 8. Pin 1 is marked on both boards; check continuity before connecting.
 - H1–H2: M2 holes, one at each end.
 - Each switch shorts its signal to GND; no pull-ups, debounce parts, LEDs or ESD parts on the board (pull-ups and debounce are in the Pi/software).
-- Size: `BOARD_W` 14 mm; length follows from `BTN_PITCH` (10 mm), `GROUP_GAP` (4 mm) and `END_MARGIN` (5.5 mm): 116 mm by default.
+- Size: `BOARD_W` 14 mm; length follows from `BTN_PITCH` (9.6 mm), `GROUP_GAP` (4 mm) and `END_MARGIN` (5.5 mm): 100.09 mm by default (fits the ≈ 104 mm inside height).
 - Two layers: signals on F.Cu, GND pour on B.Cu with F.Cu stitching.
 
 ## 5. Connector list
 
 | Ref. | Function | Pins | Footprint |
 |---|---|---:|---|
-| J1 | Pi, via 40-pin IDC ribbon | 40 | `Connector_IDC:IDC-Header_2x20_P2.54mm_Horizontal` |
+| J1 | Pi, plugged in on the back | 40 | `Connector_PinSocket_2.54mm:PinSocket_2x20_P2.54mm_Vertical` (8.5 mm) |
 | J2 | `PWR_IN` from module 5 V | 2 | JST-XH S2B-XH-A (side entry) |
 | J3 | `KEY` to module `K` | 2 | JST-XH S2B-XH-A (side entry) |
 | J4 | `BUTTONS` | 8 | JST-XH S8B-XH-A (side entry) |
-| J5 | `DISPLAY` | 7 | JST-XH S7B-XH-A (side entry), cable to the display |
+| J5 | `DISPLAY`, holes for the module's own header (nothing to buy) | 7 | `Connector_PinHeader_2.54mm:PinHeader_1x07_P2.54mm_Vertical` |
 | J6 | `SWITCH` to panel switch | 2 | JST-XH S2B-XH-A (side entry) |
+| J7 | `PWR_BTN` to the panel POWER key | 2 | JST-XH S2B-XH-A (side entry) |
 | C1 | Bulk 5V_SYS (optional), lying flat | 2 | `CP_Radial_D8.0mm_P3.50mm` |
 | C2 | 100 nF 5V_SYS | 2 | `C_Disc_D5.0mm_W2.5mm_P5.00mm` |
 | TP1 | GND | 1 | THT test pad |
 | TP2 | 5V_SYS | 1 | THT test pad |
 | TP3 | 3V3 | 1 | THT test pad |
-| H1–H4 | M2.5 mounting holes | — | `MountingHole_2.7mm_M2.5` |
+| H1–H4 | M2.5 holes on the Pi's pattern, 11 mm standoffs | — | `MountingHole_2.7mm_M2.5` |
+| H5–H6 | M2 holes under the display tab, 2.5 mm standoffs | — | `MountingHole_2.2mm_M2` |
 
 ## 6. GPIO conflict review
 
@@ -183,18 +194,19 @@ Electrical constraints:
 ## 7. PCB layout
 
 - Two layers, GND pour on both sides, JLCPCB default rules.
-- **Thickness:** the whole player targets 17 ± 2 mm, so the carrier budget is ≤ 11 mm: 1.6 mm board + ≤ 9.5 mm of parts. Tallest part: J1 (≈ 9.1 mm); heights per part in `hardware/pcb/README.md`.
-- **Single-sided:** every part on the back; the front is flat (silkscreen and holes only).
-- Board 60 × 41.5 mm (`BOARD_W` / `BOARD_H` in `build_pcb.py`). J1's 2 × 20 row sets the width; J1 plus the three stacked XH-2 set the height.
+- **Stack** (front to back, ~28.3 mm in a ≈ 33 mm case): display module + header spacer 6.5, carrier 1.6, gap 11 (J1 socket 8.5 + Pi header 2.5), Pi ~2.2, gap / insulating sheet 1, battery 6. The user prefers a thicker player over a larger one; this reverses SPEC 24's "no sandwich" decision (17 mm target).
+- **Height rule** for the back parts: part height + Pi part under it ≤ 10.5 mm (0.5 mm air in the 11 mm gap). Table per part in `hardware/pcb/README.md`. C1/C2 stay off the Pi's port edge.
+- **Two-sided:** the display on the front; J1, every cable connector, C1, C2 and the test points on the back, in the gap between the boards.
+- Board 65 × 53 mm (`BOARD_W` / `BOARD_H` in `build_pcb.py`). The width is the Pi's. The Pi (30 mm) sits flush with the bottom edge; the 23 mm band above it holds J4 (23.5 mm long), which does not fit on the right edge between the Pi's holes (17 mm). SPEC 25 first estimated ≈ 45 mm.
 - **Edges** (seen from the front), every mouth at the edge so the wires run parallel to the board:
-  - Top center: J5 `DISPLAY`, cable up to the display.
-  - Left edge, upper part: J2 `PWR_IN`, J6 `SWITCH`, J3 `KEY`.
-  - Right edge, upper part: J4 `BUTTONS`, toward the button strip.
-  - Bottom: J1, ribbon down to the Pi.
-- Four M2.5 holes in an inboard rectangle: J1 covers the whole bottom width and the connectors take the top corners.
-- **Case layout:** display at the top, carrier below it, Pi below the carrier (beside it; stacking under it would exceed the thickness target), charging module at the **top** of the case (wired to J2/J3). The battery goes wherever it fits; it wires only to the module.
+  - Top: J7 `PWR_BTN`, to the POWER key on the case's top edge.
+  - Left edge: J2 `PWR_IN`, J6 `SWITCH` (top band), J3 `KEY` (between the Pi's holes).
+  - Right edge, top band: J4 `BUTTONS`, toward the button strip.
+  - Bottom: the Pi's ports.
+- Holes: four M2.5 on the Pi's pattern (H1–H4), two M2 under the display's tab (H5/H6).
+- **Antenna keep-out:** no copper pour on either layer over the Pi's antenna (x 18–37 mm, bottom 7 mm). The display's pads and tracks cross it.
 - Keep SPI away from the 5 V entry.
-- Silkscreen: board name, "Rev B", connector names, pin 1, J4/J5 signal names (on the front, behind the pins), C1 body outline, and the micro-USB warning.
+- Silkscreen: board name, "Rev C", connector names, pin 1 (J1 on both sides), the display outline on the front, J4 signal names (front, right of the display), J5 signal names (back, by the solder joints), the Pi's top edge, C1 body outline, and the micro-USB warning. Nothing under the display body on the front.
 
 ## 8. KiCad project and fabrication workflow
 
@@ -228,8 +240,10 @@ See `hardware/pcb/README.md` (button board: `hardware/buttons/README.md`, same f
 1. Exact battery model, connector, maximum discharge current, and protection.
 2. FM5324GA datasheet: confirm charge-while-discharge without output dropout.
 3. Whether the module auto-shuts off with the Pi halted (> 50 mA would keep it on).
-4. Final PCB dimensions relative to the enclosure.
+4. Enclosure design and the DAC choice / mounting in the bottom zone.
 5. Whether to add a panel VCC switch for the display (module has no BL pin).
+6. Real heights of the Pi's top-side parts (typical values used for the height rule) and of the chosen standoffs.
+7. Exact antenna area on the Pi Zero 2 W (keep-out assumed between its mini-HDMI and USB OTG ports), Wi-Fi/BT range with the carrier, display and battery around it, and SoC / battery temperature under load (battery < 45 °C).
 
 ## 11. Explicit non-goals for Rev A / Rev B
 

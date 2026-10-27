@@ -1,6 +1,6 @@
-# OpenPlayer button board — Rev A
+# OpenPlayer button board — Rev B
 
-Side strip (SPEC 23): seven 6×6 mm tactile switches in one row and an 8-pin JST-XH to the carrier's J4. No active parts. Requirements: `docs/pcb-requirements.md` §4.7.
+Side strip (SPEC 23; 6 keys since SPEC 25): six 6×6 mm tactile switches in one row and an 8-pin JST-XH to the carrier's J4. No active parts. Requirements: `docs/pcb-requirements.md` §4.7. The POWER key moved to the case's top edge, on the carrier's J7; Rev A (7 keys, 116 mm) is in git history only.
 
 ![top](fabrication/render-top.png)
 ![bottom](fabrication/render-bottom.png)
@@ -30,19 +30,19 @@ Change the parameters at the top of `scripts/build_pcb.py` and rerun `build_pcb.
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `BTN_PITCH` | 10 mm | Switch center to center within a group (≥ 9.6, the switch courtyard) |
+| `BTN_PITCH` | 9.6 mm | Switch center to center within a group (≥ 9.6, the switch courtyard) |
 | `GROUP_GAP` | 4 mm | Extra space between groups, and between J1 and the first switch |
-| `GROUPS` | POWER \| VOL+ VOL− \| PREV PLAY NEXT MENU | Order and grouping, top to bottom |
+| `GROUPS` | VOL+ VOL− \| PREV PLAY NEXT MENU | Order and grouping, top to bottom |
 | `BOARD_W` | 14 mm | Strip width; widen it if routing fails |
 | `END_MARGIN` | 5.5 mm | Last switch / connector to board end; the M2 holes sit here |
 
-Default size 14 × 116.09 mm. Also tested at pitch/gap 12/6 (134 mm) and 11/2.
+Default size 14 × 100.09 mm: fits the ≈ 104 mm inside height of the portrait case.
 
 ## Parts
 
 | Ref | Part | Side |
 |---|---|---|
-| SW1–SW7 | 6×6 mm THT tactile (`SW_PUSH_6mm`), POWER, VOL+, VOL−, PREV, PLAY, NEXT, MENU top to bottom | Front (toward the side wall) |
+| SW2–SW7 | 6×6 mm THT tactile (`SW_PUSH_6mm`), VOL+, VOL−, PREV, PLAY, NEXT, MENU top to bottom (no SW1) | Front (toward the side wall) |
 | J1 | `CARRIER`, JST-XH 8 (B8B-XH-A), pin 1 at the top | Back, top end |
 | H1, H2 | M2 mounting holes, one at each end | — |
 
@@ -61,8 +61,8 @@ J1 has the same pinout as the carrier's J4, so the cable is **XH-8 to XH-8, stra
 | 5 | BTN_VOLUP | VOL+ (SW2) | 5 |
 | 6 | BTN_VOLDN | VOL− (SW3) | 6 |
 | 7 | BTN_MENU | MENU (SW7) | 7 |
-| 8 | PWR_KEY | POWER (SW1) | 8 |
+| 8 | — (no-connect, silkscreen `NC`) | — | 8 (PWR_KEY) |
 
 - Each switch shorts its signal to GND. Pull-ups and debounce are on the Pi side (internal pull-ups, `debounceSeconds`).
-- POWER goes to the charging module's `K` pad via the carrier, not to a GPIO. Recess it in the case; shut down with a 3 s hold on PLAY.
+- Pin 8 stays in the connector so the XH-8 cable is unchanged; the carrier still routes PWR_KEY to it. POWER is a panel key on J7 of the carrier (module `K` pad, not a GPIO). Shut down with a 3 s hold on PLAY.
 - Pin 1 is marked on both boards. Check continuity pin by pin before connecting the cable.

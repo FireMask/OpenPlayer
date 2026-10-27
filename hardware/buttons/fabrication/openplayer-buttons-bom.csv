@@ -1,6 +1,5 @@
 "Refs","Value","Footprint","Description","Qty"
 "J1","CARRIER","Connector_JST:JST_XH_B8B-XH-A_1x08_P2.50mm_Vertical","","1"
-"SW1","POWER","Button_Switch_THT:SW_PUSH_6mm","6x6 THT tactile, height per enclosure","1"
 "SW2","VOL+","Button_Switch_THT:SW_PUSH_6mm","6x6 THT tactile, height per enclosure","1"
 "SW3","VOL-","Button_Switch_THT:SW_PUSH_6mm","6x6 THT tactile, height per enclosure","1"
 "SW4","PREV","Button_Switch_THT:SW_PUSH_6mm","6x6 THT tactile, height per enclosure","1"

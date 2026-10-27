@@ -1,0 +1,5 @@
+(version 1)
+(rule "display standoffs beside the display header"
+  (constraint courtyard_clearance)
+  (condition "(A.Reference == 'J5' && (B.Reference == 'H5' || B.Reference == 'H6')) || (B.Reference == 'J5' && (A.Reference == 'H5' || A.Reference == 'H6'))")
+  (severity ignore))

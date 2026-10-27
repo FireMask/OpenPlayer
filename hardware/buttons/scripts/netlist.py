@@ -1,4 +1,4 @@
-"""OpenPlayer button board (SPEC 23): parts and nets, single source of truth.
+"""OpenPlayer button board (SPEC 23, 6 keys: SPEC 25): parts and nets, single source of truth.
 
 build_sch.py and build_pcb.py import this module. Run it directly to check J1 against the
 carrier's J4 (same pinout, straight cable):  python hardware/buttons/scripts/netlist.py
@@ -10,9 +10,8 @@ from pathlib import Path
 SWITCH = ("Switch:SW_Push", "Button_Switch_THT:SW_PUSH_6mm")  # 6×6 THT tactile, height per enclosure
 HOLE = ("Mechanical:MountingHole", "MountingHole:MountingHole_2.2mm_M2")
 
-# ref → (value, symbol lib_id, footprint lib_id). SW1–SW7 top to bottom.
+# ref → (value, symbol lib_id, footprint lib_id). SW2–SW7 top to bottom (SW1 POWER moved to the carrier's J7).
 PARTS = {
-    "SW1": ("POWER", *SWITCH),
     "SW2": ("VOL+", *SWITCH),
     "SW3": ("VOL-", *SWITCH),
     "SW4": ("PREV", *SWITCH),
@@ -26,10 +25,9 @@ PARTS = {
 
 DESCRIPTIONS = {ref: "6x6 THT tactile, height per enclosure" for ref in PARTS if ref.startswith("SW")}  # BOM
 
-# net → [(ref, pin)]. Net names and J1 pins are the carrier's J4: J1 pin N = J4 pin N.
+# net → [(ref, pin)]. Net names and J1 pins are the carrier's J4: J1 pin N = J4 pin N; pin 8 (PWR_KEY) is a no-connect.
 NETS = {
-    "GND": [("J1", "1")] + [(f"SW{i}", "2") for i in range(1, 8)],
-    "PWR_KEY": [("J1", "8"), ("SW1", "1")],
+    "GND": [("J1", "1")] + [(f"SW{i}", "2") for i in range(2, 8)],
     "BTN_VOLUP": [("J1", "5"), ("SW2", "1")],
     "BTN_VOLDN": [("J1", "6"), ("SW3", "1")],
     "BTN_PREV": [("J1", "3"), ("SW4", "1")],
@@ -65,7 +63,8 @@ def check():
     j4 = {p: net for net, pins in carrier_nets().items() for r, p in pins if r == "J4"}
     j1 = {p: net for (r, p), net in owner.items() if r == "J1"}
     assert sorted(j4, key=int) == [str(n) for n in range(1, 9)], f"carrier J4 pins {sorted(j4)}"
-    for n in range(1, 9):
+    assert "8" not in j1, "J1 pin 8 (PWR_KEY) must be unconnected"
+    for n in range(1, 8):
         assert j1.get(str(n)) == j4[str(n)], f"J1 pin {n} is {j1.get(str(n))}, carrier J4 pin {n} is {j4[str(n)]}"
     for ref in PARTS:
         if ref.startswith("SW"):
