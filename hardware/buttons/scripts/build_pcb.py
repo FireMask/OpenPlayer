@@ -18,9 +18,9 @@ import pcbgen  # noqa: E402
 from netlist import DESCRIPTIONS, PARTS, pin_net  # noqa: E402
 from pcbgen import box, text  # noqa: E402
 
-BTN_PITCH = 10.0   # mm, switch center to center within a group
+BTN_PITCH = 9.6    # mm, switch center to center within a group (SW_PUSH_6mm courtyard 9.59)
 GROUP_GAP = 4.0    # mm, extra space between groups
-GROUPS = [["SW1"], ["SW2", "SW3"], ["SW4", "SW5", "SW6", "SW7"]]  # top to bottom
+GROUPS = [["SW2", "SW3"], ["SW4", "SW5", "SW6", "SW7"]]  # top to bottom; POWER is on the carrier's J7 (SPEC 25)
 BOARD_W = 14.0     # mm, strip width
 END_MARGIN = 5.5   # mm, from the last switch / connector to the board end (holes sit here; the M2 hole courtyard is 5 mm)
 
@@ -30,15 +30,16 @@ SW_LEN = 9.59      # SW_PUSH_6mm turned 90°: pin 1 pads on the left, GND pads o
 
 SIGNAL_TRACK = 0.25  # mm, all signals; GND is the pour
 # Signals on F.Cu (B.Cu only for short hops), GND pour on B.Cu plus F.Cu stitching.
-ROUTE_ORDER = ["BTN_MENU", "BTN_NEXT", "BTN_PLAY", "BTN_PREV", "BTN_VOLDN", "BTN_VOLUP", "PWR_KEY"]  # longest first
+ROUTE_ORDER = ["BTN_MENU", "BTN_NEXT", "BTN_PLAY", "BTN_PREV", "BTN_VOLDN", "BTN_VOLUP"]  # longest first
 
 TEXT = 1.0   # mm, button and board names
 SMALL = 0.8  # mm, pin labels; JLCPCB / KiCad minimum
-PIN_LABELS = ["GND", "PLAY", "PREV", "NEXT", "VOL+", "VOL-", "MENU", "KEY"]
+UNCONNECTED = "unconnected-(J1-Pin_8-Pad8)"  # J1 pin 8: the schematic's no-connect net, for parity
+PIN_LABELS = ["GND", "PLAY", "PREV", "NEXT", "VOL+", "VOL-", "MENU", "NC"]  # pin 8 (PWR_KEY) unused here
 
 
 def layout():
-    """Switch center y per ref, and the board length. J1 is a group of its own above SW1."""
+    """Switch center y per ref, and the board length. J1 is a group of its own above the first switch."""
     y = END_MARGIN + J1_LEN + GROUP_GAP + SW_LEN / 2
     centers = {}
     for group in GROUPS:
@@ -74,7 +75,7 @@ def silkscreen(board, footprints):
     text(board, "◂1", left / 2, pin1, True, TEXT)  # points at pin 1 when read from the back
     text(board, "J1 CARRIER", left / 2, (top + bottom) / 2 + 2, True, TEXT, angle=90)
     sw = [CENTERS["SW4"], CENTERS["SW7"]]  # long text along the playback group, back, left edge
-    text(board, "OpenPlayer buttons Rev A", 1.6, sum(sw) / 2, True, TEXT, angle=90)
+    text(board, "OpenPlayer buttons Rev B", 1.6, sum(sw) / 2, True, TEXT, angle=90)
 
 
 def build():
@@ -83,12 +84,13 @@ def build():
     ds.SetCopperLayerCount(2)
     owner = pin_net()
     nets = {}
-    for name in owner.values():
+    for name in list(owner.values()) + [UNCONNECTED]:
         if name not in nets:
-            nets[name] = pcbnew.NETINFO_ITEM(board, f"/{name}")  # local labels → /NAME
+            nets[name] = pcbnew.NETINFO_ITEM(board, name if name == UNCONNECTED else f"/{name}")  # local labels → /NAME
             board.Add(nets[name])
     pcbgen.outline(board, W, H)
-    footprints = pcbgen.place(board, nets, NAME, PARTS, owner, PLACEMENT, descriptions=DESCRIPTIONS)
+    footprints = pcbgen.place(board, nets, NAME, PARTS, owner, PLACEMENT,
+                              lambda ref, n: UNCONNECTED if (ref, n) == ("J1", "8") else None, DESCRIPTIONS)
     silkscreen(board, footprints)
     ds.m_CopperEdgeClearance = FromMM(pcbgen.EDGE_CLEARANCE)
     router = pcbgen.Router(footprints, W, H, ("J1", "1"), SIGNAL_TRACK)
