@@ -63,30 +63,36 @@ TEXT = 0.9   # mm, connector names
 SMALL = 0.8  # mm, pin labels; JLCPCB / KiCad minimum
 
 
+def pads(fp):
+    """[(label index, x, y)] of a connector's pads, in mm from the board's top-left."""
+    return [(int(p.GetNumber()) - 1, pcbnew.ToMM(p.GetPosition().x) - pcbgen.ORIGIN[0],
+             pcbnew.ToMM(p.GetPosition().y) - pcbgen.ORIGIN[1]) for p in fp.Pads()]
+
+
 def silkscreen(board, footprints):
+    """Names on B.SilkS (the parts' side), never under a connector body (it would be hidden). J4/J5 pin
+    labels and the micro-USB warning go on the bare front: no room on the back at pin height."""
     for fp in footprints.values():
         fp.Reference().SetVisible(fp.GetReference().startswith("C"))  # our own labels replace the rest
-    for ref in ("J2", "J6", "J3"):  # left column: name to the right
+    for ref in ("J2", "J6", "J3"):  # vertical, in the strip right of the column
         left, top, right, bottom = box(footprints[ref])
-        label = f"{ref} {NAMES[ref]}"
-        text(board, label, right + 0.6 + len(label) * TEXT * 0.45, (top + bottom) / 2, True, TEXT)
-    left, top, right, bottom = box(footprints["J4"])  # pin labels above the body, name above them
-    for pad in footprints["J4"].Pads():
-        x = pcbnew.ToMM(pad.GetPosition().x) - pcbgen.ORIGIN[0]
-        text(board, PIN_LABELS["J4"][int(pad.GetNumber()) - 1], x, top - 2.2, True, SMALL, angle=90)
-    text(board, "J4 BUTTONS", (left + right) / 2, top - 5.2, True, TEXT)
-    left, top, right, bottom = box(footprints["J5"])  # front: pin labels below, name above
-    for pad in footprints["J5"].Pads():
-        x = pcbnew.ToMM(pad.GetPosition().x) - pcbgen.ORIGIN[0]
-        text(board, PIN_LABELS["J5"][int(pad.GetNumber()) - 1], x, bottom + 2.2, False, SMALL, angle=90)
-    text(board, "J5 DISPLAY", (left + right) / 2, top - 1.0, False, TEXT)
-    for ref in ("TP1", "TP2", "TP3"):
+        text(board, f"{ref} {NAMES[ref]}", right + 1.0, (top + bottom) / 2, True, SMALL, angle=90)
+    left, top, right, bottom = box(footprints["J4"])
+    for i, x, y in pads(footprints["J4"]):
+        text(board, PIN_LABELS["J4"][i], x + 5.0, y, False, SMALL)
+    text(board, "J4 BUTTONS", (left + right) / 2, bottom + 1.4, True, TEXT)
+    left, top, right, bottom = box(footprints["J5"])
+    for i, x, y in pads(footprints["J5"]):
+        text(board, PIN_LABELS["J5"][i], x, y - 5.5, False, SMALL, angle=90)
+    text(board, "J5 DISPLAY", (left + right) / 2, bottom + 1.0, True, TEXT)
+    for ref in ("TP1", "TP2", "TP3"):  # names to the left
         left, top, right, bottom = box(footprints[ref])
-        text(board, NAMES[ref], (left + right) / 2, bottom + 0.8, True, SMALL)
-    text(board, "J1 PI  (pin 1 ▸)", 13, H - 5.4, True, TEXT)
-    text(board, "OpenPlayer carrier Rev A", W / 2 + 6, H - 5.4, True, 1.0)
-    text(board, "DO NOT USE PI MICRO-USB POWER WHILE CONNECTED", W / 2, H - 3.2, True, SMALL)
-    text(board, "OpenPlayer Rev A", W / 2, H - 3.2, False, 1.0)
+        text(board, NAMES[ref], left - 1.6, (top + bottom) / 2, True, SMALL)
+    top = box(footprints["J1"])[1]  # strip between H3 and H4, above J1's pins
+    text(board, "OpenPlayer carrier Rev B", W / 2, top - 2.6, True, 1.0)
+    text(board, "J1 PI  (pin 1 ▸)", W / 2, top - 1.0, True, TEXT)
+    text(board, "OpenPlayer Rev B", W / 2, top + 7.5, False, 1.0)  # front, behind J1's body
+    text(board, "DO NOT USE PI MICRO-USB POWER WHILE CONNECTED", W / 2, top + 10.5, False, SMALL)
 
 
 def c1_body(board, fp):
