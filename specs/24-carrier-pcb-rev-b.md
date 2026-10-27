@@ -1,6 +1,6 @@
 # SPEC 24 — Carrier PCB Rev B (thin, right-angle connectors)
 
-> **Status:** Approved
+> **Status:** Implemented
 > **Depends on:** SPEC 22 (carrier Rev A, nets, generator scripts), SPEC 23 (shared `pcbgen`, button board XH-8 pinout)
 > **Date:** 2026-10-26
 > **Objective:** Rework the carrier into a single-sided, smaller Rev B where everything stays ≤ 11 mm thick (board plus parts). It uses a right-angle IDC header, JST-XH side-entry connectors and an off-board display cable, and is regenerated in place by the existing scripts with the same nets.
@@ -84,22 +84,22 @@ C1_BODY = (8.0, 12.0) # mm, keep-out + silkscreen outline of the flat-lying C1 b
 
 ## Acceptance criteria
 
-- [ ] `python hardware/pcb/scripts/netlist.py` prints `OK`, and `NETS` is identical to Rev A's (diff of the dict = empty).
-- [ ] `kicad-cli sch erc` reports 0 errors.
-- [ ] `kicad-cli pcb drc --schematic-parity` reports 0 violations / 0 unconnected / 0 parity issues.
-- [ ] The exported netlist matches `NETS` exactly.
-- [ ] Every footprint is on the back. The front has no component (only holes, copper, silkscreen).
-- [ ] J1 is `IDC-Header_2x20_P2.54mm_Horizontal` at the bottom center, with the mouth toward the bottom edge.
-- [ ] J5 is S7B-XH-A at the top center, mouth up. J2/J3/J6 are S2B-XH-A on the left edge, mouth left. J4 is S8B-XH-A on the right edge, upper part, mouth right.
-- [ ] J4 pin N carries the same net as Rev A (button board compatible). `hardware/buttons/scripts/netlist.py` → `OK`.
-- [ ] J5 pin order: 1 VCC, 2 GND, 3 SCL, 4 SDA, 5 DC, 6 CS, 7 RST.
-- [ ] C1 is `CP_Radial_D8.0mm_P3.50mm` 470 µF / 10 V, with a silkscreen outline of the flat body and a keep-out.
-- [ ] The README lists each part's datasheet height, and no part exceeds 9.5 mm.
-- [ ] The board is `BOARD_W` × `BOARD_H` with `BOARD_H` < 45 mm (Rev A) and four M2.5 holes inboard (not in courtyard conflict with any connector).
-- [ ] The silkscreen shows "Rev B", J1–J6 names, J4/J5 pin labels, pin 1 markers and the micro-USB warning. "Rev A" appears nowhere.
-- [ ] `export-fab.ps1 -Board pcb` finishes without errors. `fabrication/` contains the Gerber + drill zip, BOM CSV and two renders.
-- [ ] `hardware/pcb/README.md` describes Rev B and the display cable. `docs/pcb-requirements.md` §7 shows the single-sided layout, the ≤ 11 mm budget and the charger at the top.
-- [ ] No file under `src/`, `config/` or `hardware/buttons/` changes (except the regenerated `.kicad_pro` churn, reverted).
+- [x] `python hardware/pcb/scripts/netlist.py` prints `OK`, and `NETS` is identical to Rev A's (diff of the dict = empty).
+- [x] `kicad-cli sch erc` reports 0 errors.
+- [x] `kicad-cli pcb drc --schematic-parity` reports 0 violations / 0 unconnected / 0 parity issues.
+- [x] The exported netlist matches `NETS` exactly.
+- [x] Every footprint is on the back. The front has no component (only holes, copper, silkscreen).
+- [x] J1 is `IDC-Header_2x20_P2.54mm_Horizontal` at the bottom center, with the mouth toward the bottom edge.
+- [x] J5 is S7B-XH-A at the top center, mouth up. J2/J3/J6 are S2B-XH-A on the left edge, mouth left. J4 is S8B-XH-A on the right edge, upper part, mouth right.
+- [x] J4 pin N carries the same net as Rev A (button board compatible). `hardware/buttons/scripts/netlist.py` → `OK`.
+- [x] J5 pin order: 1 VCC, 2 GND, 3 SCL, 4 SDA, 5 DC, 6 CS, 7 RST.
+- [x] C1 is `CP_Radial_D8.0mm_P3.50mm` 470 µF / 10 V, with a silkscreen outline of the flat body and a keep-out.
+- [x] The README lists each part's datasheet height, and no part exceeds 9.5 mm.
+- [x] The board is `BOARD_W` × `BOARD_H` with `BOARD_H` < 45 mm (Rev A) and four M2.5 holes inboard (not in courtyard conflict with any connector).
+- [x] The silkscreen shows "Rev B", J1–J6 names, J4/J5 pin labels, pin 1 markers and the micro-USB warning. "Rev A" appears nowhere.
+- [x] `export-fab.ps1 -Board pcb` finishes without errors. `fabrication/` contains the Gerber + drill zip, BOM CSV and two renders.
+- [x] `hardware/pcb/README.md` describes Rev B and the display cable. `docs/pcb-requirements.md` §7 shows the single-sided layout, the ≤ 11 mm budget and the charger at the top.
+- [x] No file under `src/`, `config/` or `hardware/buttons/` changes (except the regenerated `.kicad_pro` churn, reverted).
 
 ## Decisions
 
