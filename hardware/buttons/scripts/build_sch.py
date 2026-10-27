@@ -18,7 +18,7 @@ NAME = "openplayer-buttons"
 # top to bottom like on the board.
 POSITIONS = {
     "J1": (101.6, 101.6),
-    **{f"SW{i}": (152.4, 50.8 + 15.24 * (i - 1)) for i in range(1, 8)},
+    **{f"SW{i}": (152.4, 50.8 + 15.24 * (i - 1)) for i in range(2, 8)},
     "H1": (203.2, 50.8), "H2": (215.9, 50.8),
 }
 TEXT_Y = {ref: (y - 5.08, y + 3.81) for ref, (_, y) in POSITIONS.items() if ref.startswith("SW")}  # value close under the switch
