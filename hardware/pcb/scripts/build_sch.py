@@ -14,6 +14,7 @@ import pcbgen  # noqa: E402
 from netlist import NETS, PARTS, pin_net  # noqa: E402
 
 NAME = "openplayer-carrier"
+BOM_EXCLUDE = ("J5",)  # holes for the display module's own header: nothing to buy
 
 # Sheet position (mm) of each symbol; multiples of 2.54 keep pins on grid.
 POSITIONS = {
@@ -29,7 +30,8 @@ POSITIONS = {
 
 def build():
     pcbgen.write_schematic(PCB_DIR, NAME, "OpenPlayer carrier", "hardware/pcb/scripts/build_sch.py",
-                           PARTS, pin_net(), POSITIONS, text_y={"J1": (101.6 - 30.48, 101.6 + 30.48)})
+                           PARTS, pin_net(), POSITIONS, text_y={"J1": (101.6 - 30.48, 101.6 + 30.48)},
+                           bom_exclude=BOM_EXCLUDE)
 
 
 if __name__ == "__main__":

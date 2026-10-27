@@ -72,10 +72,12 @@ def prop(key, value, x, y, hide=False):
     return f'(property "{key}" "{value}" (at {x:.2f} {y:.2f} 0){hidden} (effects (font (size 1.27 1.27))))'
 
 
-def write_schematic(board_dir, name, title, script, parts, owner, positions, text_y=None, descriptions=None):
+def write_schematic(board_dir, name, title, script, parts, owner, positions, text_y=None, descriptions=None,
+                    bom_exclude=()):
     """Write <name>.kicad_sch (and a stub .kicad_pro if missing). Every pin gets a net label at its
     tip; pins without a net get a no-connect flag. text_y: ref → (reference y, value y) overrides;
-    descriptions: ref → Description field (shows in the BOM)."""
+    descriptions: ref → Description field (shows in the BOM); bom_exclude: refs kept out of the BOM
+    besides test points and holes (their footprints need FP_EXCLUDE_FROM_BOM too, for parity)."""
     sheet_uuid = uid("sheet")
     lib_ids = sorted({sym for _, sym, _ in parts.values()})
     symbols = {lib_id: load_symbol(lib_id) for lib_id in lib_ids}
@@ -104,7 +106,7 @@ def write_schematic(board_dir, name, title, script, parts, owner, positions, tex
             ref_y, value_y = y - 5.08, y + 12.7
         out += [
             f'(symbol (lib_id "{lib_id}") (at {x:.2f} {y:.2f} 0) (unit 1)',
-            f"(exclude_from_sim no) (in_bom {'no' if ref[0] in 'TH' else 'yes'}) (on_board yes) (dnp no)",  # test points and holes stay out of the BOM
+            f"(exclude_from_sim no) (in_bom {'no' if ref[0] in 'TH' or ref in bom_exclude else 'yes'}) (on_board yes) (dnp no)",  # test points and holes stay out of the BOM
             f'(uuid "{uid("sym", ref)}")',
             prop("Reference", ref, x, ref_y),
             prop("Value", value, x, value_y),

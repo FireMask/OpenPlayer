@@ -14,7 +14,7 @@ import pcbnew
 from pcbnew import FromMM
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_sch import NAME, PCB_DIR  # noqa: E402  (also puts hardware/common on sys.path)
+from build_sch import BOM_EXCLUDE, NAME, PCB_DIR  # noqa: E402  (also puts hardware/common on sys.path)
 import pcbgen  # noqa: E402
 from netlist import PARTS, pin_net  # noqa: E402
 from pcbgen import box, text  # noqa: E402
@@ -208,6 +208,8 @@ def build():
     footprints = pcbgen.place(board, nets, NAME, PARTS, pin_net(), PLACEMENT,
                               lambda ref, n: f"unconnected-({ref}-Pin_{n}-Pad{n})" if ref == "J1" else None)
     pi_overlay(board, footprints["J1"])
+    for ref in BOM_EXCLUDE:  # must match the schematic, or parity fails
+        footprints[ref].SetAttributes(footprints[ref].GetAttributes() | pcbnew.FP_EXCLUDE_FROM_BOM)
     models = footprints["J5"].Models()  # holes only: the display module brings its own pre-soldered header
     for i in range(len(models)):
         models[i].m_Show = False
