@@ -2759,7 +2759,7 @@
 (label "BTN_MENU" (at 167.64 109.22 180) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "32b52110-66b8-57a1-afaa-8404aae2887f"))
 (label "PWR_KEY" (at 167.64 111.76 180) (effects (font (size 1.27 1.27)) (justify right bottom)) (uuid "554a9489-d201-5aeb-a379-28bd1b29a301"))
 (symbol (lib_id "Connector_Generic:Conn_01x07") (at 172.72 132.08 0) (unit 1)
-(exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+(exclude_from_sim no) (in_bom no) (on_board yes) (dnp no)
 (uuid "cfc40eac-14e2-5b43-a6e6-1a68840ab715")
 (property "Reference" "J5" (at 172.72 118.11 0) (effects (font (size 1.27 1.27))))
 (property "Value" "DISPLAY" (at 172.72 120.65 0) (effects (font (size 1.27 1.27))))
